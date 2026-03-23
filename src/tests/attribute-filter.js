@@ -53,8 +53,8 @@ export var options = {
 // Equality: category = 'X' — rotates through all 10 categories.
 export function equalityFilter() {
   var cat = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-  var url = buildItemsUrl({ filter: "category='" + cat + "'" });
-  var res = http.get(url);
+  var req = buildItemsUrl({ filter: "category='" + cat + "'" });
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);
@@ -66,8 +66,8 @@ export function rangeFilter() {
   var high = low + 10;
   var filter =
     "temperature >= " + low.toFixed(1) + " AND temperature <= " + high.toFixed(1);
-  var url = buildItemsUrl({ filter: filter });
-  var res = http.get(url);
+  var req = buildItemsUrl({ filter: filter });
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);
@@ -76,8 +76,8 @@ export function rangeFilter() {
 // LIKE: name LIKE 'feature_N%'
 export function likeFilter() {
   var prefix = "feature_" + Math.floor(Math.random() * 1000);
-  var url = buildItemsUrl({ filter: "name LIKE '" + prefix + "%'" });
-  var res = http.get(url);
+  var req = buildItemsUrl({ filter: "feature_name LIKE '" + prefix + "%'" });
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);

@@ -52,8 +52,8 @@ export var options = {
 
 // Small: ~0.1 degree (city-scale)
 export function smallBbox() {
-  var url = buildItemsUrl({ bbox: randomBbox(0.1) });
-  var res = http.get(url);
+  var req = buildItemsUrl({ bbox: randomBbox(0.1) });
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);
@@ -61,8 +61,8 @@ export function smallBbox() {
 
 // Medium: ~5 degrees (country-scale)
 export function mediumBbox() {
-  var url = buildItemsUrl({ bbox: randomBbox(5.0) });
-  var res = http.get(url);
+  var req = buildItemsUrl({ bbox: randomBbox(5.0) });
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);
@@ -70,8 +70,8 @@ export function mediumBbox() {
 
 // Large: ~30 degrees (continental-scale)
 export function largeBbox() {
-  var url = buildItemsUrl({ bbox: randomBbox(30.0) });
-  var res = http.get(url);
+  var req = buildItemsUrl({ bbox: randomBbox(30.0) });
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);

@@ -66,23 +66,23 @@ export var options = {
 
 export function mixedWorkload() {
   var roll = Math.random();
-  var url;
+  var req;
 
   if (roll < 0.4) {
     // Spatial bbox query (varying sizes)
     var size = 0.5 + Math.random() * 10;
-    url = buildItemsUrl({ bbox: randomBbox(size) });
+    req = buildItemsUrl({ bbox: randomBbox(size) });
   } else if (roll < 0.8) {
     // Attribute filter query
     var cat = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    url = buildItemsUrl({ filter: "category='" + cat + "'" });
+    req = buildItemsUrl({ filter: "category='" + cat + "'" });
   } else {
     // Unfiltered paginated scan
     var offset = Math.floor(Math.random() * 1000);
-    url = buildItemsUrl({ offset: offset });
+    req = buildItemsUrl({ offset: offset });
   }
 
-  var res = http.get(url);
+  var res = http.get(req.url, { tags: { name: req.name } });
   check(res, ogcChecks());
   errorRate.add(res.status !== 200);
   responseTime.add(res.timings.duration);

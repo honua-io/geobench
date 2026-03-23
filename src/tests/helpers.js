@@ -5,9 +5,12 @@ var SERVERS = {
   honua: {
     baseUrl: __ENV.HONUA_URL || "http://honua:8080",
     itemsPath: function (collection) {
-      return "/ogc/features/collections/" + collection + "/items";
+      // Honua uses FeatureServer REST API — layer ID is resolved at adapter time
+      var layerId = __ENV.HONUA_LAYER_ID || "1";
+      return "/rest/services/default/FeatureServer/" + layerId + "/query";
     },
-    supportsCql2: true,
+    supportsCql2: false,
+    isFeatureServer: true,
   },
   geoserver: {
     baseUrl: __ENV.GEOSERVER_URL || "http://geoserver:8080",
@@ -54,9 +57,36 @@ export function getServer() {
 export function buildItemsUrl(params) {
   params = params || {};
   var server = getServer();
-  var url =
-    server.config.baseUrl + server.config.itemsPath(COLLECTION) + "?f=json";
+  var base = server.config.baseUrl + server.config.itemsPath(COLLECTION);
 
+  if (server.config.isFeatureServer) {
+    // Honua FeatureServer REST API format
+    var url = base + "?f=json";
+    url += "&resultRecordCount=" + (params.limit || RESULT_LIMIT);
+    url += "&outFields=*";
+
+    if (params.bbox) {
+      url += "&geometry=" + params.bbox;
+      url += "&geometryType=esriGeometryEnvelope";
+      url += "&spatialRel=esriSpatialRelIntersects";
+    }
+
+    if (params.filter) {
+      // Convert CQL2 filter to SQL WHERE clause
+      url += "&where=" + encodeURIComponent(params.filter);
+    } else {
+      url += "&where=" + encodeURIComponent("1=1");
+    }
+
+    if (params.offset) {
+      url += "&resultOffset=" + params.offset;
+    }
+
+    return { url: url, name: server.name + ":" + COLLECTION };
+  }
+
+  // OGC API Features format (GeoServer, QGIS)
+  var url = base + "?f=json";
   url += "&limit=" + (params.limit || RESULT_LIMIT);
 
   if (params.bbox) {
@@ -72,7 +102,7 @@ export function buildItemsUrl(params) {
     url += "&offset=" + params.offset;
   }
 
-  return url;
+  return { url: url, name: server.name + ":" + COLLECTION };
 }
 
 /**

@@ -110,7 +110,7 @@ def generate(output_path, count):
         f.write(
             """CREATE TABLE bench_points (
     id              SERIAL PRIMARY KEY,
-    name            VARCHAR(100) NOT NULL,
+    feature_name    VARCHAR(100) NOT NULL,
     category        VARCHAR(20) NOT NULL,
     status          VARCHAR(20) NOT NULL,
     priority        INTEGER NOT NULL,
@@ -127,7 +127,7 @@ def generate(output_path, count):
         # COPY block
         f.write(
             "COPY bench_points "
-            "(name, category, status, priority, temperature, population, "
+            "(feature_name, category, status, priority, temperature, population, "
             "created_at, updated_at, country_code, description, geom) "
             "FROM stdin;\n"
         )
@@ -189,7 +189,7 @@ def generate(output_path, count):
             "CREATE INDEX idx_bench_points_temperature ON bench_points USING btree (temperature);\n"
         )
         f.write(
-            "CREATE INDEX idx_bench_points_name ON bench_points USING btree (name varchar_pattern_ops);\n\n"
+            "CREATE INDEX idx_bench_points_name ON bench_points USING btree (feature_name varchar_pattern_ops);\n\n"
         )
         f.write("-- Update statistics\n")
         f.write("ANALYZE bench_points;\n")
