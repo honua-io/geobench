@@ -29,7 +29,7 @@ curl -sf -X POST "${GS_URL}/geoserver/rest/workspaces/geobench/datastores" \
       "type": "PostGIS",
       "connectionParameters": {
         "entry": [
-          {"@key": "host", "$": "postgis"},
+          {"@key": "host", "$": "postgis-geoserver"},
           {"@key": "port", "$": "5432"},
           {"@key": "database", "$": "geobench"},
           {"@key": "user", "$": "geobench"},

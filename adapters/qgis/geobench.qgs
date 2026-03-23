@@ -19,7 +19,7 @@
     <customproperties>
       <Option/>
     </customproperties>
-    <layer-tree-layer id="bench_points_a1b2c3d4" name="bench_points" source="dbname='geobench' host=postgis port=5432 user='geobench' password='geobench_pass' sslmode=disable key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;bench_points&quot; (geom)" providerKey="postgres" expanded="1" checked="Qt::Checked" legend_exp="">
+    <layer-tree-layer id="bench_points_a1b2c3d4" name="bench_points" source="dbname='geobench' host=postgis-qgis port=5432 user='geobench' password='geobench_pass' sslmode=disable key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;bench_points&quot; (geom)" providerKey="postgres" expanded="1" checked="Qt::Checked" legend_exp="">
       <customproperties>
         <Option/>
       </customproperties>
@@ -28,7 +28,7 @@
   <projectlayers>
     <maplayer simplifyDrawingHints="1" simplifyMaxScale="1" geometry="Point" maxScale="0" minScale="100000000" type="vector" autoRefreshEnabled="0" refreshOnNotifyEnabled="0" wkbType="Point" hasScaleBasedVisibilityFlag="0" simplifyAlgorithm="0" simplifyLocal="1" simplifyDrawingTol="1" readOnly="0" styleCategories="AllStyleCategories" labelsEnabled="0">
       <id>bench_points_a1b2c3d4</id>
-      <datasource>dbname='geobench' host=postgis port=5432 user='geobench' password='geobench_pass' sslmode=disable key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table="public"."bench_points" (geom)</datasource>
+      <datasource>dbname='geobench' host=postgis-qgis port=5432 user='geobench' password='geobench_pass' sslmode=disable key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table="public"."bench_points" (geom)</datasource>
       <keywordList>
         <value></value>
       </keywordList>

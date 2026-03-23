@@ -1,24 +1,35 @@
-networks:
-  geobench:
-    driver: bridge
+# GeoBench: Isolated benchmark harness.
+#
+# Each server gets its own dedicated PostGIS instance.
+# The orchestrator (scripts/run-benchmark.sh) starts one server at a time
+# using Docker Compose profiles, runs its benchmarks, then tears it down
+# before starting the next — complete isolation between servers.
+#
+# Usage:
+#   docker compose --profile honua up -d      # start Honua + its PostGIS + k6
+#   docker compose --profile geoserver up -d   # start GeoServer + its PostGIS + k6
+#   docker compose --profile qgis up -d        # start QGIS + its PostGIS + k6
 
 volumes:
-  pgdata:
+  pgdata-honua:
+  pgdata-geoserver:
+  pgdata-qgis:
 
 services:
-  postgis:
+  # ─── PostGIS instances (one per server) ────────────────────────────
+
+  postgis-honua:
     image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
-    networks:
-      - geobench
+    profiles: ["honua"]
+    ports:
+      - "25432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata-honua:/var/lib/postgresql/data
       - ./data/small/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     environment:
       POSTGRES_DB: geobench
       POSTGRES_USER: geobench
       POSTGRES_PASSWORD: geobench_pass
-    ports:
-      - "${POSTGIS_PORT:-25432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U geobench -d geobench"]
       interval: 5s
@@ -30,19 +41,62 @@ services:
           cpus: "2"
           memory: 2g
 
+  postgis-geoserver:
+    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    profiles: ["geoserver"]
+    volumes:
+      - pgdata-geoserver:/var/lib/postgresql/data
+      - ./data/small/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    environment:
+      POSTGRES_DB: geobench
+      POSTGRES_USER: geobench
+      POSTGRES_PASSWORD: geobench_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geobench -d geobench"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
+
+  postgis-qgis:
+    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    profiles: ["qgis"]
+    volumes:
+      - pgdata-qgis:/var/lib/postgresql/data
+      - ./data/small/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    environment:
+      POSTGRES_DB: geobench
+      POSTGRES_USER: geobench
+      POSTGRES_PASSWORD: geobench_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geobench -d geobench"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
+
+  # ─── Feature servers (one at a time via profiles) ──────────────────
+
   honua:
     image: ${HONUA_IMAGE:-honuaio/honua-server:latest}
-    networks:
-      - geobench
+    profiles: ["honua"]
     ports:
       - "${HONUA_PORT:-8081}:8080"
     depends_on:
-      postgis:
+      postgis-honua:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"
-      ConnectionStrings__DefaultConnection: "Host=postgis;Port=5432;Database=geobench;Username=geobench;Password=geobench_pass"
+      ConnectionStrings__DefaultConnection: "Host=postgis-honua;Port=5432;Database=geobench;Username=geobench;Password=geobench_pass"
       HONUA_ADMIN_PASSWORD: "${HONUA_ADMIN_PASSWORD:-geobench-admin-key}"
       HONUA_DEV_AUTH: ""
       Security__ConnectionEncryption__MasterKey: "geobench-master-key-at-least-32-characters-long"
@@ -68,12 +122,11 @@ services:
 
   geoserver:
     image: ${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:2.28.0}
-    networks:
-      - geobench
+    profiles: ["geoserver"]
     ports:
       - "${GEOSERVER_PORT:-8082}:8080"
     depends_on:
-      postgis:
+      postgis-geoserver:
         condition: service_healthy
     environment:
       GEOSERVER_ADMIN_USER: admin
@@ -95,12 +148,11 @@ services:
 
   qgis-server:
     image: ${QGIS_IMAGE:-qgis/qgis-server:3.38}
-    networks:
-      - geobench
+    profiles: ["qgis"]
     ports:
       - "${QGIS_PORT:-8083}:80"
     depends_on:
-      postgis:
+      postgis-qgis:
         condition: service_healthy
     volumes:
       - ./adapters/qgis/geobench.qgs:/etc/qgisserver/geobench.qgs:ro
@@ -120,10 +172,11 @@ services:
           cpus: "4"
           memory: 4g
 
+  # ─── Load generator (shared, stateless) ────────────────────────────
+
   k6:
     image: ${K6_IMAGE:-grafana/k6:0.54.0}
-    networks:
-      - geobench
+    profiles: ["honua", "geoserver", "qgis"]
     volumes:
       - ./src/tests:/tests:ro
       - ./results:/results

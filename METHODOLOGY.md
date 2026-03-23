@@ -10,9 +10,9 @@ This document describes how GeoBench ensures fair, reproducible comparisons betw
 
 ## Environment
 
-### Shared Infrastructure
+### Complete Isolation
 
-All servers connect to a **single PostGIS instance** with identical data, indexes, and statistics. This eliminates database-side variance.
+Each server runs against its **own dedicated PostGIS instance** with identical data, indexes, and statistics. The orchestrator starts one server at a time (PostGIS + server + k6), runs all benchmarks, then tears the stack down completely before starting the next server. No shared database, no shared buffers, no connection slot contention.
 
 - **PostGIS image**: `postgis/postgis:17-3.5`
 - **Dataset**: 100K point features, 10 attribute fields, GiST spatial index + btree attribute indexes
@@ -116,7 +116,7 @@ Without a system card, results are not considered publishable.
 ## Known Limitations
 
 - **Docker resource limits are soft** (cgroups v2). Bare-metal results may differ.
-- **Single PostGIS instance**: Database-side contention is shared. A server that generates more efficient SQL benefits from less DB load — this is fair (query efficiency is a real characteristic).
+- **Dedicated PostGIS instances**: Each server gets its own PostGIS with identical data. Database shared buffers warm independently per server. Host-level CPU/memory is the only shared resource.
 - **CQL2 support varies**: QGIS Server has limited CQL2 support. Attribute filter tests may use simpler OGC API Features Part 1 property filters for QGIS, which is noted in results.
 - **Response size cap**: `limit=100` per request. Servers with faster JSON serialization benefit — this is intentional (serialization is part of server performance).
 - **No raster/imagery benchmarks** in v1.

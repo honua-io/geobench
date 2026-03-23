@@ -5,7 +5,7 @@ set -euo pipefail
 HONUA_URL="${HONUA_URL:-http://honua:8080}"
 API_KEY="${HONUA_API_KEY:-geobench-admin-key}"
 HEADER_KEY="X-Api-Key: ${API_KEY}"
-PGURL="${PGURL:-postgresql://geobench:geobench_pass@postgis:5432/geobench}"
+PGURL="${PGURL:-postgresql://geobench:geobench_pass@postgis-honua:5432/geobench}"
 
 echo "=== Honua Server Adapter ==="
 echo "Server: ${HONUA_URL}"
@@ -18,7 +18,7 @@ CONNECTION_ID=$(curl -sf -X POST "${HONUA_URL}/api/v1/admin/connections/" \
   -d '{
     "name": "geobench-postgis",
     "description": "GeoBench shared PostGIS database",
-    "host": "postgis",
+    "host": "postgis-honua",
     "port": 5432,
     "databaseName": "geobench",
     "username": "geobench",
