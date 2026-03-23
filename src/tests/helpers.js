@@ -23,7 +23,7 @@ var SERVERS = {
   qgis: {
     baseUrl: __ENV.QGIS_URL || "http://qgis-server:80",
     itemsPath: function (collection) {
-      return "/ogc/features/collections/" + collection + "/items";
+      return "/wfs3/collections/" + collection + "/items";
     },
     supportsCql2: false,
   },

@@ -40,10 +40,15 @@ services:
       postgis:
         condition: service_healthy
     environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"
       ConnectionStrings__DefaultConnection: "Host=postgis;Port=5432;Database=geobench;Username=geobench;Password=geobench_pass"
       HONUA_ADMIN_PASSWORD: "${HONUA_ADMIN_PASSWORD:-geobench-admin-key}"
       HONUA_DEV_AUTH: ""
+      Security__ConnectionEncryption__MasterKey: "geobench-master-key-at-least-32-characters-long"
+      Security__ConnectionEncryption__Salt: "Z2VvYmVuY2gtc2FsdC1mb3ItZW5jcnlwdGlvbi10ZXN0aW5n"
+      HostValidation__RequireExplicitHosts: "false"
+      AllowedHosts: "*"
       Limits__Query__MaxRecordCount: "10000"
       Limits__Query__DefaultRecordCount: "1000"
     healthcheck:
@@ -74,8 +79,7 @@ services:
       GEOSERVER_ADMIN_USER: admin
       GEOSERVER_ADMIN_PASSWORD: "${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
       GEOSERVER_CSRF_DISABLED: "true"
-      # Disable unnecessary extensions for benchmarking
-      STABLE_EXTENSIONS: ""
+      STABLE_EXTENSIONS: "ogcapi-features-plugin"
       COMMUNITY_EXTENSIONS: ""
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/geoserver/web/ || exit 1"]
@@ -105,7 +109,7 @@ services:
       QGIS_SERVER_LOG_LEVEL: "1"
       QGIS_SERVER_MAX_THREADS: "4"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf 'http://localhost:80/ogc/features/collections' || exit 1"]
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:80/wfs3/collections' || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 30
