@@ -31,7 +31,7 @@ services:
           memory: 2g
 
   honua:
-    image: ${HONUA_IMAGE:-honua-server:geobench}
+    image: ${HONUA_IMAGE:-honuaio/honua-server:latest}
     networks:
       - geobench
     ports:
