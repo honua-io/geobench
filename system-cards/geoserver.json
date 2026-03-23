@@ -1,0 +1,30 @@
+{
+  "name": "GeoServer",
+  "version": "2.26.1",
+  "image": "kartoza/geoserver:2.26.1",
+  "runtime": "Java (JVM, Jetty)",
+  "language": "Java",
+  "ogcApiFeatures": {
+    "basePath": "/geoserver/ogc/features/v1",
+    "conformance": ["Part 1: Core", "Part 2: CRS", "Part 3: Filtering (CQL2)"],
+    "cql2Support": true,
+    "cql2Dialects": ["cql2-text"],
+    "outputFormats": ["geojson", "gml", "shapefile"]
+  },
+  "resources": {
+    "cpus": 4,
+    "memory": "4g"
+  },
+  "configTier": "default",
+  "jvmFlags": "kartoza image defaults",
+  "connectionPooling": {
+    "minConnections": 5,
+    "maxConnections": 20,
+    "looseBbox": false,
+    "preparedStatements": false,
+    "encodeFunctions": true
+  },
+  "spatialIndex": "GiST (PostGIS)",
+  "geoWebCache": "disabled for benchmark layers",
+  "notes": "GeoWebCache explicitly disabled for bench_points layer. Default JVM heap from kartoza image."
+}

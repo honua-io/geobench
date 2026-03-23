@@ -1,0 +1,27 @@
+# Results (regenerated each run)
+results/*/
+!results/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Docker
+pgdata/
+
+# Generated data (regenerate with: python3 data/small/generate.py)
+data/small/init.sql
+
+# Environment overrides
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~

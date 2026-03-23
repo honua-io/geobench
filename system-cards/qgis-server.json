@@ -1,0 +1,23 @@
+{
+  "name": "QGIS Server",
+  "version": "3.38",
+  "image": "qgis/qgis-server:3.38",
+  "runtime": "C++ / Qt (FastCGI)",
+  "language": "C++",
+  "ogcApiFeatures": {
+    "basePath": "/ogc/features",
+    "conformance": ["Part 1: Core"],
+    "cql2Support": false,
+    "cql2Dialects": [],
+    "outputFormats": ["geojson"]
+  },
+  "resources": {
+    "cpus": 4,
+    "memory": "4g"
+  },
+  "configTier": "default",
+  "maxThreads": 4,
+  "connectionPooling": "QGIS provider-managed",
+  "spatialIndex": "GiST (PostGIS)",
+  "notes": "Limited CQL2 support. Attribute filter tests may use Part 1 property filters instead."
+}

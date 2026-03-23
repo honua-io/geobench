@@ -1,0 +1,41 @@
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.38.0" projectname="GeoBench">
+  <title>GeoBench Benchmark Dataset</title>
+  <projectCrs>
+    <spatialrefsys>
+      <proj4>+proj=longlat +datum=WGS84 +no_defs</proj4>
+      <srsid>3452</srsid>
+      <srid>4326</srid>
+      <authid>EPSG:4326</authid>
+      <description>WGS 84</description>
+    </spatialrefsys>
+  </projectCrs>
+  <projectlayers>
+    <maplayer type="vector" geometry="Point" name="bench_points" id="bench_points_1">
+      <datasource>dbname='geobench' host=postgis port=5432 user='geobench' password='geobench_pass' sslmode=disable key='id' srid=4326 type=Point table="public"."bench_points" (geom)</datasource>
+      <layername>bench_points</layername>
+      <srs>
+        <spatialrefsys>
+          <proj4>+proj=longlat +datum=WGS84 +no_defs</proj4>
+          <srsid>3452</srsid>
+          <srid>4326</srid>
+          <authid>EPSG:4326</authid>
+        </spatialrefsys>
+      </srs>
+      <provider encoding="UTF-8">postgres</provider>
+      <shortname>bench_points</shortname>
+    </maplayer>
+  </projectlayers>
+  <layer-tree-group>
+    <layer-tree-layer id="bench_points_1" name="bench_points" expanded="1" checked="Qt::Checked" />
+  </layer-tree-group>
+  <properties>
+    <WFSLayers type="QStringList">
+      <value>bench_points_1</value>
+    </WFSLayers>
+    <WMSServiceCapabilities type="bool">true</WMSServiceCapabilities>
+    <WFSServiceCapabilities type="bool">true</WFSServiceCapabilities>
+    <WMSServiceTitle type="QString">GeoBench</WMSServiceTitle>
+    <WFSServiceTitle type="QString">GeoBench</WFSServiceTitle>
+  </properties>
+</qgis>

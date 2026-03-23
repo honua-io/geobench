@@ -1,0 +1,131 @@
+networks:
+  geobench:
+    driver: bridge
+
+volumes:
+  pgdata:
+
+services:
+  postgis:
+    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    networks:
+      - geobench
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./data/small/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    environment:
+      POSTGRES_DB: geobench
+      POSTGRES_USER: geobench
+      POSTGRES_PASSWORD: geobench_pass
+    ports:
+      - "${POSTGIS_PORT:-25432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geobench -d geobench"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
+
+  honua:
+    image: ${HONUA_IMAGE:-honuaio/honua-server:latest}
+    networks:
+      - geobench
+    ports:
+      - "${HONUA_PORT:-8081}:8080"
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__DefaultConnection: "Host=postgis;Port=5432;Database=geobench;Username=geobench;Password=geobench_pass"
+      HONUA_ADMIN_PASSWORD: "${HONUA_ADMIN_PASSWORD:-geobench-admin-key}"
+      HONUA_DEV_AUTH: ""
+      Limits__Query__MaxRecordCount: "10000"
+      Limits__Query__DefaultRecordCount: "1000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/healthz/live || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4g
+
+  geoserver:
+    image: ${GEOSERVER_IMAGE:-kartoza/geoserver:2.26.1}
+    networks:
+      - geobench
+    ports:
+      - "${GEOSERVER_PORT:-8082}:8080"
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: "${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
+      GEOSERVER_CSRF_DISABLED: "true"
+      # Disable unnecessary extensions for benchmarking
+      STABLE_EXTENSIONS: ""
+      COMMUNITY_EXTENSIONS: ""
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/geoserver/web/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4g
+
+  qgis-server:
+    image: ${QGIS_IMAGE:-qgis/qgis-server:3.38}
+    networks:
+      - geobench
+    ports:
+      - "${QGIS_PORT:-8083}:80"
+    depends_on:
+      postgis:
+        condition: service_healthy
+    volumes:
+      - ./adapters/qgis/geobench.qgs:/etc/qgisserver/geobench.qgs:ro
+    environment:
+      QGIS_PROJECT_FILE: /etc/qgisserver/geobench.qgs
+      QGIS_SERVER_LOG_LEVEL: "1"
+      QGIS_SERVER_MAX_THREADS: "4"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:80/ogc/features/collections' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4g
+
+  k6:
+    image: ${K6_IMAGE:-grafana/k6:0.54.0}
+    networks:
+      - geobench
+    volumes:
+      - ./src/tests:/tests:ro
+      - ./results:/results
+    entrypoint: ["sleep", "infinity"]
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 2g

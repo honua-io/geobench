@@ -1,0 +1,22 @@
+{
+  "name": "Honua Server",
+  "version": "latest",
+  "image": "honuaio/honua-server:latest",
+  "runtime": ".NET 10 (ASP.NET Core)",
+  "language": "C#",
+  "ogcApiFeatures": {
+    "basePath": "/ogc/features",
+    "conformance": ["Part 1: Core", "Part 2: CRS", "Part 3: Filtering (CQL2)", "Part 4: Transactions"],
+    "cql2Support": true,
+    "cql2Dialects": ["cql2-text"],
+    "outputFormats": ["geojson", "json", "gml", "csv"]
+  },
+  "resources": {
+    "cpus": 4,
+    "memory": "4g"
+  },
+  "configTier": "default",
+  "connectionPooling": "framework-managed",
+  "spatialIndex": "GiST (PostGIS)",
+  "notes": "Read-only container with tmpfs. No Redis caching in benchmark config."
+}
