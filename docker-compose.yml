@@ -67,7 +67,7 @@ services:
           memory: 4g
 
   geoserver:
-    image: ${GEOSERVER_IMAGE:-kartoza/geoserver:2.26.1}
+    image: ${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:2.28.0}
     networks:
       - geobench
     ports:
@@ -79,8 +79,8 @@ services:
       GEOSERVER_ADMIN_USER: admin
       GEOSERVER_ADMIN_PASSWORD: "${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
       GEOSERVER_CSRF_DISABLED: "true"
-      STABLE_EXTENSIONS: "ogcapi-features-plugin"
-      COMMUNITY_EXTENSIONS: ""
+      INSTALL_EXTENSIONS: "true"
+      STABLE_EXTENSIONS: "ogcapi-features"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/geoserver/web/ || exit 1"]
       interval: 10s

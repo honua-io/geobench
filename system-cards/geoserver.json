@@ -1,7 +1,7 @@
 {
   "name": "GeoServer",
-  "version": "2.26.1",
-  "image": "kartoza/geoserver:2.26.1",
+  "version": "2.28.0",
+  "image": "docker.osgeo.org/geoserver:2.28.0",
   "runtime": "Java (JVM, Jetty)",
   "language": "Java",
   "ogcApiFeatures": {
