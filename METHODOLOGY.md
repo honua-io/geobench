@@ -92,11 +92,103 @@ The `concurrent` test ramps through: 1, 10, 50, 100 virtual users (VUs). Each le
 - Standard tests: Results discarded if error rate > 1%
 - High-concurrency tests (50+ VUs): Results discarded if error rate > 5%
 
-## Protocol
+### Response Shape Audit
 
-**Primary**: OGC API Features (all servers support this). Enables direct apples-to-apples comparison on the same API surface.
+Every server run also captures a lightweight response-shape audit before the timed load starts.
+This audit is not part of the benchmark result. It records:
 
-**Supplementary**: Per-server native protocols (GeoServices REST for Honua, WFS for GeoServer) may be added later as additional data points.
+- HTTP status
+- `Content-Type`
+- response byte count
+- body hash
+- compact shape notes for JSON and image responses
+
+The audit exists to make protocol comparisons publishable and to catch accidental response
+shape drift without exposing raw payloads.
+
+## Protocol Matrix
+
+GeoBench separates protocol families into **primary common**, **secondary standards**, and
+**supplemental native** tracks. Results from different tracks are never merged into a single
+"winner" chart.
+
+### Primary Common Track
+
+These are the first charts to publish because they exercise equivalent capabilities across all
+servers on broadly comparable surfaces.
+
+| Family | Operation | Honua | GeoServer | QGIS | Publish Tier | Notes |
+|--------|-----------|-------|-----------|------|--------------|-------|
+| Feature | OGC API Features `items` read | Yes | Yes | Yes | Primary | Main apples-to-apples feature read surface |
+| Feature | OGC API-equivalent attribute filtering | Yes | Yes | Yes | Primary | QGIS may require WFS Filter Encoding internally for fair equivalent filters |
+| Feature | OGC API-equivalent bbox filtering | Yes | Yes | Yes | Primary | Same response limit and validation policy |
+| Feature | Mixed feature workload | Yes | Yes | Yes | Primary | Must be composed only of request types that validate equivalently |
+| Raster | WMS `GetMap` | Yes | Yes | Yes | Primary | First common raster track |
+| Raster | WMS `GetFeatureInfo` | Yes | Yes | Yes | Secondary | Useful, but more sensitive to styling and hit-testing nuances |
+
+### Secondary Standards Track
+
+These are standards-based, but version and implementation differences can make the comparisons
+messier than the primary track. They should be published separately with explicit caveats.
+
+| Family | Operation | Honua | GeoServer | QGIS | Publish Tier | Notes |
+|--------|-----------|-------|-----------|------|--------------|-------|
+| Feature | WFS `GetFeature` | Yes | Yes | Yes | Secondary | WFS version support differs across servers |
+| Feature | WFS filtered queries | Yes | Yes | Yes | Secondary | Prefer a version/profile all tested servers genuinely support |
+| Raster/Tiles | WMTS tile fetch | Claimed | Yes | Yes | Secondary | Requires an explicit cache policy before benchmarking |
+| Raster | WCS coverage access | Unknown | Yes | Yes | Experimental | Not part of v1 until common coverage data exists |
+
+### Supplemental Native Track
+
+These are useful for product evaluation but are not vendor-neutral standards comparisons. They
+must be reported in separate charts.
+
+| Family | Operation | Honua | GeoServer | QGIS | Publish Tier | Notes |
+|--------|-----------|-------|-----------|------|--------------|-------|
+| Feature | GeoServices REST `FeatureServer/query` | Yes | With GSR extension | No | Supplemental | GeoBench v1 limits this track to spatial bbox queries |
+| Feature | GeoServices REST query diagnostics | Yes | With GSR extension | No | Diagnostic | For optimization work only: concurrency and payload-shape isolates on medium/large bbox reads |
+| Raster | GeoServices REST `MapServer/export` | Yes | No | No | Supplemental | Honua-only supplemental raster track |
+| Raster/Identify | GeoServices REST `MapServer/identify` | Yes | With GSR extension | No | Supplemental | Useful if we later add identify tests |
+
+### Out of Cross-Server Scope
+
+These are valid product capabilities, but they are not common enough across the tested servers
+to belong in GeoBench's cross-server matrix.
+
+| Capability | Honua | GeoServer | QGIS | Status |
+|-----------|-------|-----------|------|--------|
+| OData | Yes | No | No | Out of scope |
+| gRPC runtime | Yes | No | No | Out of scope |
+| MCP / agent tools | Yes | No | No | Out of scope |
+
+### Version / Packaging Notes
+
+- **WFS support is not uniform**:
+  - Honua local benchmark image currently exposes **WFS 2.0.0**
+  - GeoServer supports **WFS 1.0.0 / 1.1.0 / 2.0.0**
+  - QGIS Server local benchmark image exposes **WFS 1.1.0**
+- **GeoServices REST on GeoServer** is not part of the stock image. It requires the
+  **GSR community extension** and a matching GeoServer nightly build, so it should be treated
+  as a separate packaging tier.
+- **GeoServer GSR support is partial**:
+  - `FeatureServer/query` is suitable for supplemental native benchmarking, but without non-geospatial filters or record-count pagination
+  - `MapServer/export` is not part of the current GeoServer GSR capability surface
+- **WMTS and tile-based benchmarks** require an explicit cache policy. Cache-on and cache-off
+  results answer different questions and should not be conflated.
+
+### Reporting Rule
+
+GeoBench reports protocols in separate families:
+
+1. **Common standards, feature**
+2. **Common standards, raster**
+3. **Secondary standards**
+4. **Supplemental native protocols**
+
+No overall "fastest server" claim is valid across mixed protocol families.
+
+Response-shape audits are reported separately from performance tables and should be treated as
+supporting evidence, not benchmark results.
 
 ## System Cards
 
@@ -117,9 +209,10 @@ Without a system card, results are not considered publishable.
 
 - **Docker resource limits are soft** (cgroups v2). Bare-metal results may differ.
 - **Dedicated PostGIS instances**: Each server gets its own PostGIS with identical data. Database shared buffers warm independently per server. Host-level CPU/memory is the only shared resource.
-- **CQL2 support varies**: QGIS Server has limited CQL2 support. Attribute filter tests may use simpler OGC API Features Part 1 property filters for QGIS, which is noted in results.
+- **CQL2 / filter support varies**: QGIS Server may require WFS Filter Encoding instead of native OGC API `filter=` semantics for fair equivalent filter tests.
 - **Response size cap**: `limit=100` per request. Servers with faster JSON serialization benefit — this is intentional (serialization is part of server performance).
-- **No raster/imagery benchmarks** in v1.
+- **Raster benchmarks must control styling**: default symbology, labels, antialiasing, and transparency can materially change render cost and output bytes.
+- **Raster results must be reported separately** from feature results until style parity is pinned and documented.
 - **No write/edit operation benchmarks** in v1.
 
 ## Reproducibility

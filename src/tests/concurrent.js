@@ -1,11 +1,17 @@
 // GeoBench: Concurrency ramp benchmarks (1, 10, 50, 100 VUs).
 //
-// Mixed workload: 40% spatial bbox, 40% attribute filter, 20% paginated scan.
+// Mixed workload: 40% spatial bbox, 30% equality filter, 20% range filter, 10% prefix filter.
 // Usage: k6 run --env SERVER=honua concurrent.js
 
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import {
+  deterministicChoice,
+  deterministicInt,
+  deterministicRange,
+  deterministicUnit,
+} from "./deterministic.js";
 import {
   buildItemsUrl,
   ogcChecks,
@@ -15,14 +21,25 @@ import {
 
 var errorRate = new Rate("errors");
 var responseTime = new Trend("ogc_response_time", true);
+var scenarioThresholds = {
+  "http_req_duration{concurrency:1}": ["max>=0"],
+  "http_req_duration{concurrency:10}": ["max>=0"],
+  "http_req_duration{concurrency:50}": ["max>=0"],
+  "http_req_duration{concurrency:100}": ["max>=0"],
+  "http_reqs{concurrency:1}": ["count>=0"],
+  "http_reqs{concurrency:10}": ["count>=0"],
+  "http_reqs{concurrency:50}": ["count>=0"],
+  "http_reqs{concurrency:100}": ["count>=0"],
+};
 
 export var options = {
+  discardResponseBodies: true,
   scenarios: {
     warmup: {
       executor: "constant-vus",
       vus: 5,
       duration: "60s",
-      exec: "mixedWorkload",
+      exec: "warmupConcurrent",
       tags: { phase: "warmup" },
       startTime: "0s",
     },
@@ -59,31 +76,45 @@ export var options = {
       startTime: "450s",
     },
   },
-  thresholds: {
+  thresholds: Object.assign({
     errors: ["rate<0.05"],
-  },
+  }, scenarioThresholds),
 };
 
 export function mixedWorkload() {
-  var roll = Math.random();
+  var roll = deterministicUnit(0x501);
   var req;
 
   if (roll < 0.4) {
     // Spatial bbox query (varying sizes)
-    var size = 0.5 + Math.random() * 10;
-    req = buildItemsUrl({ bbox: randomBbox(size) });
-  } else if (roll < 0.8) {
-    // Attribute filter query
-    var cat = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    req = buildItemsUrl({ filter: "category='" + cat + "'" });
+    var size = deterministicRange(0.5, 10.5, 0x502);
+    req = buildItemsUrl({ bbox: randomBbox(size, 0x503) });
+  } else if (roll < 0.7) {
+    // Equality filter query
+    var cat = deterministicChoice(CATEGORIES, 0x504);
+    req = buildItemsUrl({
+      filterSpec: { type: "eq", field: "category", value: cat },
+    });
+  } else if (roll < 0.9) {
+    // Range filter query
+    var low = deterministicRange(-20, 40, 0x505);
+    req = buildItemsUrl({
+      filterSpec: { type: "between", field: "temperature", low: low, high: low + 10 },
+    });
   } else {
-    // Unfiltered paginated scan
-    var offset = Math.floor(Math.random() * 1000);
-    req = buildItemsUrl({ offset: offset });
+    // Prefix filter query
+    var prefix = "feature_" + deterministicInt(1000, 0x506);
+    req = buildItemsUrl({
+      filterSpec: { type: "prefix", field: "feature_name", prefix: prefix },
+    });
   }
 
-  var res = http.get(req.url, { tags: { name: req.name } });
-  check(res, ogcChecks());
-  errorRate.add(res.status !== 200);
+  var res = http.get(req.url, { tags: { name: req.name }, responseType: "text" });
+  var ok = check(res, ogcChecks(req));
+  errorRate.add(!ok);
   responseTime.add(res.timings.duration);
+}
+
+export function warmupConcurrent() {
+  mixedWorkload();
 }

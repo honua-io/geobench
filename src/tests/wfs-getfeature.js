@@ -1,18 +1,33 @@
-// GeoBench: Spatial bounding box benchmarks (small, medium, large).
+// GeoBench: standards-based WFS GetFeature benchmarks.
 //
-// Usage: k6 run --env SERVER=honua spatial-bbox.js
+// Comparable track:
+// - base collection read
+// - bbox-restricted read
+//
+// Filtered WFS queries are intentionally omitted from this suite because the
+// local Honua, GeoServer, and QGIS servers do not share one clean, common
+// standards-based filter syntax in this environment.
+//
+// Usage: k6 run --env SERVER=honua wfs-getfeature.js
 
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
-import { buildItemsUrl, ogcChecks, randomBbox } from "./helpers.js";
+import {
+  buildGetFeatureRequest,
+  randomWfsBbox,
+  wfsChecks,
+  WFS_BBOX_SIZES,
+} from "./wfs-helpers.js";
 
 var errorRate = new Rate("errors");
-var responseTime = new Trend("ogc_response_time", true);
+var responseTime = new Trend("wfs_response_time", true);
 var scenarioThresholds = {
+  "http_req_duration{query_type:base}": ["max>=0"],
   "http_req_duration{bbox_size:small}": ["max>=0"],
   "http_req_duration{bbox_size:medium}": ["max>=0"],
   "http_req_duration{bbox_size:large}": ["max>=0"],
+  "http_reqs{query_type:base}": ["count>=0"],
   "http_reqs{bbox_size:small}": ["count>=0"],
   "http_reqs{bbox_size:medium}": ["count>=0"],
   "http_reqs{bbox_size:large}": ["count>=0"],
@@ -25,9 +40,17 @@ export var options = {
       executor: "constant-vus",
       vus: 5,
       duration: "60s",
-      exec: "warmupSpatialBbox",
+      exec: "warmupWfsGetFeature",
       tags: { phase: "warmup" },
       startTime: "0s",
+    },
+    base_read: {
+      executor: "constant-vus",
+      vus: 10,
+      duration: "120s",
+      exec: "baseRead",
+      tags: { query_type: "base" },
+      startTime: "60s",
     },
     small_bbox: {
       executor: "constant-vus",
@@ -35,7 +58,7 @@ export var options = {
       duration: "120s",
       exec: "smallBbox",
       tags: { bbox_size: "small" },
-      startTime: "60s",
+      startTime: "190s",
     },
     medium_bbox: {
       executor: "constant-vus",
@@ -43,7 +66,7 @@ export var options = {
       duration: "120s",
       exec: "mediumBbox",
       tags: { bbox_size: "medium" },
-      startTime: "190s",
+      startTime: "320s",
     },
     large_bbox: {
       executor: "constant-vus",
@@ -51,7 +74,7 @@ export var options = {
       duration: "120s",
       exec: "largeBbox",
       tags: { bbox_size: "large" },
-      startTime: "320s",
+      startTime: "450s",
     },
   },
   thresholds: Object.assign({
@@ -59,33 +82,36 @@ export var options = {
   }, scenarioThresholds),
 };
 
-// Small: ~0.1 degree (city-scale)
+function runGetFeature(bbox) {
+  var req = buildGetFeatureRequest({
+    bbox: bbox,
+  });
+  var res = http.get(req.url, { tags: { name: req.name }, responseType: "text" });
+  var ok = check(res, wfsChecks(req));
+  errorRate.add(!ok);
+  responseTime.add(res.timings.duration);
+}
+
+export function baseRead() {
+  var req = buildGetFeatureRequest();
+  var res = http.get(req.url, { tags: { name: req.name }, responseType: "text" });
+  var ok = check(res, wfsChecks(req));
+  errorRate.add(!ok);
+  responseTime.add(res.timings.duration);
+}
+
 export function smallBbox() {
-  var req = buildItemsUrl({ bbox: randomBbox(0.1, 0x401) });
-  var res = http.get(req.url, { tags: { name: req.name }, responseType: "text" });
-  var ok = check(res, ogcChecks(req));
-  errorRate.add(!ok);
-  responseTime.add(res.timings.duration);
+  runGetFeature(randomWfsBbox(WFS_BBOX_SIZES.small, 0x601));
 }
 
-// Medium: ~5 degrees (country-scale)
 export function mediumBbox() {
-  var req = buildItemsUrl({ bbox: randomBbox(5.0, 0x402) });
-  var res = http.get(req.url, { tags: { name: req.name }, responseType: "text" });
-  var ok = check(res, ogcChecks(req));
-  errorRate.add(!ok);
-  responseTime.add(res.timings.duration);
+  runGetFeature(randomWfsBbox(WFS_BBOX_SIZES.medium, 0x602));
 }
 
-// Large: ~30 degrees (continental-scale)
 export function largeBbox() {
-  var req = buildItemsUrl({ bbox: randomBbox(30.0, 0x403) });
-  var res = http.get(req.url, { tags: { name: req.name }, responseType: "text" });
-  var ok = check(res, ogcChecks(req));
-  errorRate.add(!ok);
-  responseTime.add(res.timings.duration);
+  runGetFeature(randomWfsBbox(WFS_BBOX_SIZES.large, 0x603));
 }
 
-export function warmupSpatialBbox() {
-  mediumBbox();
+export function warmupWfsGetFeature() {
+  baseRead();
 }

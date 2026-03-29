@@ -14,7 +14,9 @@ There's no standardized way to compare geospatial feature server performance. Ve
 | [GeoServer](https://geoserver.org/) | Java / JVM | `kartoza/geoserver:2.26.1` |
 | [QGIS Server](https://qgis.org/en/site/about/features.html#qgis-server) | C++ / Qt | `qgis/qgis-server:3.38` |
 
-All servers are tested via **OGC API Features** against the same shared PostGIS database with identical resource constraints (4 CPU, 4 GB RAM).
+GeoBench now supports separate tracks for **common feature APIs**, **common raster APIs**,
+**secondary standards** such as WFS, and **supplemental native protocols** such as GeoServices
+REST. See [METHODOLOGY.md](METHODOLOGY.md) for the matrix and reporting rules.
 
 ## Quick Start
 
@@ -32,6 +34,73 @@ docker compose up -d
 ```
 
 Results are written to `results/<timestamp>/report.md`.
+Each run also writes `*-response-shapes.json` audit files for the selected servers. The generated
+report includes a compact response-shape section with status, `Content-Type`, byte count, a body
+hash, and structural notes.
+The current authoritative rerun status is tracked in [docs/matrix-status.md](docs/matrix-status.md).
+
+Protocol-specific runs can be selected explicitly:
+
+```bash
+# Common raster track
+TESTS="wms-getmap" SERVERS="geoserver qgis" ./scripts/run-benchmark.sh
+
+# Secondary standards track
+TESTS="wfs-getfeature" ./scripts/run-benchmark.sh
+
+# Supplemental native track
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
+GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
+GEOSERVER_GSR_ENABLED=1 \
+TESTS="geoservices-query" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# Long-burn subset of the main native track with the stock bbox salts
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
+GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
+GEOSERVER_GSR_ENABLED=1 \
+GEOSERVICES_QUERY_WARMUP=60s \
+GEOSERVICES_QUERY_DURATION=120s \
+GEOSERVICES_QUERY_SCENARIOS=medium,large \
+TESTS="geoservices-query" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# Large-only seed sweep
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
+GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
+GEOSERVER_GSR_ENABLED=1 \
+GEOSERVICES_QUERY_WARMUP=60s \
+GEOSERVICES_QUERY_DURATION=120s \
+GEOSERVICES_QUERY_SCENARIOS=large \
+GEOSERVICES_QUERY_SALT_LARGE=0xB02 \
+TESTS="geoservices-query" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# Summarize multiple large-only runs into one sweep report
+python3 scripts/run-geoservices-query-sweep.py \
+  --scenario large \
+  --results-dir results/20260328-183500 \
+  --results-dir results/20260328-184250
+
+# Supplemental native diagnostics for optimization work
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
+GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
+GEOSERVER_GSR_ENABLED=1 \
+TESTS="geoservices-query-diagnostics" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# Long-burn diagnostic subset
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
+GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
+GEOSERVER_GSR_ENABLED=1 \
+GEOSERVICES_DIAG_WARMUP=60s \
+GEOSERVICES_DIAG_DURATION=120s \
+GEOSERVICES_DIAG_VARIANTS="medium-full-10vu,medium-geom-oid-10vu,large-full-10vu,large-geom-oid-10vu" \
+TESTS="geoservices-query-diagnostics" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# Honua-native raster export track
+TESTS="geoservices-export" SERVERS="honua" ./scripts/run-benchmark.sh
+
+# Add lightweight response-shape audits to any selected protocol suite
+AUDIT_SHAPES=1 TESTS="attribute-filter spatial-bbox wms-getmap wfs-getfeature" \
+  SERVERS="honua geoserver qgis" ./scripts/run-benchmark.sh
+```
 
 For a quick validation without running full benchmarks:
 
@@ -48,6 +117,22 @@ bash tests/smoke-test.sh
 | `attribute-filter` | Equality, range, LIKE queries via CQL2 | 10 | 120s each |
 | `spatial-bbox` | Small/medium/large bounding box queries | 10 | 120s each |
 | `concurrent` | Mixed workload at 1/10/50/100 VUs | 1-100 | 120s each |
+| `wms-getmap` | WMS raster rendering on the common standards track | 10 | 120s each |
+| `wfs-getfeature` | WFS base read plus bbox reads on the standards track | 10 | 120s each |
+| `geoservices-query` | GeoServices REST FeatureServer/query spatial bbox track | 10 | 120s each |
+| `geoservices-query-diagnostics` | Native query diagnostics: 1 VU vs 10 VU and reduced-payload variants on medium/large bboxes | mixed | 15s warmup + 20s each |
+| `geoservices-export` | GeoServices REST MapServer/export on the Honua-native track | 10 | 120s each |
+
+The runner captures a lightweight response-shape audit before each timed server run. It is
+designed for blog-safe publishing and regression checking, not for performance comparison.
+
+## Optional GeoServer GSR
+
+GeoServer's GeoServices REST support is not part of the stock image. To benchmark
+`FeatureServer/query`, run GeoServer with the `gsr` community extension on a matching
+nightly build tag such as `docker.osgeo.org/geoserver:2.28.x`, then set
+`GEOSERVER_GSR_ENABLED=1`. The GeoBench adapter verifies the GSR query endpoint before the timed
+run starts.
 
 ## Dataset
 
@@ -67,6 +152,7 @@ See [METHODOLOGY.md](METHODOLOGY.md) for the complete fairness and reproducibili
 - 5 runs with median reporting
 - Mandatory system cards
 - Caching and connection pool policies
+- Protocol matrix and reporting tiers
 
 ## Architecture
 
@@ -87,7 +173,7 @@ See [METHODOLOGY.md](METHODOLOGY.md) for the complete fairness and reproducibili
 │               └─────────────┘                         │
 │                                                       │
 │  ┌──────────┐                                         │
-│  │    k6    │─── OGC API Features ──► servers         │
+│  │    k6    │─── OGC API / WMS / WFS / GSR ──► servers│
 │  └──────────┘                                         │
 └──────────────────────────────────────────────────────┘
 ```
