@@ -108,6 +108,10 @@ build_k6_env_flags() {
     GEOSERVICES_QUERY_SALT_SMALL
     GEOSERVICES_QUERY_SALT_MEDIUM
     GEOSERVICES_QUERY_SALT_LARGE
+    WMS_REPROJECTION_DURATION
+    WMS_REPROJECTION_WARMUP
+    WMS_REPROJECTION_VUS
+    WMS_REPROJECTION_SCENARIOS
   )
 
   for name in "${names[@]}"; do
@@ -155,7 +159,7 @@ supports_test_for_server() {
     attribute-filter|spatial-bbox|concurrent|wfs-getfeature)
       return 0
       ;;
-    wms-getmap)
+    wms-getmap|wms-reprojection)
       [[ "${server}" == "honua" || "${server}" == "geoserver" || "${server}" == "qgis" ]]
       return
       ;;

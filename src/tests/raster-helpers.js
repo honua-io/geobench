@@ -111,6 +111,56 @@ export function buildBbox(sizeDeg, salt) {
   return randomBbox(sizeDeg, salt);
 }
 
+function parseBbox(bbox) {
+  var parts = String(bbox).split(",").map(function (value) {
+    return parseFloat(value);
+  });
+
+  if (parts.length !== 4 || parts.some(function (value) { return !Number.isFinite(value); })) {
+    throw new Error("Invalid bbox: " + bbox);
+  }
+
+  return {
+    minLon: parts[0],
+    minLat: parts[1],
+    maxLon: parts[2],
+    maxLat: parts[3],
+  };
+}
+
+function lonLatToWebMercator(lon, lat) {
+  var originShift = 20037508.342789244;
+  var clampedLat = Math.max(Math.min(lat, 85.05112878), -85.05112878);
+  var x = lon * originShift / 180.0;
+  var y = Math.log(Math.tan((90 + clampedLat) * Math.PI / 360.0)) / (Math.PI / 180.0);
+  y = y * originShift / 180.0;
+  return { x: x, y: y };
+}
+
+export function reprojectBbox(bbox, targetCrs) {
+  var normalizedCrs = String(targetCrs || "CRS:84").toUpperCase();
+  if (normalizedCrs === "CRS:84" || normalizedCrs === "EPSG:4326") {
+    return bbox;
+  }
+
+  if (normalizedCrs !== "EPSG:3857") {
+    throw new Error("Unsupported raster reprojection target: " + targetCrs);
+  }
+
+  var bounds = parseBbox(bbox);
+  var min = lonLatToWebMercator(bounds.minLon, bounds.minLat);
+  var max = lonLatToWebMercator(bounds.maxLon, bounds.maxLat);
+  return [min.x, min.y, max.x, max.y]
+    .map(function (value) {
+      return value.toFixed(3);
+    })
+    .join(",");
+}
+
+export function buildProjectedBbox(sizeDeg, salt, targetCrs) {
+  return reprojectBbox(buildBbox(sizeDeg, salt), targetCrs);
+}
+
 export function validateImageResponse(response, expectedSize) {
   var contentType = (response.headers["Content-Type"] || response.headers["content-type"] || "")
     .toLowerCase();
@@ -138,6 +188,7 @@ export function validateImageResponse(response, expectedSize) {
 export function buildMapRequest(serverName, params) {
   params = params || {};
   var server = getRasterServer(serverName);
+  var targetCrs = params.crs || "CRS:84";
 
   if (server.config.kind === "wms") {
     var url = server.config.baseUrl + server.config.path;
@@ -151,7 +202,7 @@ export function buildMapRequest(serverName, params) {
     url += "&REQUEST=GetMap";
     url += "&LAYERS=" + encodeURIComponent(server.config.layer);
     url += "&STYLES=";
-    url += "&CRS=CRS:84";
+    url += "&CRS=" + encodeURIComponent(targetCrs);
     url += "&BBOX=" + params.bbox;
     url += "&WIDTH=" + params.width;
     url += "&HEIGHT=" + params.height;
@@ -167,8 +218,8 @@ export function buildMapRequest(serverName, params) {
   if (server.config.kind === "export") {
     var exportUrl = server.config.baseUrl + server.config.path;
     exportUrl += "?bbox=" + params.bbox;
-    exportUrl += "&bboxSR=4326";
-    exportUrl += "&imageSR=4326";
+    exportUrl += "&bboxSR=" + encodeURIComponent(params.bboxSrid || 4326);
+    exportUrl += "&imageSR=" + encodeURIComponent(params.imageSrid || params.bboxSrid || 4326);
     exportUrl += "&size=" + params.width + "," + params.height;
     exportUrl += "&format=png";
     exportUrl += "&transparent=true";

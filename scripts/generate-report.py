@@ -58,6 +58,16 @@ TEST_DEFINITIONS = {
             {"id": "large", "label": "large", "tag_key": "bbox_size", "tag_value": "large"},
         ],
     },
+    "wms-reprojection": {
+        "group": "Common Standards: Raster",
+        "heading": "### WMS GetMap Reprojection",
+        "first_column": "BBox Size",
+        "scenarios": [
+            {"id": "small", "label": "small", "tag_key": "bbox_size", "tag_value": "small"},
+            {"id": "medium", "label": "medium", "tag_key": "bbox_size", "tag_value": "medium"},
+            {"id": "large", "label": "large", "tag_key": "bbox_size", "tag_value": "large"},
+        ],
+    },
     "wfs-getfeature": {
         "group": "Secondary Standards",
         "heading": "### WFS GetFeature",
@@ -107,7 +117,7 @@ TEST_DEFINITIONS = {
 }
 REPORT_GROUPS = [
     ("Common Standards: Feature", ["attribute-filter", "spatial-bbox", "concurrent"]),
-    ("Common Standards: Raster", ["wms-getmap"]),
+    ("Common Standards: Raster", ["wms-getmap", "wms-reprojection"]),
     ("Secondary Standards", ["wfs-getfeature"]),
     ("Supplemental Native Protocols", ["geoservices-query", "geoservices-query-diagnostics", "geoservices-export"]),
 ]

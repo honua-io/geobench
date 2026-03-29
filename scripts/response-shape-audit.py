@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 import urllib.error
@@ -56,6 +57,22 @@ def http_get_json(url: str) -> tuple[int, str, bytes, Any]:
         except Exception:
             payload = None
     return status, content_type, body, payload
+
+
+def lonlat_to_web_mercator(lon: float, lat: float) -> tuple[float, float]:
+    origin_shift = 20037508.342789244
+    clamped_lat = max(min(lat, 85.05112878), -85.05112878)
+    x = lon * origin_shift / 180.0
+    y = math.log(math.tan((90.0 + clamped_lat) * math.pi / 360.0)) / (math.pi / 180.0)
+    y = y * origin_shift / 180.0
+    return x, y
+
+
+def reproject_bbox_4326_to_3857(bbox: str) -> str:
+    min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))
+    min_x, min_y = lonlat_to_web_mercator(min_lon, min_lat)
+    max_x, max_y = lonlat_to_web_mercator(max_lon, max_lat)
+    return f"{min_x:.3f},{min_y:.3f},{max_x:.3f},{max_y:.3f}"
 
 
 def top_level_keys(payload: Any) -> list[str]:
@@ -264,6 +281,8 @@ def wfs_requests(server: ServerConfig) -> list[dict[str, str]]:
 
 def raster_requests(server: ServerConfig, enabled_tests: list[str]) -> list[dict[str, str]]:
     requests: list[dict[str, str]] = []
+    sample_bbox_4326 = "139.2325,35.2325,139.3325,35.3325"
+    sample_bbox_3857 = reproject_bbox_4326_to_3857(sample_bbox_4326)
     if server.name == "honua":
         if "wms-getmap" in enabled_tests:
             requests.append(
@@ -272,7 +291,17 @@ def raster_requests(server: ServerConfig, enabled_tests: list[str]) -> list[dict
                     "protocol": "wms",
                     "suite": "wms-getmap",
                     "request": "small",
-                    "url": f"{server.base_url}/ogc/services/default/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=bench_points&STYLES=&CRS=CRS:84&BBOX=139.2325,35.2325,139.3325,35.3325&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
+                    "url": f"{server.base_url}/ogc/services/default/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=bench_points&STYLES=&CRS=CRS:84&BBOX={sample_bbox_4326}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
+                }
+            )
+        if "wms-reprojection" in enabled_tests:
+            requests.append(
+                {
+                    "family": "raster",
+                    "protocol": "wms",
+                    "suite": "wms-reprojection",
+                    "request": "small-3857",
+                    "url": f"{server.base_url}/ogc/services/default/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=bench_points&STYLES=&CRS=EPSG:3857&BBOX={sample_bbox_3857}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
                 }
             )
         if "geoservices-export" in enabled_tests:
@@ -282,7 +311,7 @@ def raster_requests(server: ServerConfig, enabled_tests: list[str]) -> list[dict
                     "protocol": "geoservices-rest",
                     "suite": "geoservices-export",
                     "request": "small",
-                    "url": f"{server.base_url}/rest/services/default/MapServer/export?bbox=139.2325,35.2325,139.3325,35.3325&bboxSR=4326&imageSR=4326&size={DEFAULT_IMAGE_SIZE},{DEFAULT_IMAGE_SIZE}&format=png&transparent=true&f=image",
+                    "url": f"{server.base_url}/rest/services/default/MapServer/export?bbox={sample_bbox_4326}&bboxSR=4326&imageSR=4326&size={DEFAULT_IMAGE_SIZE},{DEFAULT_IMAGE_SIZE}&format=png&transparent=true&f=image",
                 }
             )
         return requests
@@ -294,7 +323,17 @@ def raster_requests(server: ServerConfig, enabled_tests: list[str]) -> list[dict
                     "protocol": "wms",
                     "suite": "wms-getmap",
                     "request": "small",
-                    "url": f"{server.base_url}/geoserver/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=geobench:bench_points&STYLES=&CRS=CRS:84&BBOX=139.2325,35.2325,139.3325,35.3325&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
+                    "url": f"{server.base_url}/geoserver/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=geobench:bench_points&STYLES=&CRS=CRS:84&BBOX={sample_bbox_4326}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
+                }
+            )
+        if "wms-reprojection" in enabled_tests:
+            requests.append(
+                {
+                    "family": "raster",
+                    "protocol": "wms",
+                    "suite": "wms-reprojection",
+                    "request": "small-3857",
+                    "url": f"{server.base_url}/geoserver/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=geobench:bench_points&STYLES=&CRS=EPSG:3857&BBOX={sample_bbox_3857}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
                 }
             )
         return requests
@@ -307,7 +346,17 @@ def raster_requests(server: ServerConfig, enabled_tests: list[str]) -> list[dict
                     "protocol": "wms",
                     "suite": "wms-getmap",
                     "request": "small",
-                    "url": f"{server.base_url}/ows/?MAP={map_path}&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=bench_points&STYLES=&CRS=CRS:84&BBOX=139.2325,35.2325,139.3325,35.3325&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
+                    "url": f"{server.base_url}/ows/?MAP={map_path}&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=bench_points&STYLES=&CRS=CRS:84&BBOX={sample_bbox_4326}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
+                }
+            )
+        if "wms-reprojection" in enabled_tests:
+            requests.append(
+                {
+                    "family": "raster",
+                    "protocol": "wms",
+                    "suite": "wms-reprojection",
+                    "request": "small-3857",
+                    "url": f"{server.base_url}/ows/?MAP={map_path}&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=bench_points&STYLES=&CRS=EPSG:3857&BBOX={sample_bbox_3857}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}&FORMAT=image/png&TRANSPARENT=true",
                 }
             )
         return requests
@@ -532,7 +581,7 @@ def main() -> int:
         requests.extend(geoservices_diagnostic_requests(server))
     if "wfs-getfeature" in enabled_tests:
         requests.extend(wfs_requests(server))
-    if any(test in enabled_tests for test in ("wms-getmap", "geoservices-export")):
+    if any(test in enabled_tests for test in ("wms-getmap", "wms-reprojection", "geoservices-export")):
         requests.extend(raster_requests(server, enabled_tests))
 
     entries = []

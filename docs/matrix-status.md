@@ -26,6 +26,7 @@ Current authoritative matrix status for the rerun campaign on the current local 
 | --- | --- | --- |
 | `geoservices-query-diagnostics` | Diagnostic only | Useful for optimization work, not for the publishable matrix |
 | `geoservices-export` | Supplemental single-server | Honua-only native raster track |
+| `wms-reprojection` | Initial validation complete | Implemented and smoke-benchmarked in `results/20260329-124605/report.md`; not yet part of the reduced canonical matrix |
 | `wms-getfeatureinfo` | Not rerun yet | Secondary row, not part of the current completed set |
 | WFS filtered queries | Not implemented as a canonical row yet | Still called out in methodology as secondary work |
 | WMTS / WCS / `MapServer/identify` | Not rerun yet | Still missing from the current authoritative matrix |

@@ -124,6 +124,7 @@ servers on broadly comparable surfaces.
 | Feature | OGC API-equivalent bbox filtering | Yes | Yes | Yes | Primary | Same response limit and validation policy |
 | Feature | Mixed feature workload | Yes | Yes | Yes | Primary | Must be composed only of request types that validate equivalently |
 | Raster | WMS `GetMap` | Yes | Yes | Yes | Primary | First common raster track |
+| Raster | WMS `GetMap` reprojection | Yes | Yes | Yes | Secondary | Same deterministic views as the base WMS row, requested in `EPSG:3857` |
 | Raster | WMS `GetFeatureInfo` | Yes | Yes | Yes | Secondary | Useful, but more sensitive to styling and hit-testing nuances |
 
 ### Secondary Standards Track

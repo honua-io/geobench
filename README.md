@@ -45,6 +45,9 @@ Protocol-specific runs can be selected explicitly:
 # Common raster track
 TESTS="wms-getmap" SERVERS="geoserver qgis" ./scripts/run-benchmark.sh
 
+# Common raster reprojection track
+TESTS="wms-reprojection" SERVERS="honua geoserver qgis" ./scripts/run-benchmark.sh
+
 # Secondary standards track
 TESTS="wfs-getfeature" ./scripts/run-benchmark.sh
 
@@ -118,6 +121,7 @@ bash tests/smoke-test.sh
 | `spatial-bbox` | Small/medium/large bounding box queries | 10 | 120s each |
 | `concurrent` | Mixed workload at 1/10/50/100 VUs | 1-100 | 120s each |
 | `wms-getmap` | WMS raster rendering on the common standards track | 10 | 120s each |
+| `wms-reprojection` | WMS `GetMap` with deterministic `EPSG:3857` reprojection from `4326` source data | 10 | 120s each |
 | `wfs-getfeature` | WFS base read plus bbox reads on the standards track | 10 | 120s each |
 | `geoservices-query` | GeoServices REST FeatureServer/query spatial bbox track | 10 | 120s each |
 | `geoservices-query-diagnostics` | Native query diagnostics: 1 VU vs 10 VU and reduced-payload variants on medium/large bboxes | mixed | 15s warmup + 20s each |
