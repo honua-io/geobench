@@ -18,6 +18,20 @@ GeoBench now supports separate tracks for **common feature APIs**, **common rast
 **secondary standards** such as WFS, and **supplemental native protocols** such as GeoServices
 REST. See [METHODOLOGY.md](METHODOLOGY.md) for the matrix and reporting rules.
 
+## Current Snapshot
+
+Current authoritative reruns on the 100K-point dataset as of March 30, 2026 show Honua ahead of
+GeoServer on throughput across the tracked comparative suites in the current full-suite snapshot.
+
+- Concurrent mixed workload: Honua measured `43.8 / 191.9 / 203.8 / 191.3 req/s` at
+  `1 / 10 / 50 / 100` VUs, versus GeoServer at `9.1 / 34.9 / 45.2 / 41.0 req/s`.
+- WMS reprojection: Honua measured `1020.4 / 27.8 / 29.2 req/s` on small, medium, and large bbox
+  scenarios, versus GeoServer at `23.6 / 9.1 / 6.3 req/s`.
+- GeoServices `FeatureServer/query`: Honua measured `489.5 / 212.4 / 74.0 req/s` on small,
+  medium, and large bbox scenarios, versus GeoServer at `107.3 / 134.9 / 28.1 req/s`.
+
+The current authoritative rerun status is tracked in [docs/matrix-status.md](docs/matrix-status.md).
+
 ## Quick Start
 
 **Requirements**: Docker, Docker Compose v2, Python 3, jq, curl
@@ -37,7 +51,6 @@ Results are written to `results/<timestamp>/report.md`.
 Each run also writes `*-response-shapes.json` audit files for the selected servers. The generated
 report includes a compact response-shape section with status, `Content-Type`, byte count, a body
 hash, and structural notes.
-The current authoritative rerun status is tracked in [docs/matrix-status.md](docs/matrix-status.md).
 
 Protocol-specific runs can be selected explicitly:
 
