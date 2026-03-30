@@ -22,13 +22,20 @@ REST. See [METHODOLOGY.md](METHODOLOGY.md) for the matrix and reporting rules.
 
 Current authoritative reruns on the 100K-point dataset as of March 30, 2026 show Honua ahead of
 GeoServer on throughput across the tracked comparative suites in the current full-suite snapshot.
+Every comparative `req/s` row in the current authoritative report is won by Honua.
 
-- Concurrent mixed workload: Honua measured `43.8 / 191.9 / 203.8 / 191.3 req/s` at
-  `1 / 10 / 50 / 100` VUs, versus GeoServer at `9.1 / 34.9 / 45.2 / 41.0 req/s`.
-- WMS reprojection: Honua measured `1020.4 / 27.8 / 29.2 req/s` on small, medium, and large bbox
-  scenarios, versus GeoServer at `23.6 / 9.1 / 6.3 req/s`.
-- GeoServices `FeatureServer/query`: Honua measured `489.5 / 212.4 / 74.0 req/s` on small,
-  medium, and large bbox scenarios, versus GeoServer at `107.3 / 134.9 / 28.1 req/s`.
+| Suite | Scenario | Honua | GeoServer | QGIS | Winner |
+|---|---|---|---|---|---|
+| Concurrent mixed workload | 1 VU | **43.8 req/s** | 9.1 req/s | 0.6 req/s | **Honua** |
+| Concurrent mixed workload | 10 VUs | **191.9 req/s** | 34.9 req/s | 0.6 req/s | **Honua** |
+| Concurrent mixed workload | 50 VUs | **203.8 req/s** | 45.2 req/s | 0.7 req/s | **Honua** |
+| Concurrent mixed workload | 100 VUs | **191.3 req/s** | 41.0 req/s | 0.7 req/s | **Honua** |
+| WMS reprojection | small bbox | **1020.4 req/s** | 23.6 req/s | 0.8 req/s | **Honua** |
+| WMS reprojection | medium bbox | **27.8 req/s** | 9.1 req/s | 0.8 req/s | **Honua** |
+| WMS reprojection | large bbox | **29.2 req/s** | 6.3 req/s | 0.8 req/s | **Honua** |
+| GeoServices `FeatureServer/query` | small bbox | **489.5 req/s** | 107.3 req/s | — | **Honua** |
+| GeoServices `FeatureServer/query` | medium bbox | **212.4 req/s** | 134.9 req/s | — | **Honua** |
+| GeoServices `FeatureServer/query` | large bbox | **74.0 req/s** | 28.1 req/s | — | **Honua** |
 
 The current authoritative rerun status is tracked in [docs/matrix-status.md](docs/matrix-status.md).
 
