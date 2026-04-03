@@ -140,3 +140,82 @@ export function geoservicesChecks(request) {
     },
   };
 }
+
+function identifyPayloadHasResults(response) {
+  var payload = parsePayload(response);
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  if (payload.error) {
+    return false;
+  }
+
+  if (payload.results !== undefined) {
+    return true;
+  }
+
+  if (payload.layers !== undefined) {
+    return Array.isArray(payload.layers);
+  }
+
+  if (payload.features !== undefined) {
+    return Array.isArray(payload.features);
+  }
+
+  return false;
+}
+
+export function buildGeoservicesIdentifyRequest(params) {
+  params = params || {};
+  var server = getServer();
+
+  var mapExtent = params.mapExtent || "";
+  if (!mapExtent) {
+    throw new Error("Identify request requires mapExtent");
+  }
+
+  var geometry = params.geometry || "";
+  if (!geometry) {
+    throw new Error("Identify request requires geometry");
+  }
+
+  var url =
+    server.config.baseUrl +
+    server.config.pathPrefix +
+    encodeURIComponent(server.config.serviceId) +
+    "/MapServer/identify";
+
+  url += "?f=json";
+  url += "&geometry=" + encodeURIComponent(geometry);
+  url += "&geometryType=" + encodeURIComponent(params.geometryType || "esriGeometryPoint");
+  url += "&sr=" + encodeURIComponent(params.srid || "4326");
+  url += "&mapExtent=" + encodeURIComponent(mapExtent);
+  url += "&imageDisplay=" + encodeURIComponent(params.imageWidth || "256") + "," +
+    encodeURIComponent(params.imageHeight || "256") + "," +
+    encodeURIComponent(params.dpi || "96");
+  url += "&tolerance=" + encodeURIComponent(params.tolerance || 2);
+  url += "&returnGeometry=" + encodeURIComponent(params.returnGeometry === false ? "false" : "true");
+  url += "&layers=" + encodeURIComponent(params.layers || ("all:" + server.config.layerId));
+
+  return {
+    url: url,
+    name: server.name + ":identify",
+    validate: identifyPayloadHasResults,
+  };
+}
+
+export function geoservicesIdentifyChecks(request) {
+  return {
+    "status is 200": function (response) {
+      return response.status === 200;
+    },
+    "content-type is json": function (response) {
+      var contentType = response.headers["Content-Type"] || response.headers["content-type"] || "";
+      return contentType.toLowerCase().indexOf("json") !== -1;
+    },
+    "response includes identify payload": function (response) {
+      return request && request.validate ? request.validate(response) : false;
+    },
+  };
+}

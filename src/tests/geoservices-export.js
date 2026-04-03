@@ -110,5 +110,7 @@ export function largeExport() {
 }
 
 export function warmupGeoservicesExport() {
+  smallExport();
   mediumExport();
+  largeExport();
 }

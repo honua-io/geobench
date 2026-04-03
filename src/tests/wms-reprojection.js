@@ -136,15 +136,15 @@ export function largeMap() {
 }
 
 export function warmupWmsReprojection() {
-  if (selectedBboxSizes.indexOf("medium") !== -1) {
-    mediumMap();
-    return;
-  }
-
   if (selectedBboxSizes.indexOf("small") !== -1) {
     smallMap();
-    return;
   }
 
-  largeMap();
+  if (selectedBboxSizes.indexOf("medium") !== -1) {
+    mediumMap();
+  }
+
+  if (selectedBboxSizes.indexOf("large") !== -1) {
+    largeMap();
+  }
 }

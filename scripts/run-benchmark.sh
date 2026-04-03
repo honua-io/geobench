@@ -21,8 +21,11 @@ if [ -n "${TESTS:-}" ]; then
 else
   TESTS=("attribute-filter" "spatial-bbox" "concurrent")
 fi
-RUNS="${RUNS:-1}"
+RUNS="${RUNS:-5}"
 AUDIT_SHAPES="${AUDIT_SHAPES:-1}"
+CACHE_TIER_DEFAULT="${CACHE_TIER_DEFAULT:-${CACHE_TIER:-warm_service}}"
+WMTS_CACHE_TIER="${WMTS_CACHE_TIER:-warm_tile_cache}"
+WMTS_CACHE_POLICY="${WMTS_CACHE_POLICY:-warm}"
 
 mkdir -p "${RESULTS_DIR}"
 chmod 777 "${RESULTS_DIR}"
@@ -37,6 +40,7 @@ echo "  Tests:      ${TESTS[*]}"
 echo "  Runs:       ${RUNS}"
 echo "  Isolation:  each server gets its own PostGIS"
 echo "  Audit:      response-shape samples ${AUDIT_SHAPES}"
+echo "  Cache:      default=${CACHE_TIER_DEFAULT}; wmts=${WMTS_CACHE_TIER}"
 echo ""
 
 cd "${PROJECT_DIR}"
@@ -103,15 +107,40 @@ build_k6_env_flags() {
     GEOSERVICES_DIAG_VARIANTS
     GEOSERVICES_QUERY_DURATION
     GEOSERVICES_QUERY_WARMUP
+    GEOSERVICES_IDENTIFY_DURATION
+    GEOSERVICES_IDENTIFY_WARMUP
+    GEOSERVICES_IDENTIFY_VUS
+    GEOSERVICES_IDENTIFY_SCENARIOS
     GEOSERVICES_QUERY_VUS
     GEOSERVICES_QUERY_SCENARIOS
     GEOSERVICES_QUERY_SALT_SMALL
     GEOSERVICES_QUERY_SALT_MEDIUM
     GEOSERVICES_QUERY_SALT_LARGE
+    WFS_FILTERED_DURATION
+    WFS_FILTERED_WARMUP
+    WFS_FILTERED_VUS
+    WMS_GETMAP_DURATION
+    WMS_GETMAP_WARMUP
+    WMS_GETMAP_VUS
+    WMS_FILTERED_DURATION
+    WMS_FILTERED_WARMUP
+    WMS_FILTERED_VUS
+    WMS_FILTERED_SCENARIOS
     WMS_REPROJECTION_DURATION
     WMS_REPROJECTION_WARMUP
     WMS_REPROJECTION_VUS
     WMS_REPROJECTION_SCENARIOS
+    WMTS_DURATION
+    WMTS_WARMUP
+    WMTS_VUS
+    WMTS_SCENARIOS
+    WCS_DURATION
+    WCS_WARMUP
+    WCS_VUS
+    WCS_SCENARIOS
+    WCS_FORMAT
+    GEOSERVER_WCS_COVERAGE
+    WCS_COVERAGE
   )
 
   for name in "${names[@]}"; do
@@ -159,8 +188,24 @@ supports_test_for_server() {
     attribute-filter|spatial-bbox|concurrent|wfs-getfeature)
       return 0
       ;;
-    wms-getmap|wms-reprojection)
+    wfs-filtered)
+      [[ "${server}" == "honua" || "${server}" == "geoserver" ]]
+      return
+      ;;
+    wms-getmap|wms-reprojection|wms-getfeatureinfo)
       [[ "${server}" == "honua" || "${server}" == "geoserver" || "${server}" == "qgis" ]]
+      return
+      ;;
+    wms-filtered)
+      [[ "${server}" == "honua" || "${server}" == "geoserver" ]]
+      return
+      ;;
+    wmts)
+      [[ "${server}" == "geoserver" ]]
+      return
+      ;;
+    wcs)
+      [[ "${server}" == "geoserver" ]]
       return
       ;;
     geoservices-query)
@@ -184,6 +229,15 @@ supports_test_for_server() {
     geoservices-export)
       [[ "${server}" == "honua" ]]
       return
+      ;;
+    geoservices-identify)
+      if [[ "${server}" == "honua" ]]; then
+        return 0
+      fi
+      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
+        return 0
+      fi
+      return 1
       ;;
     *)
       echo "Unknown test: ${test}" >&2
@@ -230,7 +284,11 @@ run_adapter() {
       bash "${adapter}" 2>&1 | sed 's/^/    /'
       ;;
     geoserver)
+      local wmts_cache_policy
+      wmts_cache_policy="${WMTS_CACHE_POLICY:-warm}"
       GS_URL="http://localhost:${GEOSERVER_PORT:-8082}" \
+      GEOBENCH_TESTS="${TESTS[*]}" \
+      WMTS_CACHE_POLICY="${wmts_cache_policy}" \
       bash "${adapter}" 2>&1 | sed 's/^/    /'
       ;;
     qgis)
@@ -262,6 +320,50 @@ run_response_shape_audit() {
     --output "${output_path}" 2>&1 | sed 's/^/    /'
 }
 
+write_run_metadata() {
+  local output_path="${RESULTS_DIR}/benchmark-metadata.json"
+
+  GEOBENCH_SERVERS="${SERVERS[*]}" \
+  GEOBENCH_TESTS="${TESTS[*]}" \
+  GEOBENCH_RUNS="${RUNS}" \
+  GEOBENCH_AUDIT_SHAPES="${AUDIT_SHAPES}" \
+  GEOBENCH_CACHE_TIER_DEFAULT="${CACHE_TIER_DEFAULT}" \
+  GEOBENCH_WMTS_CACHE_TIER="${WMTS_CACHE_TIER}" \
+  GEOBENCH_WMTS_CACHE_POLICY="${WMTS_CACHE_POLICY}" \
+  python3 - "${output_path}" <<'PY2'
+import json
+import os
+import sys
+
+output_path = sys.argv[1]
+default_cache_tier = os.environ.get("GEOBENCH_CACHE_TIER_DEFAULT", "warm_service")
+wmts_cache_tier = os.environ.get("GEOBENCH_WMTS_CACHE_TIER", "warm_tile_cache")
+wmts_cache_policy = os.environ.get("GEOBENCH_WMTS_CACHE_POLICY", "warm")
+
+tests = os.environ.get("GEOBENCH_TESTS", "").split()
+test_metadata = {}
+for test in tests:
+    entry = {
+        "cache_tier": wmts_cache_tier if test == "wmts" else default_cache_tier,
+    }
+    if test == "wmts":
+        entry["wmts_cache_policy"] = wmts_cache_policy
+    test_metadata[test] = entry
+
+metadata = {
+    "servers": os.environ.get("GEOBENCH_SERVERS", "").split(),
+    "runs": int(os.environ.get("GEOBENCH_RUNS", "0")),
+    "audit_shapes": int(os.environ.get("GEOBENCH_AUDIT_SHAPES", "0")),
+    "default_cache_tier": default_cache_tier,
+    "wmts_cache_policy": wmts_cache_policy,
+    "tests": test_metadata,
+}
+
+with open(output_path, "w") as f:
+    json.dump(metadata, f, indent=2)
+PY2
+}
+
 # ─── Main loop: one server at a time, fully isolated ─────────────────
 
 TOTAL_TESTS=0
@@ -277,6 +379,8 @@ if [ "${TOTAL_TESTS}" -eq 0 ]; then
   echo "ERROR: no supported server/test combinations selected" >&2
   exit 1
 fi
+
+write_run_metadata
 
 CURRENT=0
 

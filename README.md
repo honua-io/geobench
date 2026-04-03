@@ -56,8 +56,11 @@ docker compose up -d
 
 Results are written to `results/<timestamp>/report.md`.
 Each run also writes `*-response-shapes.json` audit files for the selected servers. The generated
-report includes a compact response-shape section with status, `Content-Type`, byte count, a body
-hash, and structural notes.
+report includes a compact payload comparability section plus a response-shape section with status,
+`Content-Type`, byte count, a body hash, and structural notes.
+
+The default harness now runs `5` median-reported runs. For quick local validation, set `RUNS=1`
+and shorten the suite-specific warmup and duration values.
 
 Protocol-specific runs can be selected explicitly:
 
@@ -70,6 +73,21 @@ TESTS="wms-reprojection" SERVERS="honua geoserver qgis" ./scripts/run-benchmark.
 
 # Secondary standards track
 TESTS="wfs-getfeature" ./scripts/run-benchmark.sh
+
+# Secondary standards filtered WFS track on the shared Honua/GeoServer WFS 2.0 profile
+TESTS="wfs-filtered" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# WMS filtered GetMap on Honua and GeoServer
+TESTS="wms-filtered" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
+
+# WMTS tile suite (GeoServer only, explicit warm-tile-cache track)
+WMTS_CACHE_POLICY=warm TESTS="wmts" SERVERS="geoserver" ./scripts/run-benchmark.sh
+
+# WCS GetCoverage (GeoServer only, requires coverage id and remains experimental)
+GEOSERVER_WCS_COVERAGE="geobench:points" TESTS="wcs" SERVERS="geoserver" ./scripts/run-benchmark.sh
+
+# GeoServices MapServer/identify suite
+TESTS="geoservices-identify" SERVERS="honua" ./scripts/run-benchmark.sh
 
 # Supplemental native track
 GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
@@ -142,13 +160,40 @@ bash tests/smoke-test.sh
 | `concurrent` | Mixed workload at 1/10/50/100 VUs | 1-100 | 120s each |
 | `wms-getmap` | WMS raster rendering on the common standards track | 10 | 120s each |
 | `wms-reprojection` | WMS `GetMap` with deterministic `EPSG:3857` reprojection from `4326` source data | 10 | 120s each |
+| `wms-getfeatureinfo` | WMS `GetFeatureInfo` on deterministic `CRS:84` hotspots | 10 | 120s each |
+| `wms-filtered` | WMS GetMap with OGC `FILTER` queries (equality/range/like) | 10 | 120s each |
+| `wmts` | WMTS `GetTile` tile matrix requests | 10 | 120s each |
+| `wcs` | WCS `GetCoverage` coverage reads (server-specific coverage required) | 10 | 120s each |
 | `wfs-getfeature` | WFS base read plus bbox reads on the standards track | 10 | 120s each |
+| `wfs-filtered` | WFS equality/range/prefix filtering on the shared Honua/GeoServer FES 2.0 profile | 10 | 120s each |
 | `geoservices-query` | GeoServices REST FeatureServer/query spatial bbox track | 10 | 120s each |
 | `geoservices-query-diagnostics` | Native query diagnostics: 1 VU vs 10 VU and reduced-payload variants on medium/large bboxes | mixed | 15s warmup + 20s each |
 | `geoservices-export` | GeoServices REST MapServer/export on the Honua-native track | 10 | 120s each |
+| `geoservices-identify` | GeoServices REST MapServer/identify on deterministic points | 10 | 120s each |
 
 The runner captures a lightweight response-shape audit before each timed server run. It is
-designed for blog-safe publishing and regression checking, not for performance comparison.
+designed for blog-safe publishing and regression checking, not for performance comparison. The
+generated report now also summarizes whether payload differences appear to be metadata-only or a
+core shape divergence that would weaken cross-server comparability.
+`wfs-filtered` currently targets Honua and GeoServer only; the local QGIS benchmark image remains
+on a separate WFS 1.1 profile and is not part of this row yet.
+
+## Cache Tiers
+
+GeoBench treats cache behavior as a separate scientific dimension, not as a hidden implementation
+detail.
+
+- `baseline`: no dedicated external cache layer is introduced for the row. Warmed runtime state,
+  database buffers, and OS cache still exist after warmup.
+- `warm service`: the same row interpreted as steady-state warmed service behavior after warmup.
+- `warm tile cache`: tile requests intentionally served from a warmed tile cache. This is where the
+  current `wmts` row belongs.
+- `cache-assisted`: Redis, GeoWebCache blobstores, MinIO/object-store-backed caches, or CDN-like
+  layers. Useful, but separate from the baseline matrix.
+
+Current rule: do not compare `warm tile cache` numbers against `baseline` render numbers in the
+same table. If a future Redis or MinIO experiment is added, it should be published as a separate
+cache-assisted track unless every server is using an equivalent cache role.
 
 ## Optional GeoServer GSR
 

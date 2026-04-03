@@ -234,6 +234,53 @@ export function buildMapRequest(serverName, params) {
   throw new Error("Unsupported raster server kind: " + server.config.kind);
 }
 
+export function buildGetFeatureInfoRequest(serverName, params) {
+  params = params || {};
+  var server = getRasterServer(serverName);
+
+  if (server.config.kind !== "wms") {
+    throw new Error("GetFeatureInfo is supported only for WMS servers");
+  }
+
+  var width = params.width || 256;
+  var height = params.height || 256;
+  var layer = server.config.layer || "bench_points";
+  var bbox = params.bbox;
+
+  if (!bbox) {
+    throw new Error("GetFeatureInfo request requires bbox");
+  }
+
+  var url = server.config.baseUrl + server.config.path;
+  if (server.config.mapPath) {
+    url += "?MAP=" + encodeURIComponent(server.config.mapPath);
+    url += "&SERVICE=WMS";
+  } else {
+    url += "?SERVICE=WMS";
+  }
+  url += "&VERSION=1.3.0";
+  url += "&REQUEST=GetFeatureInfo";
+  url += "&LAYERS=" + encodeURIComponent(layer);
+  url += "&STYLES=";
+  url += "&QUERY_LAYERS=" + encodeURIComponent(layer);
+  url += "&CRS=" + encodeURIComponent(params.crs || "CRS:84");
+  url += "&BBOX=" + bbox;
+  url += "&WIDTH=" + width;
+  url += "&HEIGHT=" + height;
+  url += "&INFO_FORMAT=" + encodeURIComponent(params.infoFormat || "application/json");
+  url += "&I=" + (params.i || 128);
+  url += "&J=" + (params.j || 128);
+  url += "&FEATURE_COUNT=" + (params.featureCount || 10);
+  return {
+    url: url,
+    name: server.name + ":getfeatureinfo",
+    expectedSize: {
+      width: width,
+      height: height,
+    },
+  };
+}
+
 export function buildQgisMapRequest(bbox, width, height) {
   return buildMapRequest("qgis", {
     bbox: bbox,

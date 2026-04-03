@@ -79,6 +79,56 @@ TEST_DEFINITIONS = {
             {"id": "large", "label": "large bbox", "tag_key": "bbox_size", "tag_value": "large"},
         ],
     },
+    "wfs-filtered": {
+        "group": "Secondary Standards",
+        "heading": "### WFS Filtered Queries",
+        "first_column": "Query Type",
+        "scenarios": [
+            {"id": "equality", "label": "equality", "tag_key": "query_type", "tag_value": "equality"},
+            {"id": "range", "label": "range", "tag_key": "query_type", "tag_value": "range"},
+            {"id": "like", "label": "like", "tag_key": "query_type", "tag_value": "like"},
+        ],
+    },
+    "wms-getfeatureinfo": {
+        "group": "Secondary Standards",
+        "heading": "### WMS GetFeatureInfo",
+        "first_column": "BBox Size",
+        "scenarios": [
+            {"id": "small", "label": "small", "tag_key": "bbox_size", "tag_value": "small"},
+            {"id": "medium", "label": "medium", "tag_key": "bbox_size", "tag_value": "medium"},
+            {"id": "large", "label": "large", "tag_key": "bbox_size", "tag_value": "large"},
+        ],
+    },
+    "wms-filtered": {
+        "group": "Secondary Standards",
+        "heading": "### WMS GetMap filtered",
+        "first_column": "Query Type",
+        "scenarios": [
+            {"id": "equality", "label": "equality", "tag_key": "query_type", "tag_value": "equality"},
+            {"id": "range", "label": "range", "tag_key": "query_type", "tag_value": "range"},
+            {"id": "like", "label": "like", "tag_key": "query_type", "tag_value": "like"},
+        ],
+    },
+    "wmts": {
+        "group": "Secondary Standards",
+        "heading": "### WMTS tile fetch",
+        "first_column": "Tile Matrix",
+        "scenarios": [
+            {"id": "z0", "label": "z0", "tag_key": "tile_level", "tag_value": "z0"},
+            {"id": "z1", "label": "z1", "tag_key": "tile_level", "tag_value": "z1"},
+            {"id": "z2", "label": "z2", "tag_key": "tile_level", "tag_value": "z2"},
+        ],
+    },
+    "wcs": {
+        "group": "Secondary Standards",
+        "heading": "### WCS GetCoverage",
+        "first_column": "BBox Size",
+        "scenarios": [
+            {"id": "small", "label": "small", "tag_key": "bbox_size", "tag_value": "small"},
+            {"id": "medium", "label": "medium", "tag_key": "bbox_size", "tag_value": "medium"},
+            {"id": "large", "label": "large", "tag_key": "bbox_size", "tag_value": "large"},
+        ],
+    },
     "geoservices-query": {
         "group": "Supplemental Native Protocols",
         "heading": "### GeoServices REST FeatureServer/query",
@@ -114,12 +164,22 @@ TEST_DEFINITIONS = {
             {"id": "large", "label": "large", "tag_key": "bbox_size", "tag_value": "large"},
         ],
     },
+    "geoservices-identify": {
+        "group": "Supplemental Native Protocols",
+        "heading": "### GeoServices REST MapServer/identify",
+        "first_column": "BBox Size",
+        "scenarios": [
+            {"id": "small", "label": "small", "tag_key": "bbox_size", "tag_value": "small"},
+            {"id": "medium", "label": "medium", "tag_key": "bbox_size", "tag_value": "medium"},
+            {"id": "large", "label": "large", "tag_key": "bbox_size", "tag_value": "large"},
+        ],
+    },
 }
 REPORT_GROUPS = [
     ("Common Standards: Feature", ["attribute-filter", "spatial-bbox", "concurrent"]),
     ("Common Standards: Raster", ["wms-getmap", "wms-reprojection"]),
-    ("Secondary Standards", ["wfs-getfeature"]),
-    ("Supplemental Native Protocols", ["geoservices-query", "geoservices-query-diagnostics", "geoservices-export"]),
+    ("Secondary Standards", ["wfs-getfeature", "wfs-filtered", "wms-getfeatureinfo", "wms-filtered", "wmts", "wcs"]),
+    ("Supplemental Native Protocols", ["geoservices-query", "geoservices-query-diagnostics", "geoservices-export", "geoservices-identify"]),
 ]
 SERVER_LABELS = {
     "honua": "Honua Server",
@@ -460,6 +520,135 @@ def add_shape_audit_section(lines, shape_audits, servers):
         lines.append("")
 
 
+def comparable_shape_value(entry, key):
+    value = entry.get(key)
+    if isinstance(value, list):
+        return tuple(value)
+    if isinstance(value, dict):
+        return tuple(sorted(value.items()))
+    return value
+
+
+def compare_shape_group(entries):
+    if len(entries) < 2:
+      return "Single-server row", "No cross-server comparability claim"
+
+    statuses = {entry.get("status") for entry in entries}
+    if statuses != {200}:
+        return "Blocked", "One or more servers did not return HTTP 200"
+
+    family = entries[0].get("family")
+    if family == "feature":
+        core_keys = [
+            "feature_count",
+            "first_feature_geometry_type",
+            "first_feature_property_keys",
+            "first_feature_property_types",
+            "first_feature_id_kind",
+        ]
+        metadata_only = []
+        for key in core_keys:
+            values = {comparable_shape_value(entry, key) for entry in entries}
+            if len(values) > 1:
+                return "Not comparable", f"Core payload drift in {key}"
+
+        meta_values = {comparable_shape_value(entry, "metadata_flags") for entry in entries}
+        top_key_values = {comparable_shape_value(entry, "top_level_keys") for entry in entries}
+        if len(meta_values) > 1 or len(top_key_values) > 1:
+            metadata_only.append("top-level metadata differs")
+
+        if metadata_only:
+            return "Comparable with metadata drift", "; ".join(metadata_only)
+
+        return "Comparable", "Core payload shape matches"
+
+    dimension_values = {comparable_shape_value(entry, "dimensions") for entry in entries}
+    if len(dimension_values) > 1:
+        return "Not comparable", "Raster dimensions differ"
+
+    return "Comparable", "Raster dimensions match; byte/hash differences are informational"
+
+
+def add_payload_comparability_section(lines, shape_audits, servers):
+    groups = defaultdict(list)
+    for server in servers:
+        for entry in shape_audits.get(server, []):
+            groups[(entry.get("family"), entry.get("suite"), entry.get("request"))].append(
+                {
+                    "server": server,
+                    "entry": entry,
+                }
+            )
+
+    if not groups:
+        return
+
+    lines.append("## Payload Comparability")
+    lines.append("")
+    rows = []
+    for (_, suite, request), grouped in sorted(groups.items(), key=lambda item: (item[0][1], item[0][2])):
+        ordered = sorted(grouped, key=lambda item: SERVERS.index(item["server"]) if item["server"] in SERVERS else 999)
+        verdict, note = compare_shape_group([item["entry"] for item in ordered])
+        rows.append(
+            [
+                f"{suite} / {request}",
+                ", ".join(SERVER_LABELS.get(item["server"], item["server"]) for item in ordered),
+                verdict,
+                note,
+            ]
+        )
+
+    lines.append(format_table(["Request", "Servers", "Verdict", "Notes"], rows))
+    lines.append("")
+
+
+def add_audit_findings_section(lines, shape_audits, servers):
+    findings = []
+    grouped = defaultdict(list)
+
+    for server in servers:
+        for entry in shape_audits.get(server, []):
+            grouped[(server, entry.get("family"), entry.get("suite"))].append(entry)
+
+    for (server, family, suite), entries in sorted(grouped.items(), key=lambda item: item[0]):
+        request_names = {entry.get("request") for entry in entries if entry.get("request")}
+        hashes = {entry.get("sha256") for entry in entries if entry.get("sha256")}
+
+        if family == "raster" and len(request_names) > 1 and len(hashes) == 1:
+            findings.append(
+                [
+                    SERVER_LABELS.get(server, server),
+                    suite,
+                    "Scenario collapse",
+                    "All sampled variants returned the same raster hash",
+                ]
+            )
+
+        if family == "feature":
+            empty_requests = sorted(
+                entry.get("request")
+                for entry in entries
+                if entry.get("feature_count") == 0 and entry.get("request")
+            )
+            if empty_requests:
+                findings.append(
+                    [
+                        SERVER_LABELS.get(server, server),
+                        suite,
+                        "Empty sample",
+                        "No features/results in sampled request(s): " + ", ".join(empty_requests),
+                    ]
+                )
+
+    if not findings:
+        return
+
+    lines.append("## Audit Findings")
+    lines.append("")
+    lines.append(format_table(["Server", "Suite", "Finding", "Notes"], findings))
+    lines.append("")
+
+
 def generate_report(results_dir, output_path, runs):
     aggregated, aggregated_overall = collect_results(results_dir)
     shape_audits = collect_shape_audits(results_dir)
@@ -505,6 +694,11 @@ def generate_report(results_dir, output_path, runs):
             else:
                 add_overall_section(lines, aggregated_overall, servers, test, heading)
 
+    run_metadata = load_run_metadata(results_dir)
+
+    add_cache_tier_section(lines, run_metadata)
+    add_payload_comparability_section(lines, shape_audits, servers)
+    add_audit_findings_section(lines, shape_audits, servers)
     add_shape_audit_section(lines, shape_audits, servers)
 
     report = "\n".join(lines)
@@ -520,6 +714,11 @@ def generate_report(results_dir, output_path, runs):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "dataset": "small",
                 "runs": runs,
+                "run_metadata": run_metadata,
+                "cache_tiers": {
+                    test: entry.get("cache_tier")
+                    for test, entry in run_metadata.get("tests", {}).items()
+                },
                 "results": aggregated,
                 "overall_results": aggregated_overall,
                 "response_shape_audits": shape_audits,
@@ -528,6 +727,81 @@ def generate_report(results_dir, output_path, runs):
             indent=2,
         )
     print(f"JSON written to {json_path}", file=sys.stderr)
+
+
+def ordered_tests(test_entries):
+    ordered = [test for test in TEST_DEFINITIONS if test in test_entries]
+    ordered.extend(sorted(test for test in test_entries if test not in TEST_DEFINITIONS))
+    return ordered
+
+
+def humanize_cache_tier(cache_tier):
+    return str(cache_tier or "unknown").replace("_", " ")
+
+
+def load_run_metadata(results_dir):
+    results_path = Path(results_dir)
+    metadata_path = results_path / "benchmark-metadata.json"
+    metadata = {}
+    if metadata_path.exists():
+        try:
+            with open(metadata_path) as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                metadata = loaded
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+
+    default_cache_tier = metadata.get("default_cache_tier", "warm_service")
+    raw_tests = metadata.get("tests") if isinstance(metadata.get("tests"), dict) else {}
+
+    observed_tests = []
+    for path in sorted(results_path.glob("*-run*.json")):
+        parsed = parse_result_filename(path.name)
+        if not parsed:
+            continue
+        _server, test, _run = parsed
+        if test not in observed_tests:
+            observed_tests.append(test)
+
+    if not observed_tests:
+        observed_tests = ordered_tests(raw_tests)
+
+    normalized_tests = {}
+    for test in observed_tests:
+        raw_entry = raw_tests.get(test) if isinstance(raw_tests.get(test), dict) else {}
+        cache_tier = raw_entry.get("cache_tier") or ("warm_tile_cache" if test == "wmts" else default_cache_tier)
+        entry = {"cache_tier": cache_tier}
+        wmts_cache_policy = raw_entry.get("wmts_cache_policy") or metadata.get("wmts_cache_policy")
+        if test == "wmts" and wmts_cache_policy:
+            entry["wmts_cache_policy"] = wmts_cache_policy
+        normalized_tests[test] = entry
+
+    metadata["default_cache_tier"] = default_cache_tier
+    metadata["tests"] = normalized_tests
+    return metadata
+
+
+def add_cache_tier_section(lines, run_metadata):
+    tests = run_metadata.get("tests", {}) if isinstance(run_metadata, dict) else {}
+    if not tests:
+        return
+
+    lines.append("## Cache Tiers")
+    lines.append("")
+    lines.append(f"Default non-WMTS tier: `{run_metadata.get('default_cache_tier', 'warm_service')}`")
+    lines.append("")
+    lines.append("| Test | Cache tier | Notes |")
+    lines.append("| --- | --- | --- |")
+    for test in ordered_tests(tests):
+        entry = tests.get(test, {})
+        notes = []
+        if test == "wmts" and entry.get("wmts_cache_policy"):
+            notes.append(f"wmts_cache_policy={entry['wmts_cache_policy']}")
+        lines.append(
+            f"| {test} | {humanize_cache_tier(entry.get('cache_tier'))} | {'; '.join(notes) or '-'} |"
+        )
+    lines.append("")
 
 
 def main():

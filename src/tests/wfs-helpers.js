@@ -1,15 +1,14 @@
 // GeoBench: shared helpers for standards-based WFS benchmarking.
 //
 // Supported local capability profile:
-// - Honua: WFS 2.0.0
-// - GeoServer: WFS 2.0.0
+// - Honua: WFS 2.0.0 with FES 2.0 KVP FILTER support
+// - GeoServer: WFS 2.0.0 with FES 2.0 KVP FILTER support
 // - QGIS: WFS 1.1.0
 //
 // Filter caveat:
-// The local servers do not expose one common, standards-based filter dialect
-// that is cleanly comparable in this workspace. Honua accepts `cql_filter`
-// here, while GeoServer and QGIS use XML FES. This suite therefore benchmarks
-// only the comparable read operations: base GetFeature and bbox GetFeature.
+// The shared filtered-query suite targets the common Honua/GeoServer
+// WFS 2.0 + FES 2.0 profile. QGIS remains excluded from that row because
+// the local benchmark image is currently pinned to WFS 1.1.0.
 
 import { deterministicChoice, deterministicRange } from "./deterministic.js";
 
@@ -27,6 +26,7 @@ var SERVERS = {
     bboxParam: "BBOX",
     bboxCrsSuffix: "",
     outputFormat: "application/json",
+    filterDialect: "fes-2.0",
   },
   geoserver: {
     baseUrl: __ENV.GEOSERVER_URL || "http://geoserver:8080",
@@ -38,6 +38,7 @@ var SERVERS = {
     bboxParam: "BBOX",
     bboxCrsSuffix: ",EPSG:4326",
     outputFormat: "application/json",
+    filterDialect: "fes-2.0",
   },
   qgis: {
     baseUrl: __ENV.QGIS_URL || "http://qgis-server:80",
@@ -50,8 +51,84 @@ var SERVERS = {
     bboxParam: "BBOX",
     bboxCrsSuffix: "",
     outputFormat: "application/vnd.geo+json",
+    filterDialect: null,
   },
 };
+
+function escapeXml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function escapeLikePrefix(prefix) {
+  return String(prefix)
+    .replace(/\\/g, "\\\\")
+    .replace(/_/g, "\\_")
+    .replace(/%/g, "\\%");
+}
+
+function normalizeFilterSpec(spec) {
+  if (!spec) {
+    return null;
+  }
+
+  if (spec.type === "between") {
+    return {
+      type: spec.type,
+      field: spec.field,
+      low: parseFloat(spec.low.toFixed(1)),
+      high: parseFloat(spec.high.toFixed(1)),
+    };
+  }
+
+  return spec;
+}
+
+function buildFes20Filter(filterSpec) {
+  if (!filterSpec) {
+    throw new Error("WFS filtered request requires a filter spec");
+  }
+
+  if (filterSpec.type === "eq") {
+    return (
+      '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">' +
+      "<fes:PropertyIsEqualTo>" +
+      "<fes:ValueReference>" + escapeXml(filterSpec.field) + "</fes:ValueReference>" +
+      "<fes:Literal>" + escapeXml(filterSpec.value) + "</fes:Literal>" +
+      "</fes:PropertyIsEqualTo>" +
+      "</fes:Filter>"
+    );
+  }
+
+  if (filterSpec.type === "between") {
+    return (
+      '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">' +
+      "<fes:PropertyIsBetween>" +
+      "<fes:ValueReference>" + escapeXml(filterSpec.field) + "</fes:ValueReference>" +
+      "<fes:LowerBoundary><fes:Literal>" + escapeXml(filterSpec.low.toFixed(1)) + "</fes:Literal></fes:LowerBoundary>" +
+      "<fes:UpperBoundary><fes:Literal>" + escapeXml(filterSpec.high.toFixed(1)) + "</fes:Literal></fes:UpperBoundary>" +
+      "</fes:PropertyIsBetween>" +
+      "</fes:Filter>"
+    );
+  }
+
+  if (filterSpec.type === "prefix") {
+    return (
+      '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">' +
+      '<fes:PropertyIsLike wildCard="%" singleChar="_" escapeChar="\\">' +
+      "<fes:ValueReference>" + escapeXml(filterSpec.field) + "</fes:ValueReference>" +
+      "<fes:Literal>" + escapeXml(escapeLikePrefix(filterSpec.prefix) + "%") + "</fes:Literal>" +
+      "</fes:PropertyIsLike>" +
+      "</fes:Filter>"
+    );
+  }
+
+  throw new Error("Unsupported WFS filter spec: " + JSON.stringify(filterSpec));
+}
 
 export var WFS_BBOX_SIZES = {
   small: 0.1,
@@ -158,6 +235,39 @@ function validateBboxCollection(response, bbox, limit) {
   };
 }
 
+function validateFilteredCollection(response, filterSpec, limit) {
+  var normalizedFilter = normalizeFilterSpec(filterSpec);
+  var validated = validateFeatureCollection(response, limit);
+
+  if (!validated.ok) {
+    return false;
+  }
+
+  if (normalizedFilter.type === "eq") {
+    return validated.features.every(function (feature) {
+      var properties = feature.properties || {};
+      return String(properties[normalizedFilter.field]) === String(normalizedFilter.value);
+    });
+  }
+
+  if (normalizedFilter.type === "between") {
+    return validated.features.every(function (feature) {
+      var properties = feature.properties || {};
+      var numeric = parseFloat(properties[normalizedFilter.field]);
+      return numeric >= normalizedFilter.low && numeric <= normalizedFilter.high;
+    });
+  }
+
+  if (normalizedFilter.type === "prefix") {
+    return validated.features.every(function (feature) {
+      var properties = feature.properties || {};
+      return String(properties[normalizedFilter.field] || "").indexOf(normalizedFilter.prefix) === 0;
+    });
+  }
+
+  return false;
+}
+
 function addCommonParams(url, server, limit) {
   url += (url.indexOf("?") === -1 ? "?" : "&");
   url += "SERVICE=WFS";
@@ -214,6 +324,45 @@ export function buildGetFeatureRequest(params) {
     url: url,
     name: server.name + ":wfs:getfeature",
     validate: validate,
+  };
+}
+
+export function wfsFilteredQueriesSupported() {
+  var server = getServer((__ENV.SERVER || "honua").toLowerCase());
+  return !!server.config.filterDialect;
+}
+
+export function buildFilteredGetFeatureRequest(params) {
+  params = params || {};
+  var server = getServer((__ENV.SERVER || "honua").toLowerCase());
+  var limit = params.limit || DEFAULT_LIMIT;
+  var filterSpec = normalizeFilterSpec(params.filterSpec || null);
+
+  if (!filterSpec) {
+    throw new Error("Missing filterSpec for WFS filtered request");
+  }
+
+  if (!server.config.filterDialect) {
+    throw new Error(
+      "WFS filtered queries are not supported for " + server.name +
+      " in this harness; use honua or geoserver"
+    );
+  }
+
+  var url = buildBaseUrl(server);
+  if (server.name === "qgis") {
+    url += "?MAP=" + encodeURIComponent(server.config.mapPath);
+  }
+
+  url = addCommonParams(url, server, limit);
+  url += "&FILTER=" + encodeURIComponent(buildFes20Filter(filterSpec));
+
+  return {
+    url: url,
+    name: server.name + ":wfs:filtered",
+    validate: function (response) {
+      return validateFilteredCollection(response, filterSpec, limit);
+    },
   };
 }
 

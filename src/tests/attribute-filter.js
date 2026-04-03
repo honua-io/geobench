@@ -74,6 +74,8 @@ export function equalityFilter() {
 
 export function warmupAttributeFilter() {
   equalityFilter();
+  rangeFilter();
+  likeFilter();
 }
 
 // Range: temperature >= X AND temperature <= X+10

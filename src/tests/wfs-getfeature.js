@@ -114,4 +114,7 @@ export function largeBbox() {
 
 export function warmupWfsGetFeature() {
   baseRead();
+  smallBbox();
+  mediumBbox();
+  largeBbox();
 }

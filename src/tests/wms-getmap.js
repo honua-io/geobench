@@ -10,6 +10,9 @@ import { buildBbox, buildMapRequest, RASTER_SIZES, validateImageResponse } from 
 
 var errorRate = new Rate("errors");
 var responseTime = new Trend("raster_response_time", true);
+var scenarioDuration = __ENV.WMS_GETMAP_DURATION || "120s";
+var warmupDuration = __ENV.WMS_GETMAP_WARMUP || "60s";
+var scenarioVus = parseInt(__ENV.WMS_GETMAP_VUS || "10", 10);
 var scenarioThresholds = {
   "http_req_duration{bbox_size:small}": ["max>=0"],
   "http_req_duration{bbox_size:medium}": ["max>=0"],
@@ -31,41 +34,52 @@ function supportedServerName() {
 
 var SERVER_NAME = supportedServerName();
 
-export var options = {
-  scenarios: {
+function buildScenarios() {
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  var scenarios = {
     warmup: {
       executor: "constant-vus",
-      vus: 5,
-      duration: "60s",
+      vus: Math.max(1, Math.min(5, scenarioVus)),
+      duration: warmupDuration,
       exec: "warmupWmsGetMap",
       tags: { phase: "warmup" },
       startTime: "0s",
     },
     small_map: {
       executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
+      vus: scenarioVus,
+      duration: scenarioDuration,
       exec: "smallMap",
       tags: { bbox_size: "small" },
-      startTime: "60s",
+      startTime: String(offsetSeconds) + "s",
     },
-    medium_map: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "mediumMap",
-      tags: { bbox_size: "medium" },
-      startTime: "190s",
-    },
-    large_map: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "largeMap",
-      tags: { bbox_size: "large" },
-      startTime: "320s",
-    },
-  },
+  };
+
+  offsetSeconds += parseInt(scenarioDuration, 10);
+  scenarios.medium_map = {
+    executor: "constant-vus",
+    vus: scenarioVus,
+    duration: scenarioDuration,
+    exec: "mediumMap",
+    tags: { bbox_size: "medium" },
+    startTime: String(offsetSeconds) + "s",
+  };
+
+  offsetSeconds += parseInt(scenarioDuration, 10);
+  scenarios.large_map = {
+    executor: "constant-vus",
+    vus: scenarioVus,
+    duration: scenarioDuration,
+    exec: "largeMap",
+    tags: { bbox_size: "large" },
+    startTime: String(offsetSeconds) + "s",
+  };
+
+  return scenarios;
+}
+
+export var options = {
+  scenarios: buildScenarios(),
   thresholds: Object.assign({
     errors: ["rate<0.01"],
   }, scenarioThresholds),
@@ -112,5 +126,7 @@ export function largeMap() {
 }
 
 export function warmupWmsGetMap() {
+  smallMap();
   mediumMap();
+  largeMap();
 }

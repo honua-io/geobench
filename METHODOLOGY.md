@@ -59,6 +59,37 @@ The warmup phase uses the same query patterns as the measurement phase. Warmup d
 - **Server-side query caching**: Not disabled (would be artificial). If a server caches query results, that's a legitimate performance characteristic. Documented in system cards.
 - **PostGIS shared buffers**: Default configuration. Same for all servers since they share the instance.
 
+### Cache Tier Taxonomy
+
+GeoBench treats caching as a measurement dimension, not a single yes/no setting. Different cache
+roles answer different questions and must be published separately.
+
+- **Baseline**
+  No dedicated external cache product is added for the row. In-process caches, database buffers,
+  OS page cache, and warmed execution plans are still part of steady-state behavior after warmup.
+- **Warm Service State**
+  The same baseline stack interpreted explicitly as warmed steady-state service behavior after the
+  standard warmup period.
+- **Warm Tile Cache**
+  Tile requests are intentionally served from a warmed tile cache. This is valid for tile
+  protocols such as WMTS and should be interpreted as a delivery/cache row, not a render row.
+- **Cache-Assisted Product Track**
+  A product's natural cache layer is introduced on purpose, such as GeoWebCache blobstores,
+  Redis-backed response caches, MinIO/object-store-backed caches, or CDN-like layers. These rows
+  are useful, but they are not vendor-neutral unless each server is tested with an equivalent
+  cache role.
+
+### Cache Tier Rules
+
+- Every published row must declare its cache tier.
+- Cache tiers must not be mixed within the same comparison table.
+- `WMTS` belongs in a `Warm Tile Cache` row in the current harness.
+- `OGC API Features`, `WFS`, `GeoServices query`, and primary `WMS GetMap` rows belong in the
+  `Baseline` / `Warm Service State` interpretation unless a dedicated cache layer is explicitly
+  added and disclosed.
+- A local Redis or MinIO sidecar is valid only as a separate `Cache-Assisted Product Track`,
+  because local Docker cache behavior is not the same thing as managed cloud cache behavior.
+
 ## Measurement
 
 ### Tool
@@ -106,6 +137,11 @@ This audit is not part of the benchmark result. It records:
 The audit exists to make protocol comparisons publishable and to catch accidental response
 shape drift without exposing raw payloads.
 
+The generated report also includes a payload comparability summary. It distinguishes metadata-only
+differences from core payload drift such as feature count changes, geometry-type changes, or
+property-schema changes. This still does not replace full semantic validation or production
+telemetry; it is a harness-local guardrail.
+
 ## Protocol Matrix
 
 GeoBench separates protocol families into **primary common**, **secondary standards**, and
@@ -123,7 +159,7 @@ servers on broadly comparable surfaces.
 | Feature | OGC API-equivalent attribute filtering | Yes | Yes | Yes | Primary | QGIS may require WFS Filter Encoding internally for fair equivalent filters |
 | Feature | OGC API-equivalent bbox filtering | Yes | Yes | Yes | Primary | Same response limit and validation policy |
 | Feature | Mixed feature workload | Yes | Yes | Yes | Primary | Must be composed only of request types that validate equivalently |
-| Raster | WMS `GetMap` | Yes | Yes | Yes | Primary | First common raster track |
+| Raster | WMS `GetMap` | Yes | Yes | Yes | Primary | First common raster track; baseline non-tile-cached render row |
 | Raster | WMS `GetMap` reprojection | Yes | Yes | Yes | Secondary | Same deterministic views as the base WMS row, requested in `EPSG:3857` |
 | Raster | WMS `GetFeatureInfo` | Yes | Yes | Yes | Secondary | Useful, but more sensitive to styling and hit-testing nuances |
 
@@ -135,9 +171,10 @@ messier than the primary track. They should be published separately with explici
 | Family | Operation | Honua | GeoServer | QGIS | Publish Tier | Notes |
 |--------|-----------|-------|-----------|------|--------------|-------|
 | Feature | WFS `GetFeature` | Yes | Yes | Yes | Secondary | WFS version support differs across servers |
-| Feature | WFS filtered queries | Yes | Yes | Yes | Secondary | Prefer a version/profile all tested servers genuinely support |
-| Raster/Tiles | WMTS tile fetch | Claimed | Yes | Yes | Secondary | Requires an explicit cache policy before benchmarking |
-| Raster | WCS coverage access | Unknown | Yes | Yes | Experimental | Not part of v1 until common coverage data exists |
+| Feature | WFS filtered queries | Yes | Yes | Pending | Secondary | Current harness uses the shared Honua/GeoServer WFS 2.0 + FES 2.0 profile; QGIS needs a separate 1.1-equivalent row |
+| Feature | WMS GetMap with OGC `FILTER` | Yes | Yes | No | Secondary | Deterministic equality/range/like filter patterns on raster rendering |
+| Raster/Tiles | WMTS tile fetch | No | Yes | No | Secondary | Published only as an explicit warm-tile-cache row; cache-fill or uncached behavior belongs in a separate diagnostic track |
+| Raster | WCS coverage access | No | Yes | No | Experimental | Requires explicit coverage configuration and shared sample coverage data |
 
 ### Supplemental Native Track
 
@@ -149,7 +186,7 @@ must be reported in separate charts.
 | Feature | GeoServices REST `FeatureServer/query` | Yes | With GSR extension | No | Supplemental | GeoBench v1 limits this track to spatial bbox queries |
 | Feature | GeoServices REST query diagnostics | Yes | With GSR extension | No | Diagnostic | For optimization work only: concurrency and payload-shape isolates on medium/large bbox reads |
 | Raster | GeoServices REST `MapServer/export` | Yes | No | No | Supplemental | Honua-only supplemental raster track |
-| Raster/Identify | GeoServices REST `MapServer/identify` | Yes | With GSR extension | No | Supplemental | Useful if we later add identify tests |
+| Raster/Identify | GeoServices REST `MapServer/identify` | Yes | With GSR extension | No | Supplemental | Added as a supplemental native benchmark row |
 
 ### Out of Cross-Server Scope
 
@@ -168,6 +205,9 @@ to belong in GeoBench's cross-server matrix.
   - Honua local benchmark image currently exposes **WFS 2.0.0**
   - GeoServer supports **WFS 1.0.0 / 1.1.0 / 2.0.0**
   - QGIS Server local benchmark image exposes **WFS 1.1.0**
+- **WFS filtered queries currently use the shared WFS 2.0 + FES 2.0 profile**
+  exposed by Honua and GeoServer. QGIS filtered WFS coverage needs a separate
+  equivalent 1.1 profile and is not part of the current row.
 - **GeoServices REST on GeoServer** is not part of the stock image. It requires the
   **GSR community extension** and a matching GeoServer nightly build, so it should be treated
   as a separate packaging tier.
@@ -176,6 +216,12 @@ to belong in GeoBench's cross-server matrix.
   - `MapServer/export` is not part of the current GeoServer GSR capability surface
 - **WMTS and tile-based benchmarks** require an explicit cache policy. Cache-on and cache-off
   results answer different questions and should not be conflated.
+- **Cache role equivalence matters more than cache brand**: Redis vs GeoWebCache vs MinIO is not
+  the right comparison axis. The right question is whether each server is using an equivalent
+  cache function: tile cache, query/result cache, metadata cache, or object/blob cache.
+- **Local cache backends are not cloud telemetry**: a local Redis sidecar, filesystem cache, or
+  GeoWebCache blobstore is useful for a harness-local cache-assisted track, but it does not model
+  CDN behavior, object-store latency, or managed cloud cache failure modes.
 
 ### Reporting Rule
 
@@ -187,6 +233,8 @@ GeoBench reports protocols in separate families:
 4. **Supplemental native protocols**
 
 No overall "fastest server" claim is valid across mixed protocol families.
+No overall claim is valid across mixed cache tiers either. A `Warm Tile Cache` row and a
+`Baseline` render row answer different questions and must remain in separate charts.
 
 Response-shape audits are reported separately from performance tables and should be treated as
 supporting evidence, not benchmark results.
@@ -210,10 +258,16 @@ Without a system card, results are not considered publishable.
 
 - **Docker resource limits are soft** (cgroups v2). Bare-metal results may differ.
 - **Dedicated PostGIS instances**: Each server gets its own PostGIS with identical data. Database shared buffers warm independently per server. Host-level CPU/memory is the only shared resource.
+- **Local Docker is not the cloud**: these numbers are useful for reproducible local comparison, not
+  for claiming exact production behavior under managed load balancers, remote caches, or cloud
+  storage layers.
 - **CQL2 / filter support varies**: QGIS Server may require WFS Filter Encoding instead of native OGC API `filter=` semantics for fair equivalent filter tests.
+- **WFS filtered coverage is intentionally partial**: the current harness benchmarks the common Honua/GeoServer WFS 2.0 FES profile only.
 - **Response size cap**: `limit=100` per request. Servers with faster JSON serialization benefit — this is intentional (serialization is part of server performance).
 - **Raster benchmarks must control styling**: default symbology, labels, antialiasing, and transparency can materially change render cost and output bytes.
 - **Raster results must be reported separately** from feature results until style parity is pinned and documented.
+- **Payload audits are heuristic**: they surface shape drift and metadata differences, but they are
+  not a substitute for deep payload equivalence proofs or cloud-side tracing.
 - **No write/edit operation benchmarks** in v1.
 
 ## Reproducibility

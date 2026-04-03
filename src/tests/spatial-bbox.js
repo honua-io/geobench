@@ -87,5 +87,7 @@ export function largeBbox() {
 }
 
 export function warmupSpatialBbox() {
+  smallBbox();
   mediumBbox();
+  largeBbox();
 }

@@ -127,15 +127,15 @@ export function largeBbox() {
 }
 
 export function warmupGeoservicesQuery() {
-  if (selectedBboxSizes.indexOf("medium") !== -1) {
-    mediumBbox();
-    return;
-  }
-
   if (selectedBboxSizes.indexOf("small") !== -1) {
     smallBbox();
-    return;
   }
 
-  largeBbox();
+  if (selectedBboxSizes.indexOf("medium") !== -1) {
+    mediumBbox();
+  }
+
+  if (selectedBboxSizes.indexOf("large") !== -1) {
+    largeBbox();
+  }
 }

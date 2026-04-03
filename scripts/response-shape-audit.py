@@ -75,10 +75,107 @@ def reproject_bbox_4326_to_3857(bbox: str) -> str:
     return f"{min_x:.3f},{min_y:.3f},{max_x:.3f},{max_y:.3f}"
 
 
+def first_point_from_geometry(geometry: Any) -> tuple[float, float] | None:
+    if not isinstance(geometry, dict):
+        return None
+    if geometry.get("type") != "Point":
+        return None
+    coordinates = geometry.get("coordinates")
+    if not isinstance(coordinates, list) or len(coordinates) < 2:
+        return None
+    try:
+        return float(coordinates[0]), float(coordinates[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def collection_items_url(server: ServerConfig, collection: str) -> str | None:
+    collection_id = urllib.parse.quote(collection, safe=":")
+    if server.name == "honua":
+        return f"{server.base_url}/ogc/features/collections/{collection_id}/items?limit=1"
+    if server.name == "geoserver":
+        return f"{server.base_url}/geoserver/ogc/features/v1/collections/{collection_id}/items?limit=1"
+    return None
+
+
+def discover_collection_point(server: ServerConfig, collection: str) -> tuple[float, float] | None:
+    url = collection_items_url(server, collection)
+    if not url:
+        return None
+    status, _content_type, _body, payload = http_get_json(url)
+    if status != 200 or not isinstance(payload, dict):
+        return None
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return None
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        point = first_point_from_geometry(feature.get("geometry"))
+        if point is not None:
+            return point
+    return None
+
+
+def bbox_around_point(lon: float, lat: float, delta: float = 0.02) -> str:
+    return f"{lon - delta:.6f},{lat - delta:.6f},{lon + delta:.6f},{lat + delta:.6f}"
+
+
 def top_level_keys(payload: Any) -> list[str]:
     if isinstance(payload, dict):
         return sorted(payload.keys())
     return []
+
+
+def value_kind(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return type(value).__name__
+
+
+def metadata_flags(payload: Any, keys: list[str]) -> dict[str, bool]:
+    if not isinstance(payload, dict):
+        return {}
+    return {key: key in payload for key in keys}
+
+
+def first_value_type_map(values: dict[str, Any]) -> dict[str, str]:
+    return {key: value_kind(values[key]) for key in sorted(values.keys())}
+
+
+def normalized_feature_id(feature: dict[str, Any]) -> str | None:
+    feature_id = feature.get("id")
+    if feature_id is None:
+        properties = feature.get("properties")
+        if isinstance(properties, dict):
+            feature_id = properties.get("id")
+    if feature_id is None:
+        return None
+    return str(feature_id)
+
+
+def normalized_geoservices_id(feature: dict[str, Any]) -> str | None:
+    attributes = feature.get("attributes")
+    if not isinstance(attributes, dict):
+        attributes = {}
+    feature_id = (
+        attributes.get("OBJECTID")
+        or attributes.get("objectid")
+        or attributes.get("id")
+    )
+    if feature_id is None:
+        return None
+    return str(feature_id)
 
 
 def feature_shape(payload: Any) -> dict[str, Any]:
@@ -122,12 +219,21 @@ def feature_shape(payload: Any) -> dict[str, Any]:
         ]
     )
 
+    flags = metadata_flags(
+        payload,
+        ["links", "numberMatched", "numberReturned", "timeStamp", "bbox", "crs", "type"],
+    )
+    feature_ids = [identifier for identifier in (normalized_feature_id(feature) for feature in features[:5]) if identifier]
+
     return {
         "top_level_keys": top_level_keys(payload),
         "feature_count": len(features),
         "first_feature_property_keys": sorted(properties.keys()),
+        "first_feature_property_types": first_value_type_map(properties),
         "first_feature_geometry_type": geometry.get("type"),
         "first_feature_id_kind": feature_id_kind,
+        "feature_id_sample": feature_ids,
+        "metadata_flags": flags,
         "summary": summary,
     }
 
@@ -136,6 +242,8 @@ def geoservices_feature_shape(payload: Any) -> dict[str, Any]:
     features = []
     if isinstance(payload, dict):
         raw_features = payload.get("features")
+        if not raw_features:
+            raw_features = payload.get("results")
         if isinstance(raw_features, list):
             features = raw_features
 
@@ -183,12 +291,21 @@ def geoservices_feature_shape(payload: Any) -> dict[str, Any]:
         ]
     )
 
+    flags = metadata_flags(
+        payload,
+        ["fields", "objectIdFieldName", "geometryType", "spatialReference", "exceededTransferLimit", "results", "features", "layers"],
+    )
+    feature_ids = [identifier for identifier in (normalized_geoservices_id(feature) for feature in features[:5]) if identifier]
+
     return {
         "top_level_keys": top_level_keys(payload),
         "feature_count": len(features),
         "first_feature_property_keys": sorted(attributes.keys()),
+        "first_feature_property_types": first_value_type_map(attributes),
         "first_feature_geometry_type": geometry_type,
         "first_feature_id_kind": feature_id_kind,
+        "feature_id_sample": feature_ids,
+        "metadata_flags": flags,
         "summary": summary,
     }
 
@@ -279,6 +396,233 @@ def wfs_requests(server: ServerConfig) -> list[dict[str, str]]:
     return []
 
 
+def wfs_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
+    filter_param = (
+        "%3Cfes%3AFilter%20xmlns%3Afes%3D%22http%3A%2F%2Fwww.opengis.net%2Ffes%2F2.0%22%3E"
+        "%3Cfes%3APropertyIsEqualTo%3E"
+        "%3Cfes%3AValueReference%3Ecategory%3C%2Ffes%3AValueReference%3E"
+        "%3Cfes%3ALiteral%3Epark%3C%2Ffes%3ALiteral%3E"
+        "%3C%2Ffes%3APropertyIsEqualTo%3E"
+        "%3C%2Ffes%3AFilter%3E"
+    )
+    if server.name == "honua":
+        base = f"{server.base_url}/wfs"
+        return [
+            {
+                "family": "feature",
+                "protocol": "wfs",
+                "suite": "wfs-filtered",
+                "request": "equality",
+                "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=bench_points&COUNT=100&OUTPUTFORMAT=application/json&FILTER=" + filter_param,
+            },
+        ]
+    if server.name == "geoserver":
+        base = f"{server.base_url}/geoserver/wfs"
+        return [
+            {
+                "family": "feature",
+                "protocol": "wfs",
+                "suite": "wfs-filtered",
+                "request": "equality",
+                "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=geobench:bench_points&COUNT=100&OUTPUTFORMAT=application/json&FILTER=" + filter_param,
+            },
+        ]
+    return []
+
+
+def wms_getfeatureinfo_requests(server: ServerConfig) -> list[dict[str, str]]:
+    sample_bbox_4326 = "139.2325,35.2325,139.3325,35.3325"
+    if server.name == "honua":
+        return [
+            {
+                "family": "feature",
+                "protocol": "wms",
+                "suite": "wms-getfeatureinfo",
+                "request": "small",
+                "url": (
+                    f"{server.base_url}/ogc/services/default/wms?"
+                    f"SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=bench_points&STYLES=&"
+                    f"QUERY_LAYERS=bench_points&CRS=CRS:84&BBOX={sample_bbox_4326}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}"
+                    f"&INFO_FORMAT=application/json&I=128&J=128&FEATURE_COUNT=10"
+                ),
+            }
+        ]
+    if server.name == "geoserver":
+        return [
+            {
+                "family": "feature",
+                "protocol": "wms",
+                "suite": "wms-getfeatureinfo",
+                "request": "small",
+                "url": (
+                    f"{server.base_url}/geoserver/wms?"
+                    f"SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=geobench:bench_points&STYLES=&"
+                    f"QUERY_LAYERS=geobench:bench_points&CRS=CRS:84&BBOX={sample_bbox_4326}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}"
+                    f"&INFO_FORMAT=application/json&I=128&J=128&FEATURE_COUNT=10"
+                ),
+            }
+        ]
+    if server.name == "qgis":
+        map_path = urllib.parse.quote(env("QGIS_MAP_PATH", "/etc/qgisserver/geobench.qgs"))
+        return [
+            {
+                "family": "feature",
+                "protocol": "wms",
+                "suite": "wms-getfeatureinfo",
+                "request": "small",
+                "url": (
+                    f"{server.base_url}/ows/?MAP={map_path}&"
+                    f"SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=bench_points&STYLES=&"
+                    f"QUERY_LAYERS=bench_points&CRS=CRS:84&BBOX={sample_bbox_4326}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}"
+                    f"&INFO_FORMAT=application/json&I=128&J=128&FEATURE_COUNT=10"
+                ),
+            }
+        ]
+    return []
+
+
+
+
+def wms_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
+    fixtures = [
+        {
+            "request": "equality",
+            "bbox_4326": "146.5040,-38.5760,151.5040,-33.5760",
+            "xml": (
+                "<Filter xmlns=\"http://www.opengis.net/ogc\">"
+                "<PropertyIsEqualTo>"
+                "<PropertyName>category</PropertyName>"
+                "<Literal>park</Literal>"
+                "</PropertyIsEqualTo>"
+                "</Filter>"
+            ),
+        },
+        {
+            "request": "range",
+            "bbox_4326": "-47.8625,-24.7825,-42.8625,-19.7825",
+            "xml": (
+                "<Filter xmlns=\"http://www.opengis.net/ogc\">"
+                "<PropertyIsBetween>"
+                "<PropertyName>temperature</PropertyName>"
+                "<LowerBoundary><Literal>24.968923912383616</Literal></LowerBoundary>"
+                "<UpperBoundary><Literal>34.968923912383616</Literal></UpperBoundary>"
+                "</PropertyIsBetween>"
+                "</Filter>"
+            ),
+        },
+        {
+            "request": "like",
+            "bbox_4326": "139.6637,35.6637,144.6637,40.6637",
+            "xml": (
+                "<Filter xmlns=\"http://www.opengis.net/ogc\">"
+                "<PropertyIsLike wildCard=\"%\" singleChar=\"_\" escapeChar=\"\\\\\">"
+                "<PropertyName>feature_name</PropertyName>"
+                "<Literal>feature_548%</Literal>"
+                "</PropertyIsLike>"
+                "</Filter>"
+            ),
+        },
+    ]
+
+    if server.name == "honua":
+        base = f"{server.base_url}/ogc/services/default/wms"
+        layer = "bench_points"
+    elif server.name == "geoserver":
+        base = f"{server.base_url}/geoserver/wms"
+        layer = "geobench:bench_points"
+    else:
+        return []
+
+    return [
+        {
+            "family": "raster",
+            "protocol": "wms",
+            "suite": "wms-filtered",
+            "request": fixture["request"],
+            "url": (
+                f"{base}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS={layer}&STYLES=&CRS=CRS:84"
+                f"&BBOX={fixture['bbox_4326']}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}"
+                "&FORMAT=image/png&TRANSPARENT=true"
+                f"&FILTER={urllib.parse.quote(fixture['xml'])}"
+            ),
+        }
+        for fixture in fixtures
+    ]
+def wmts_requests(server: ServerConfig) -> list[dict[str, str]]:
+    if server.name != "geoserver":
+        return []
+
+    base = f"{server.base_url}/geoserver/gwc/service/wmts"
+    return [
+        {
+            "family": "raster",
+            "protocol": "wmts",
+            "suite": "wmts",
+            "request": "z0",
+            "url": (
+                f"{base}?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=geobench:bench_points"
+                f"&STYLE=&TILEMATRIXSET=EPSG:900913&TILEMATRIX=EPSG:900913:0&TILECOL=0&TILEROW=0&FORMAT=image/png"
+            ),
+        },
+    ]
+
+
+def wcs_requests(server: ServerConfig) -> list[dict[str, str]]:
+    if server.name != "geoserver":
+        return []
+
+    coverage = env("GEOSERVER_WCS_COVERAGE", env("WCS_COVERAGE", "geobench:bench_raster"))
+
+    sample_bbox_4326 = "139.2325,35.2325,139.3325,35.3325"
+    base = f"{server.base_url}/geoserver/wcs"
+    return [
+        {
+            "family": "raster",
+            "protocol": "wcs",
+            "suite": "wcs",
+            "request": "small",
+            "url": (
+                f"{base}?SERVICE=WCS&VERSION=1.0.0&REQUEST=GetCoverage&COVERAGE={urllib.parse.quote(coverage)}"
+                f"&CRS=EPSG:4326&BBOX={sample_bbox_4326}&WIDTH=256&HEIGHT=256&FORMAT=GeoTIFF"
+            ),
+        },
+    ]
+
+
+
+
+def geoservices_identify_requests(server: ServerConfig) -> list[dict[str, str]]:
+    if server.name == "honua":
+        service = env("HONUA_GSR_SERVICE_ID", env("HONUA_SERVICE_NAME", "default"))
+        layer = env("HONUA_GSR_LAYER_ID", env("HONUA_COLLECTION_ID", "1"))
+        collection = env("HONUA_COLLECTION_ID", "1")
+        base = f"{server.base_url}/rest/services/{service}/MapServer/identify"
+    elif server.name == "geoserver":
+        if env("GEOSERVER_GSR_ENABLED", "0") != "1":
+            return []
+        service = env("GEOSERVER_GSR_SERVICE", "geobench")
+        layer = env("GEOSERVER_GSR_LAYER_ID", "0")
+        collection = "geobench:bench_points"
+        base = f"{server.base_url}/geoserver/gsr/services/{service}/MapServer/identify"
+    else:
+        return []
+
+    lon, lat = discover_collection_point(server, collection) or (139.2825, 35.2825)
+    geometry = f"{lon:.6f},{lat:.6f}"
+    sample_bbox_4326 = bbox_around_point(lon, lat)
+    return [
+        {
+            "family": "feature",
+            "protocol": "geoservices-rest",
+            "suite": "geoservices-identify",
+            "request": "small",
+            "url": (
+                f"{base}?f=json&geometry={urllib.parse.quote(geometry)}&geometryType=esriGeometryPoint&sr=4326"
+                f"&mapExtent={urllib.parse.quote(sample_bbox_4326)}&imageDisplay={DEFAULT_IMAGE_SIZE}"
+                f"%2C{DEFAULT_IMAGE_SIZE}%2C96&tolerance=2&returnGeometry=true&layers=all%3A{urllib.parse.quote(layer)}"
+            ),
+        },
+    ]
 def raster_requests(server: ServerConfig, enabled_tests: list[str]) -> list[dict[str, str]]:
     requests: list[dict[str, str]] = []
     sample_bbox_4326 = "139.2325,35.2325,139.3325,35.3325"
@@ -581,8 +925,20 @@ def main() -> int:
         requests.extend(geoservices_diagnostic_requests(server))
     if "wfs-getfeature" in enabled_tests:
         requests.extend(wfs_requests(server))
+    if "wfs-filtered" in enabled_tests:
+        requests.extend(wfs_filtered_requests(server))
     if any(test in enabled_tests for test in ("wms-getmap", "wms-reprojection", "geoservices-export")):
         requests.extend(raster_requests(server, enabled_tests))
+    if "wms-getfeatureinfo" in enabled_tests:
+        requests.extend(wms_getfeatureinfo_requests(server))
+    if "wms-filtered" in enabled_tests:
+        requests.extend(wms_filtered_requests(server))
+    if "wmts" in enabled_tests:
+        requests.extend(wmts_requests(server))
+    if "wcs" in enabled_tests:
+        requests.extend(wcs_requests(server))
+    if "geoservices-identify" in enabled_tests:
+        requests.extend(geoservices_identify_requests(server))
 
     entries = []
     for spec in requests:
