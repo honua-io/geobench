@@ -10,14 +10,18 @@ import { buildBbox, buildMapRequest, RASTER_SIZES, validateImageResponse } from 
 
 var errorRate = new Rate("errors");
 var responseTime = new Trend("raster_response_time", true);
-var scenarioThresholds = {
-  "http_req_duration{bbox_size:small}": ["max>=0"],
-  "http_req_duration{bbox_size:medium}": ["max>=0"],
-  "http_req_duration{bbox_size:large}": ["max>=0"],
-  "http_reqs{bbox_size:small}": ["count>=0"],
-  "http_reqs{bbox_size:medium}": ["count>=0"],
-  "http_reqs{bbox_size:large}": ["count>=0"],
-};
+var scenarioDuration = __ENV.GEOSERVICES_EXPORT_DURATION || "120s";
+var warmupDuration = __ENV.GEOSERVICES_EXPORT_WARMUP || "60s";
+var scenarioVus = parseInt(__ENV.GEOSERVICES_EXPORT_VUS || "10", 10);
+var selectedBboxSizes = (__ENV.GEOSERVICES_EXPORT_SCENARIOS || "small,medium,large")
+  .split(",")
+  .map(function (value) {
+    return value.trim();
+  })
+  .filter(function (value) {
+    return value.length > 0;
+  });
+var scenarioThresholds = {};
 
 function selectedServer() {
   var name = (__ENV.SERVER || "honua").toLowerCase();
@@ -28,44 +32,55 @@ function selectedServer() {
 }
 
 var SERVER_NAME = selectedServer();
+var BBOX_VARIANTS = [
+  { id: "small", exec: "smallExport" },
+  { id: "medium", exec: "mediumExport" },
+  { id: "large", exec: "largeExport" },
+].filter(function (variant) {
+  return selectedBboxSizes.indexOf(variant.id) !== -1;
+});
 
-export var options = {
-  scenarios: {
+if (BBOX_VARIANTS.length === 0) {
+  throw new Error("No GeoServices export scenarios selected");
+}
+
+BBOX_VARIANTS.forEach(function (variant) {
+  scenarioThresholds["http_req_duration{bbox_size:" + variant.id + "}"] = ["max>=0"];
+  scenarioThresholds["http_reqs{bbox_size:" + variant.id + "}"] = ["count>=0"];
+});
+
+function buildScenarios() {
+  var scenarios = {
     warmup: {
       executor: "constant-vus",
-      vus: 5,
-      duration: "60s",
+      vus: Math.max(1, Math.min(5, scenarioVus)),
+      duration: warmupDuration,
       exec: "warmupGeoservicesExport",
       tags: { phase: "warmup" },
       startTime: "0s",
     },
-    small_export: {
+  };
+
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  BBOX_VARIANTS.forEach(function (variant) {
+    scenarios[variant.id + "_export"] = {
       executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "smallExport",
-      tags: { bbox_size: "small" },
-      startTime: "60s",
-    },
-    medium_export: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "mediumExport",
-      tags: { bbox_size: "medium" },
-      startTime: "190s",
-    },
-    large_export: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "largeExport",
-      tags: { bbox_size: "large" },
-      startTime: "320s",
-    },
-  },
+      vus: scenarioVus,
+      duration: scenarioDuration,
+      exec: variant.exec,
+      tags: { bbox_size: variant.id },
+      startTime: String(offsetSeconds) + "s",
+    };
+    offsetSeconds += parseInt(scenarioDuration, 10);
+  });
+
+  return scenarios;
+}
+
+export var options = {
+  scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 
@@ -110,7 +125,13 @@ export function largeExport() {
 }
 
 export function warmupGeoservicesExport() {
-  smallExport();
-  mediumExport();
-  largeExport();
+  BBOX_VARIANTS.forEach(function (variant) {
+    if (variant.id === "small") {
+      smallExport();
+    } else if (variant.id === "medium") {
+      mediumExport();
+    } else if (variant.id === "large") {
+      largeExport();
+    }
+  });
 }

@@ -14,6 +14,8 @@ WMTS_CACHE_POLICY="${WMTS_CACHE_POLICY:-warm}"
 WCS_COVERAGE_ID="${GEOSERVER_WCS_COVERAGE:-${WCS_COVERAGE:-geobench:bench_raster}}"
 WCS_COVERAGE_NAME="${WCS_COVERAGE_ID#*:}"
 WCS_STORE_NAME="${GEOSERVER_WCS_STORE:-${WCS_COVERAGE_NAME}}"
+GEOSERVER_MAX_CONNECTIONS="${GEOSERVER_MAX_CONNECTIONS:-6}"
+GEOSERVER_MIN_CONNECTIONS="${GEOSERVER_MIN_CONNECTIONS:-3}"
 ENABLE_WMTS=0
 ENABLE_WCS=0
 
@@ -58,8 +60,8 @@ curl -sf -X POST "${GS_URL}/geoserver/rest/workspaces/geobench/datastores" \
           {"@key": "Loose bbox", "$": "false"},
           {"@key": "Estimated extends", "$": "true"},
           {"@key": "encode functions", "$": "true"},
-          {"@key": "max connections", "$": "20"},
-          {"@key": "min connections", "$": "5"}
+          {"@key": "max connections", "$": "'${GEOSERVER_MAX_CONNECTIONS}'"},
+          {"@key": "min connections", "$": "'${GEOSERVER_MIN_CONNECTIONS}'"}
         ]
       }
     }

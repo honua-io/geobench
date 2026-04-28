@@ -16,6 +16,40 @@ from pathlib import Path
 
 
 SERVERS = ("honua", "geoserver", "qgis")
+CONCURRENT_LEVELS = ("1", "10", "50", "100")
+CONCURRENT_WORKLOADS = (
+    ("bbox", "bbox", "40%"),
+    ("equality", "equality", "30%"),
+    ("range", "range", "20%"),
+    ("like", "like", "10%"),
+)
+CONCURRENT_WORKLOAD_PREFIX = "workload:"
+CONCURRENT_WORKLOAD_LABELS = {
+    "bbox": "bbox",
+    "equality": "equality",
+    "range": "range",
+    "like": "like",
+}
+DEFAULT_CONCURRENT_MIX = {
+    "bbox": 0.40,
+    "equality": 0.30,
+    "range": 0.20,
+    "like": 0.10,
+}
+SPATIAL_CACHE_SENSITIVE_TESTS = {
+    "spatial-bbox",
+    "concurrent",
+    "wfs-getfeature",
+    "wms-getmap",
+    "wms-reprojection",
+    "wms-getfeatureinfo",
+    "wms-filtered",
+    "wcs",
+    "geoservices-query",
+    "geoservices-query-diagnostics",
+    "geoservices-export",
+    "geoservices-identify",
+}
 TEST_DEFINITIONS = {
     "attribute-filter": {
         "group": "Common Standards: Feature",
@@ -215,35 +249,96 @@ def round_metric(value):
     return round(float(value), 1)
 
 
-def compute_metrics(values):
+def duration_seconds(value, default=None):
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip().lower()
+    if not text:
+        return default
+
+    try:
+        if text.endswith("ms"):
+            return float(text[:-2]) / 1000.0
+        if text.endswith("s"):
+            return float(text[:-1])
+        if text.endswith("m"):
+            return float(text[:-1]) * 60.0
+        if text.endswith("h"):
+            return float(text[:-1]) * 3600.0
+        return float(text)
+    except ValueError:
+        return default
+
+
+def scenario_duration_for_test(run_metadata, test):
+    tests = run_metadata.get("tests", {}) if isinstance(run_metadata, dict) else {}
+    entry = tests.get(test, {}) if isinstance(tests.get(test), dict) else {}
+    seconds = duration_seconds(entry.get("scenario_duration_seconds"))
+    return seconds if seconds and seconds > 0 else None
+
+
+def compute_metrics(values, scenario_duration_seconds=None):
     """Compute benchmark metrics from a list of duration values (ms)."""
     if not values:
         return None
 
     values_sorted = sorted(values)
     n = len(values_sorted)
+    rps_denominator = scenario_duration_seconds or 120.0
 
     return {
-        "rps": round_metric(n / 120.0),
+        "rps": round_metric(n / rps_denominator),
         "p50": round_metric(values_sorted[min(int(n * 0.50), n - 1)]),
         "p95": round_metric(values_sorted[min(int(n * 0.95), n - 1)]),
         "p99": round_metric(values_sorted[min(int(n * 0.99), n - 1)]),
     }
 
 
-def metrics_from_summary(duration_metric, request_metric):
+def metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds=None):
     if not duration_metric or not request_metric:
         return None
 
+    if scenario_duration_seconds:
+        request_count = request_metric.get("count")
+        rps = (float(request_count) / scenario_duration_seconds) if request_count is not None else None
+    else:
+        rps = request_metric.get("rate")
+
     return {
-        "rps": round_metric(request_metric.get("rate")),
+        "rps": round_metric(rps),
         "p50": round_metric(duration_metric.get("med")),
         "p95": round_metric(duration_metric.get("p(95)")),
         "p99": round_metric(duration_metric.get("p(99)")),
     }
 
 
-def parse_k6_point_stream(filepath):
+def parse_metric_name(metric_name):
+    if "{" not in metric_name or not metric_name.endswith("}"):
+        return metric_name, {}
+
+    base, raw_tags = metric_name.split("{", 1)
+    tags = {}
+    for part in raw_tags[:-1].split(","):
+        if not part or ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        tags[key] = value
+    return base, tags
+
+
+def metric_for_tags(metrics, metric_name, expected_tags):
+    expected = {str(key): str(value) for key, value in expected_tags.items()}
+    for key, value in metrics.items():
+        base, tags = parse_metric_name(key)
+        if base == metric_name and tags == expected:
+            return value
+    return None
+
+
+def parse_k6_point_stream(filepath, run_metadata=None):
     """Parse a k6 point-stream JSON file into scenario metrics."""
     test = None
     parsed_name = parse_result_filename(Path(filepath).name)
@@ -251,6 +346,7 @@ def parse_k6_point_stream(filepath):
         _, test, _ = parsed_name
 
     definitions = TEST_DEFINITIONS.get(test, {}).get("scenarios", [])
+    scenario_duration_seconds = scenario_duration_for_test(run_metadata or {}, test)
     points = defaultdict(list)
 
     with open(filepath) as f:
@@ -286,29 +382,47 @@ def parse_k6_point_stream(filepath):
                 )
             points[scenario].append(data.get("value", 0))
 
+            if test == "concurrent" and tags.get("concurrency") and tags.get("workload"):
+                points[
+                    f"{CONCURRENT_WORKLOAD_PREFIX}{tags['concurrency']}:{tags['workload']}"
+                ].append(data.get("value", 0))
+
     parsed = {}
     for scenario, values in points.items():
-        metrics = compute_metrics(values)
+        metrics = compute_metrics(values, scenario_duration_seconds)
         if metrics:
             parsed[scenario] = metrics
     return parsed
 
 
-def parse_k6_summary(data, test):
+def parse_k6_summary(data, test, run_metadata=None):
     """Parse a k6 summary-export JSON object into scenario and overall metrics."""
     metrics = data.get("metrics", {})
     definitions = TEST_DEFINITIONS.get(test, {}).get("scenarios", [])
+    scenario_duration_seconds = scenario_duration_for_test(run_metadata or {}, test)
 
     by_scenario = {}
     for definition in definitions:
         scenario_id = definition["id"]
         tag_key = definition["tag_key"]
         tag_value = definition["tag_value"]
-        duration_metric = metrics.get(f"http_req_duration{{{tag_key}:{tag_value}}}")
-        request_metric = metrics.get(f"http_reqs{{{tag_key}:{tag_value}}}")
-        parsed = metrics_from_summary(duration_metric, request_metric)
+        duration_metric = metric_for_tags(metrics, "http_req_duration", {tag_key: tag_value})
+        request_metric = metric_for_tags(metrics, "http_reqs", {tag_key: tag_value})
+        parsed = metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds)
         if parsed:
             by_scenario[scenario_id] = parsed
+
+    if test == "concurrent":
+        for concurrency in CONCURRENT_LEVELS:
+            for workload_id, _label, _weight in CONCURRENT_WORKLOADS:
+                tags = {"concurrency": concurrency, "workload": workload_id}
+                duration_metric = metric_for_tags(metrics, "http_req_duration", tags)
+                request_metric = metric_for_tags(metrics, "http_reqs", tags)
+                parsed = metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds)
+                if parsed:
+                    by_scenario[
+                        f"{CONCURRENT_WORKLOAD_PREFIX}{concurrency}:{workload_id}"
+                    ] = parsed
 
     overall = metrics_from_summary(
         metrics.get("http_req_duration"),
@@ -318,16 +432,16 @@ def parse_k6_summary(data, test):
     return by_scenario, overall
 
 
-def parse_result_file(filepath, test):
+def parse_result_file(filepath, test, run_metadata=None):
     """Parse either summary JSON or point-stream JSON results."""
     try:
         with open(filepath) as f:
             data = json.load(f)
     except json.JSONDecodeError:
-        return parse_k6_point_stream(filepath), None
+        return parse_k6_point_stream(filepath, run_metadata), None
 
     if isinstance(data, dict) and "metrics" in data:
-        return parse_k6_summary(data, test)
+        return parse_k6_summary(data, test, run_metadata)
 
     return {}, None
 
@@ -354,7 +468,7 @@ def aggregate_runs(raw):
     return aggregated
 
 
-def collect_results(results_dir):
+def collect_results(results_dir, run_metadata=None):
     """Collect and aggregate results across all runs."""
     scenario_runs = defaultdict(
         lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
@@ -370,7 +484,7 @@ def collect_results(results_dir):
             continue
 
         server, test, run_id = parsed_name
-        scenario_metrics, overall_metrics = parse_result_file(filepath, test)
+        scenario_metrics, overall_metrics = parse_result_file(filepath, test, run_metadata)
 
         for scenario, metrics in scenario_metrics.items():
             scenario_runs[server][test][scenario][run_id] = metrics
@@ -438,6 +552,93 @@ def add_scenario_section(lines, aggregated, servers, test, heading, first_column
 
     lines.append(format_table(headers, rows))
     lines.append("")
+
+
+def has_concurrent_workload_data(aggregated, servers):
+    for server in servers:
+        scenarios = aggregated.get(server, {}).get("concurrent", {})
+        if any(key.startswith(CONCURRENT_WORKLOAD_PREFIX) for key in scenarios):
+            return True
+    return False
+
+
+def format_mix_weight(value):
+    if value is None:
+        return "-"
+    return f"{float(value) * 100:.0f}%"
+
+
+def concurrent_metadata(run_metadata):
+    tests = run_metadata.get("tests", {}) if isinstance(run_metadata, dict) else {}
+    entry = tests.get("concurrent", {}) if isinstance(tests.get("concurrent"), dict) else {}
+    levels = entry.get("concurrent_levels") or list(CONCURRENT_LEVELS)
+    workloads = entry.get("concurrent_workloads") or [workload[0] for workload in CONCURRENT_WORKLOADS]
+    mix = entry.get("concurrent_mix")
+    if not isinstance(mix, dict):
+        mix = DEFAULT_CONCURRENT_MIX
+    profile = entry.get("concurrent_workload_profile") or "canonical_mixed"
+    return levels, workloads, mix, profile
+
+
+def add_concurrent_workload_section(lines, aggregated, servers, run_metadata):
+    if not has_concurrent_workload_data(aggregated, servers):
+        return
+
+    levels, workloads, mix, profile = concurrent_metadata(run_metadata)
+
+    lines.append("#### Concurrent Workload Breakdown")
+    lines.append("")
+    if profile == "focused":
+        selected = ", ".join(workloads)
+        lines.append(f"Focused concurrent diagnostic workload: {selected}.")
+    else:
+        mix_text = ", ".join(
+            f"{format_mix_weight(mix.get(workload_id))} {CONCURRENT_WORKLOAD_LABELS.get(workload_id, workload_id)}"
+            for workload_id in workloads
+        )
+        lines.append(f"Canonical mixed workload: {mix_text}.")
+    lines.append("Rows are reported when k6 exports both `concurrency` and `workload` tags.")
+    lines.append("")
+
+    headers = ["VUs", "Workload", "Mix", "Metric"] + [
+        SERVER_LABELS.get(s, s) for s in servers
+    ]
+    rows = []
+    for concurrency in levels:
+        for workload_id in workloads:
+            workload_label = CONCURRENT_WORKLOAD_LABELS.get(workload_id, workload_id)
+            workload_weight = format_mix_weight(mix.get(workload_id))
+            scenario = f"{CONCURRENT_WORKLOAD_PREFIX}{concurrency}:{workload_id}"
+            if not any(
+                aggregated.get(server, {}).get("concurrent", {}).get(scenario)
+                for server in servers
+            ):
+                continue
+
+            for metric, metric_label in [
+                ("rps", "req/s"),
+                ("p50", "p50 ms"),
+                ("p95", "p95 ms"),
+                ("p99", "p99 ms"),
+            ]:
+                row = [
+                    concurrency if metric == "rps" else "",
+                    workload_label if metric == "rps" else "",
+                    workload_weight if metric == "rps" else "",
+                    metric_label,
+                ]
+                for server in servers:
+                    row.append(
+                        aggregated.get(server, {})
+                        .get("concurrent", {})
+                        .get(scenario, {})
+                        .get(metric)
+                    )
+                rows.append(row)
+
+    if rows:
+        lines.append(format_table(headers, rows))
+        lines.append("")
 
 
 def add_overall_section(lines, aggregated_overall, servers, test, heading):
@@ -544,13 +745,16 @@ def compare_shape_group(entries):
             "first_feature_geometry_type",
             "first_feature_property_keys",
             "first_feature_property_types",
-            "first_feature_id_kind",
         ]
         metadata_only = []
         for key in core_keys:
             values = {comparable_shape_value(entry, key) for entry in entries}
             if len(values) > 1:
                 return "Not comparable", f"Core payload drift in {key}"
+
+        id_kind_values = {comparable_shape_value(entry, "first_feature_id_kind") for entry in entries}
+        if len(id_kind_values) > 1:
+            metadata_only.append("feature id representation differs")
 
         meta_values = {comparable_shape_value(entry, "metadata_flags") for entry in entries}
         top_key_values = {comparable_shape_value(entry, "top_level_keys") for entry in entries}
@@ -649,16 +853,110 @@ def add_audit_findings_section(lines, shape_audits, servers):
     lines.append("")
 
 
-def generate_report(results_dir, output_path, runs):
-    aggregated, aggregated_overall = collect_results(results_dir)
+def add_benchmark_semantics_section(lines, run_metadata):
+    tests = run_metadata.get("tests", {}) if isinstance(run_metadata, dict) else {}
+    observed_tests = set(tests)
+    if not observed_tests:
+        return
+
+    measurement_policy = (
+        run_metadata.get("measurement_policy", {})
+        if isinstance(run_metadata.get("measurement_policy"), dict)
+        else {}
+    )
+    rows = []
+
+    if "spatial-bbox" in observed_tests:
+        tolerance = run_metadata.get("bbox_tolerance_deg")
+        note = "viewport/windowing bbox; not an exact spatial predicate row"
+        if tolerance is not None:
+            note += f"; edge tolerance={tolerance} degrees"
+        rows.append(["`spatial-bbox`", note])
+
+    if "attribute-filter" in observed_tests:
+        rows.append(
+            [
+                "`attribute-filter`",
+                "equality, numeric range, and literal-prefix LIKE filters via CQL2 where supported",
+            ]
+        )
+
+    if "concurrent" in observed_tests:
+        levels, workloads, mix, profile = concurrent_metadata(run_metadata)
+        if profile == "focused":
+            concurrent_note = (
+                "focused concurrent diagnostic; selected levels="
+                + ",".join(levels)
+                + "; selected workloads="
+                + ",".join(workloads)
+            )
+        else:
+            mix_text = ", ".join(
+                f"{format_mix_weight(mix.get(workload_id))} {CONCURRENT_WORKLOAD_LABELS.get(workload_id, workload_id)}"
+                for workload_id in workloads
+            )
+            concurrent_note = (
+                f"mixed workload: {mix_text}; report includes workload-tagged tail latency when available"
+            )
+        rows.append(
+            [
+                "`concurrent`",
+                concurrent_note,
+            ]
+        )
+
+    if observed_tests & SPATIAL_CACHE_SENSITIVE_TESTS:
+        spatial_cache_default = measurement_policy.get(
+            "spatial_response_caching_default",
+            False,
+        )
+        rows.append(
+            [
+                "Spatial response caching",
+                f"default={str(spatial_cache_default).lower()}; cache-assisted spatial/render rows must be run as a separate track",
+            ]
+        )
+
+    response_body_policy = measurement_policy.get(
+        "response_body_policy",
+        "k6 discards default bodies, while measured feature requests use responseType=text so validators can inspect payloads",
+    )
+    rows.append(["Response validation", response_body_policy])
+
+    if run_metadata.get("server_tuning"):
+        rows.append(
+            [
+                "Pool profile",
+                "connection/admission settings are reported as benchmark inputs, not hidden tuning",
+            ]
+        )
+
+    if not rows:
+        return
+
+    lines.append("## Benchmark Semantics")
+    lines.append("")
+    lines.append(format_table(["Topic", "Policy"], rows))
+    lines.append("")
+
+
+def generate_report(results_dir, output_path, runs, selected_servers=None):
+    run_metadata = load_run_metadata(results_dir)
+    aggregated, aggregated_overall = collect_results(results_dir, run_metadata)
     shape_audits = collect_shape_audits(results_dir)
     discovered_servers = set(aggregated.keys()) | set(aggregated_overall.keys()) | set(shape_audits.keys())
-    servers = [server for server in SERVERS if server in discovered_servers]
-    servers.extend(sorted(discovered_servers - set(servers)))
+    if selected_servers:
+        servers = [server for server in selected_servers if server in discovered_servers]
+    else:
+        servers = [server for server in SERVERS if server in discovered_servers]
+        servers.extend(sorted(discovered_servers - set(servers)))
 
     if not servers:
         print("No results found in " + results_dir, file=sys.stderr)
         sys.exit(1)
+
+    report_metadata = dict(run_metadata)
+    report_metadata["servers"] = servers
 
     lines = []
     lines.append("# GeoBench Results")
@@ -668,6 +966,7 @@ def generate_report(results_dir, output_path, runs):
     )
     lines.append(f"Dataset: Small (100K points) | Runs: {runs} (median reported)")
     lines.append("")
+    add_benchmark_semantics_section(lines, report_metadata)
 
     for group_name, tests in REPORT_GROUPS:
         rendered_group = False
@@ -691,12 +990,14 @@ def generate_report(results_dir, output_path, runs):
             first_column = TEST_DEFINITIONS[test]["first_column"]
             if has_scenario_data:
                 add_scenario_section(lines, aggregated, servers, test, heading, first_column)
+                if test == "concurrent":
+                    add_concurrent_workload_section(lines, aggregated, servers, report_metadata)
             else:
                 add_overall_section(lines, aggregated_overall, servers, test, heading)
 
-    run_metadata = load_run_metadata(results_dir)
-
-    add_cache_tier_section(lines, run_metadata)
+    add_cache_tier_section(lines, report_metadata)
+    add_server_images_section(lines, report_metadata, servers)
+    add_server_tuning_section(lines, report_metadata, servers)
     add_payload_comparability_section(lines, shape_audits, servers)
     add_audit_findings_section(lines, shape_audits, servers)
     add_shape_audit_section(lines, shape_audits, servers)
@@ -714,14 +1015,14 @@ def generate_report(results_dir, output_path, runs):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "dataset": "small",
                 "runs": runs,
-                "run_metadata": run_metadata,
+                "run_metadata": report_metadata,
                 "cache_tiers": {
                     test: entry.get("cache_tier")
-                    for test, entry in run_metadata.get("tests", {}).items()
+                    for test, entry in report_metadata.get("tests", {}).items()
                 },
-                "results": aggregated,
-                "overall_results": aggregated_overall,
-                "response_shape_audits": shape_audits,
+                "results": {server: aggregated.get(server, {}) for server in servers},
+                "overall_results": {server: aggregated_overall.get(server, {}) for server in servers},
+                "response_shape_audits": {server: shape_audits.get(server, []) for server in servers},
             },
             f,
             indent=2,
@@ -752,7 +1053,7 @@ def load_run_metadata(results_dir):
         except (OSError, json.JSONDecodeError):
             metadata = {}
 
-    default_cache_tier = metadata.get("default_cache_tier", "warm_service")
+    default_cache_tier = metadata.get("default_cache_tier", "baseline")
     raw_tests = metadata.get("tests") if isinstance(metadata.get("tests"), dict) else {}
 
     observed_tests = []
@@ -771,7 +1072,8 @@ def load_run_metadata(results_dir):
     for test in observed_tests:
         raw_entry = raw_tests.get(test) if isinstance(raw_tests.get(test), dict) else {}
         cache_tier = raw_entry.get("cache_tier") or ("warm_tile_cache" if test == "wmts" else default_cache_tier)
-        entry = {"cache_tier": cache_tier}
+        entry = dict(raw_entry)
+        entry["cache_tier"] = cache_tier
         wmts_cache_policy = raw_entry.get("wmts_cache_policy") or metadata.get("wmts_cache_policy")
         if test == "wmts" and wmts_cache_policy:
             entry["wmts_cache_policy"] = wmts_cache_policy
@@ -789,7 +1091,7 @@ def add_cache_tier_section(lines, run_metadata):
 
     lines.append("## Cache Tiers")
     lines.append("")
-    lines.append(f"Default non-WMTS tier: `{run_metadata.get('default_cache_tier', 'warm_service')}`")
+    lines.append(f"Default non-WMTS tier: `{run_metadata.get('default_cache_tier', 'baseline')}`")
     lines.append("")
     lines.append("| Test | Cache tier | Notes |")
     lines.append("| --- | --- | --- |")
@@ -798,9 +1100,49 @@ def add_cache_tier_section(lines, run_metadata):
         notes = []
         if test == "wmts" and entry.get("wmts_cache_policy"):
             notes.append(f"wmts_cache_policy={entry['wmts_cache_policy']}")
+        if test == "spatial-bbox" and run_metadata.get("bbox_tolerance_deg") is not None:
+            notes.append(f"bbox_tolerance_deg={run_metadata['bbox_tolerance_deg']}")
         lines.append(
             f"| {test} | {humanize_cache_tier(entry.get('cache_tier'))} | {'; '.join(notes) or '-'} |"
         )
+    lines.append("")
+
+
+def add_server_tuning_section(lines, run_metadata, servers=None):
+    tuning = run_metadata.get("server_tuning", {}) if isinstance(run_metadata, dict) else {}
+    if not tuning:
+        return
+
+    lines.append("## Server Tuning")
+    lines.append("")
+    lines.append("| Server | Setting | Value |")
+    lines.append("| --- | --- | --- |")
+    for server in (servers or SERVERS):
+        settings = tuning.get(server)
+        if not isinstance(settings, dict):
+            continue
+        for key in sorted(settings):
+            lines.append(f"| {SERVER_LABELS.get(server, server)} | `{key}` | `{settings[key]}` |")
+    lines.append("")
+
+
+def add_server_images_section(lines, run_metadata, servers=None):
+    images = run_metadata.get("server_images", {}) if isinstance(run_metadata, dict) else {}
+    if not images:
+        return
+
+    lines.append("## Server Images")
+    lines.append("")
+    lines.append("| Component | Image |")
+    lines.append("| --- | --- |")
+    for server in (servers or SERVERS):
+        image = images.get(server)
+        if image:
+            lines.append(f"| {SERVER_LABELS.get(server, server)} | `{image}` |")
+    for component in ("postgis", "k6"):
+        image = images.get(component)
+        if image:
+            lines.append(f"| {component} | `{image}` |")
     lines.append("")
 
 
@@ -809,8 +1151,17 @@ def main():
     parser.add_argument("--results-dir", required=True, help="Directory with k6 JSON results")
     parser.add_argument("--output", required=True, help="Output markdown file")
     parser.add_argument("--runs", type=int, default=5, help="Number of runs (for labeling)")
+    parser.add_argument("--servers", help="Comma- or space-separated server ids to include")
     args = parser.parse_args()
-    generate_report(args.results_dir, args.output, args.runs)
+    selected_servers = None
+    if args.servers:
+        selected_servers = [
+            part.strip()
+            for chunk in args.servers.split()
+            for part in chunk.split(",")
+            if part.strip()
+        ]
+    generate_report(args.results_dir, args.output, args.runs, selected_servers)
 
 
 if __name__ == "__main__":

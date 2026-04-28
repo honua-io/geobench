@@ -1,0 +1,40 @@
+{
+  "server": "honua",
+  "generated_at": "2026-04-27T09:08:30.700660+00:00",
+  "tests": [
+    "wms-getfeatureinfo"
+  ],
+  "entries": [
+    {
+      "family": "feature",
+      "protocol": "wms",
+      "suite": "wms-getfeatureinfo",
+      "request": "small",
+      "url": "http://localhost:8081/ogc/services/default/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=bench_points&STYLES=&QUERY_LAYERS=bench_points&CRS=CRS:84&BBOX=139.2325,35.2325,139.3325,35.3325&WIDTH=256&HEIGHT=256&INFO_FORMAT=application/json&I=128&J=128&FEATURE_COUNT=10",
+      "status": 200,
+      "content_type": "application/json",
+      "bytes": 44,
+      "sha256": "71c755273a977d9c052f4b9e64789e8981ca9d3d9da69523c29893df597748cf",
+      "top_level_keys": [
+        "features",
+        "type"
+      ],
+      "feature_count": 0,
+      "first_feature_property_keys": [],
+      "first_feature_property_types": {},
+      "first_feature_geometry_type": null,
+      "first_feature_id_kind": "missing",
+      "feature_id_sample": [],
+      "metadata_flags": {
+        "links": false,
+        "numberMatched": false,
+        "numberReturned": false,
+        "timeStamp": false,
+        "bbox": false,
+        "crs": false,
+        "type": true
+      },
+      "summary": "top_keys=features,type; features=0; first_id=missing; first_geom=-; first_props=-"
+    }
+  ]
+}

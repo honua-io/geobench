@@ -10,53 +10,69 @@ import { buildItemsUrl, ogcChecks, CATEGORIES } from "./helpers.js";
 
 var errorRate = new Rate("errors");
 var responseTime = new Trend("ogc_response_time", true);
-var scenarioThresholds = {
-  "http_req_duration{query_type:equality}": ["max>=0"],
-  "http_req_duration{query_type:range}": ["max>=0"],
-  "http_req_duration{query_type:like}": ["max>=0"],
-  "http_reqs{query_type:equality}": ["count>=0"],
-  "http_reqs{query_type:range}": ["count>=0"],
-  "http_reqs{query_type:like}": ["count>=0"],
-};
+var scenarioDuration = __ENV.ATTRIBUTE_FILTER_DURATION || "120s";
+var warmupDuration = __ENV.ATTRIBUTE_FILTER_WARMUP || "60s";
+var scenarioVus = parseInt(__ENV.ATTRIBUTE_FILTER_VUS || "10", 10);
+var selectedQueryTypes = (__ENV.ATTRIBUTE_FILTER_SCENARIOS || "equality,range,like")
+  .split(",")
+  .map(function (value) {
+    return value.trim();
+  })
+  .filter(function (value) {
+    return value.length > 0;
+  });
 
-export var options = {
-  discardResponseBodies: true,
-  scenarios: {
+var FILTER_VARIANTS = [
+  { id: "equality", exec: "equalityFilter" },
+  { id: "range", exec: "rangeFilter" },
+  { id: "like", exec: "likeFilter" },
+].filter(function (variant) {
+  return selectedQueryTypes.indexOf(variant.id) !== -1;
+});
+
+if (FILTER_VARIANTS.length === 0) {
+  throw new Error("No attribute-filter scenarios selected");
+}
+
+var scenarioThresholds = {};
+FILTER_VARIANTS.forEach(function (variant) {
+  scenarioThresholds["http_req_duration{query_type:" + variant.id + "}"] = ["max>=0"];
+  scenarioThresholds["http_reqs{query_type:" + variant.id + "}"] = ["count>=0"];
+});
+
+function buildScenarios() {
+  var scenarios = {
     warmup: {
       executor: "constant-vus",
-      vus: 5,
-      duration: "60s",
+      vus: Math.max(1, Math.min(5, scenarioVus)),
+      duration: warmupDuration,
       exec: "warmupAttributeFilter",
       tags: { phase: "warmup" },
       startTime: "0s",
     },
-    equality_filter: {
+  };
+
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  FILTER_VARIANTS.forEach(function (variant) {
+    scenarios[variant.id + "_filter"] = {
       executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "equalityFilter",
-      tags: { query_type: "equality" },
-      startTime: "60s",
-    },
-    range_filter: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "rangeFilter",
-      tags: { query_type: "range" },
-      startTime: "190s",
-    },
-    like_filter: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "likeFilter",
-      tags: { query_type: "like" },
-      startTime: "320s",
-    },
-  },
+      vus: scenarioVus,
+      duration: scenarioDuration,
+      exec: variant.exec,
+      tags: { query_type: variant.id },
+      startTime: String(offsetSeconds) + "s",
+    };
+    offsetSeconds += parseInt(scenarioDuration, 10);
+  });
+
+  return scenarios;
+}
+
+export var options = {
+  discardResponseBodies: true,
+  scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 
@@ -73,9 +89,15 @@ export function equalityFilter() {
 }
 
 export function warmupAttributeFilter() {
-  equalityFilter();
-  rangeFilter();
-  likeFilter();
+  FILTER_VARIANTS.forEach(function (variant) {
+    if (variant.id === "equality") {
+      equalityFilter();
+    } else if (variant.id === "range") {
+      rangeFilter();
+    } else if (variant.id === "like") {
+      likeFilter();
+    }
+  });
 }
 
 // Range: temperature >= X AND temperature <= X+10

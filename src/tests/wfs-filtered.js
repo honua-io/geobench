@@ -25,14 +25,14 @@ var responseTime = new Trend("wfs_filtered_response_time", true);
 var scenarioDuration = __ENV.WFS_FILTERED_DURATION || "120s";
 var warmupDuration = __ENV.WFS_FILTERED_WARMUP || "60s";
 var scenarioVus = parseInt(__ENV.WFS_FILTERED_VUS || "10", 10);
-var scenarioThresholds = {
-  "http_req_duration{query_type:equality}": ["max>=0"],
-  "http_req_duration{query_type:range}": ["max>=0"],
-  "http_req_duration{query_type:like}": ["max>=0"],
-  "http_reqs{query_type:equality}": ["count>=0"],
-  "http_reqs{query_type:range}": ["count>=0"],
-  "http_reqs{query_type:like}": ["count>=0"],
-};
+var selectedQueryTypes = (__ENV.WFS_FILTERED_SCENARIOS || "equality,range,like")
+  .split(",")
+  .map(function (value) {
+    return value.trim();
+  })
+  .filter(function (value) {
+    return value.length > 0;
+  });
 
 if (!wfsFilteredQueriesSupported()) {
   throw new Error(
@@ -41,10 +41,26 @@ if (!wfsFilteredQueriesSupported()) {
   );
 }
 
-function buildScenarios() {
-  var offsetSeconds = parseInt(warmupDuration, 10);
+var FILTER_VARIANTS = [
+  { id: "equality", exec: "equalityFilter" },
+  { id: "range", exec: "rangeFilter" },
+  { id: "like", exec: "likeFilter" },
+].filter(function (variant) {
+  return selectedQueryTypes.indexOf(variant.id) !== -1;
+});
 
-  return {
+if (FILTER_VARIANTS.length === 0) {
+  throw new Error("No WFS filtered scenarios selected");
+}
+
+var scenarioThresholds = {};
+FILTER_VARIANTS.forEach(function (variant) {
+  scenarioThresholds["http_req_duration{query_type:" + variant.id + "}"] = ["max>=0"];
+  scenarioThresholds["http_reqs{query_type:" + variant.id + "}"] = ["count>=0"];
+});
+
+function buildScenarios() {
+  var scenarios = {
     warmup: {
       executor: "constant-vus",
       vus: Math.max(1, Math.min(5, scenarioVus)),
@@ -53,38 +69,29 @@ function buildScenarios() {
       tags: { phase: "warmup" },
       startTime: "0s",
     },
-    equality_filter: {
-      executor: "constant-vus",
-      vus: scenarioVus,
-      duration: scenarioDuration,
-      exec: "equalityFilter",
-      tags: { query_type: "equality" },
-      startTime: String(offsetSeconds) + "s",
-    },
-    range_filter: {
-      executor: "constant-vus",
-      vus: scenarioVus,
-      duration: scenarioDuration,
-      exec: "rangeFilter",
-      tags: { query_type: "range" },
-      startTime: String(offsetSeconds + parseInt(scenarioDuration, 10)) + "s",
-    },
-    like_filter: {
-      executor: "constant-vus",
-      vus: scenarioVus,
-      duration: scenarioDuration,
-      exec: "likeFilter",
-      tags: { query_type: "like" },
-      startTime: String(offsetSeconds + (parseInt(scenarioDuration, 10) * 2)) + "s",
-    },
   };
+
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  FILTER_VARIANTS.forEach(function (variant) {
+    scenarios[variant.id + "_filter"] = {
+      executor: "constant-vus",
+      vus: scenarioVus,
+      duration: scenarioDuration,
+      exec: variant.exec,
+      tags: { query_type: variant.id },
+      startTime: String(offsetSeconds) + "s",
+    };
+    offsetSeconds += parseInt(scenarioDuration, 10);
+  });
+
+  return scenarios;
 }
 
 export var options = {
   discardResponseBodies: true,
   scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 
@@ -123,7 +130,13 @@ export function likeFilter() {
 }
 
 export function warmupWfsFiltered() {
-  equalityFilter();
-  rangeFilter();
-  likeFilter();
+  FILTER_VARIANTS.forEach(function (variant) {
+    if (variant.id === "equality") {
+      equalityFilter();
+    } else if (variant.id === "range") {
+      rangeFilter();
+    } else if (variant.id === "like") {
+      likeFilter();
+    }
+  });
 }

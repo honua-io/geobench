@@ -22,63 +22,72 @@ import {
 
 var errorRate = new Rate("errors");
 var responseTime = new Trend("wfs_response_time", true);
-var scenarioThresholds = {
-  "http_req_duration{query_type:base}": ["max>=0"],
-  "http_req_duration{bbox_size:small}": ["max>=0"],
-  "http_req_duration{bbox_size:medium}": ["max>=0"],
-  "http_req_duration{bbox_size:large}": ["max>=0"],
-  "http_reqs{query_type:base}": ["count>=0"],
-  "http_reqs{bbox_size:small}": ["count>=0"],
-  "http_reqs{bbox_size:medium}": ["count>=0"],
-  "http_reqs{bbox_size:large}": ["count>=0"],
-};
+var scenarioDuration = __ENV.WFS_GETFEATURE_DURATION || "120s";
+var warmupDuration = __ENV.WFS_GETFEATURE_WARMUP || "60s";
+var scenarioVus = parseInt(__ENV.WFS_GETFEATURE_VUS || "10", 10);
+var selectedScenarios = (__ENV.WFS_GETFEATURE_SCENARIOS || "base,small,medium,large")
+  .split(",")
+  .map(function (value) {
+    return value.trim();
+  })
+  .filter(function (value) {
+    return value.length > 0;
+  });
 
-export var options = {
-  discardResponseBodies: true,
-  scenarios: {
+var VARIANTS = [
+  { id: "base", exec: "baseRead", tagName: "query_type", tagValue: "base" },
+  { id: "small", exec: "smallBbox", tagName: "bbox_size", tagValue: "small" },
+  { id: "medium", exec: "mediumBbox", tagName: "bbox_size", tagValue: "medium" },
+  { id: "large", exec: "largeBbox", tagName: "bbox_size", tagValue: "large" },
+].filter(function (variant) {
+  return selectedScenarios.indexOf(variant.id) !== -1;
+});
+
+if (VARIANTS.length === 0) {
+  throw new Error("No WFS GetFeature scenarios selected");
+}
+
+var scenarioThresholds = {};
+VARIANTS.forEach(function (variant) {
+  scenarioThresholds["http_req_duration{" + variant.tagName + ":" + variant.tagValue + "}"] = ["max>=0"];
+  scenarioThresholds["http_reqs{" + variant.tagName + ":" + variant.tagValue + "}"] = ["count>=0"];
+});
+
+function buildScenarios() {
+  var scenarios = {
     warmup: {
       executor: "constant-vus",
-      vus: 5,
-      duration: "60s",
+      vus: Math.max(1, Math.min(5, scenarioVus)),
+      duration: warmupDuration,
       exec: "warmupWfsGetFeature",
       tags: { phase: "warmup" },
       startTime: "0s",
     },
-    base_read: {
+  };
+
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  VARIANTS.forEach(function (variant) {
+    var tags = {};
+    tags[variant.tagName] = variant.tagValue;
+    scenarios[variant.id + "_read"] = {
       executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "baseRead",
-      tags: { query_type: "base" },
-      startTime: "60s",
-    },
-    small_bbox: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "smallBbox",
-      tags: { bbox_size: "small" },
-      startTime: "190s",
-    },
-    medium_bbox: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "mediumBbox",
-      tags: { bbox_size: "medium" },
-      startTime: "320s",
-    },
-    large_bbox: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "largeBbox",
-      tags: { bbox_size: "large" },
-      startTime: "450s",
-    },
-  },
+      vus: scenarioVus,
+      duration: scenarioDuration,
+      exec: variant.exec,
+      tags: tags,
+      startTime: String(offsetSeconds) + "s",
+    };
+    offsetSeconds += parseInt(scenarioDuration, 10);
+  });
+
+  return scenarios;
+}
+
+export var options = {
+  discardResponseBodies: true,
+  scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 
@@ -113,8 +122,15 @@ export function largeBbox() {
 }
 
 export function warmupWfsGetFeature() {
-  baseRead();
-  smallBbox();
-  mediumBbox();
-  largeBbox();
+  VARIANTS.forEach(function (variant) {
+    if (variant.id === "base") {
+      baseRead();
+    } else if (variant.id === "small") {
+      smallBbox();
+    } else if (variant.id === "medium") {
+      mediumBbox();
+    } else if (variant.id === "large") {
+      largeBbox();
+    }
+  });
 }

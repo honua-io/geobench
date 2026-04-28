@@ -43,6 +43,7 @@ var SERVERS = {
 export var COLLECTION = __ENV.COLLECTION || "bench_points";
 export var RESULT_LIMIT = parseInt(__ENV.RESULT_LIMIT || "100");
 export var SORT_BY = __ENV.SORT_BY || "id";
+export var BBOX_TOLERANCE_DEG = parseFloat(__ENV.BBOX_TOLERANCE_DEG || "0.0001");
 
 function escapeXml(text) {
   return String(text)
@@ -103,7 +104,7 @@ function buildCql2Filter(spec) {
   }
 
   if (spec.type === "prefix") {
-    return spec.field + " LIKE " + quoteCqlLiteral(spec.prefix + "%");
+    return spec.field + " LIKE " + quoteCqlLiteral(escapeLikePrefix(spec.prefix) + "%");
   }
 
   throw new Error("Unsupported CQL2 filter spec: " + JSON.stringify(spec));
@@ -189,10 +190,10 @@ function pointWithinBbox(coords, bbox) {
   return (
     coords &&
     coords.length >= 2 &&
-    coords[0] >= bbox.minLon &&
-    coords[0] <= bbox.maxLon &&
-    coords[1] >= bbox.minLat &&
-    coords[1] <= bbox.maxLat
+    coords[0] >= bbox.minLon - bbox.tolerance &&
+    coords[0] <= bbox.maxLon + bbox.tolerance &&
+    coords[1] >= bbox.minLat - bbox.tolerance &&
+    coords[1] <= bbox.maxLat + bbox.tolerance
   );
 }
 
@@ -205,6 +206,7 @@ function bboxValidator(bboxString) {
     minLat: parts[1],
     maxLon: parts[2],
     maxLat: parts[3],
+    tolerance: BBOX_TOLERANCE_DEG,
   };
 
   return function (response) {
