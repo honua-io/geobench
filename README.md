@@ -4,7 +4,9 @@ Open, vendor-neutral benchmark suite for geospatial feature servers. Think [Tech
 
 ## Why
 
-There's no standardized way to compare geospatial feature server performance. Vendor benchmarks are self-serving. GeoBench provides reproducible, independently verifiable numbers that anyone can run.
+There's no standardized way to compare geospatial feature server performance. Published numbers are
+often hard to reproduce or compare across products. GeoBench provides independently verifiable
+benchmark definitions, system cards, and artifacts that anyone can rerun.
 
 ## Servers Tested
 
@@ -20,31 +22,31 @@ REST. See [METHODOLOGY.md](METHODOLOGY.md) for the matrix and reporting rules.
 
 ## Current Snapshot
 
-Fresh Honua-vs-GeoServer snapshot from April 28, 2026 on the 100K-point dataset. This is a
-5-run median, baseline/no spatial-response-cache profile with 30s warmup and 30s measured windows
-per scenario. The run used Honua image `honua-geobench:trunk-09c2f54b-rendercopy1` with bounded
-database admission (`HONUA_MAX_CONCURRENT_QUERIES=8`, pool max `8`) and GeoServer
-`docker.osgeo.org/geoserver:2.28.x` with a 6-connection datastore pool.
+Latest two-server snapshot from April 28, 2026 on the 100K-point dataset. This is a 5-run median,
+baseline/no spatial-response-cache profile with 30s warmup and 30s measured windows per scenario.
+Both servers were run with bounded database admission/pool settings; exact image tags and
+environment variables are shown in the reproduction command below.
 
-Honua won 204/204 performance metric cells where both Honua and GeoServer had a measured row.
-GeoServices `MapServer/export` is Honua-only. QGIS Server remains runnable in the harness, but it
-is omitted from this headline table because the closest competitive comparison is Honua vs
-GeoServer.
+Across the full report, all 204 comparable performance metric cells favored the Honua row. The
+table below keeps the raw values visible instead of repeating a winner label on every line.
+GeoServices `MapServer/export` has no GeoServer row in this harness profile. QGIS Server remains
+runnable in the harness, but it is omitted from this headline table because this snapshot focuses on
+the currently comparable Honua and GeoServer rows.
 
-| Track | Scenario | Honua | GeoServer | Winner |
-|---|---|---:|---:|---|
-| Attribute filter | LIKE | **1431.9 req/s, p95 9.2 ms** | 51.6 req/s, p95 284.5 ms | **Honua** |
-| Spatial bbox | large bbox | **926.8 req/s, p95 16.4 ms** | 26.2 req/s, p95 918.1 ms | **Honua** |
-| Concurrent mixed workload | 100 VUs | **1144.3 req/s, p99 205.2 ms** | 49.9 req/s, p99 5772.9 ms | **Honua** |
-| WMS `GetMap` | medium bbox | **88.0 req/s, p95 149.4 ms** | 23.3 req/s, p95 1419.2 ms | **Honua** |
-| WMS reprojection | large bbox | **93.3 req/s, p95 133.7 ms** | 31.4 req/s, p95 441.2 ms | **Honua** |
-| WFS `GetFeature` | large bbox | **567.9 req/s, p95 33.0 ms** | 145.1 req/s, p95 152.4 ms | **Honua** |
-| WFS filtered | LIKE | **1274.9 req/s, p95 7.6 ms** | 28.3 req/s, p95 1238.2 ms | **Honua** |
-| WMS `GetFeatureInfo` | medium bbox | **2432.7 req/s, p95 5.8 ms** | 141.7 req/s, p95 286.0 ms | **Honua** |
-| WMS filtered `GetMap` | range | **99.6 req/s, p95 190.1 ms** | 14.2 req/s, p95 1916.1 ms | **Honua** |
-| GeoServices `FeatureServer/query` | medium bbox | **502.5 req/s, p95 26.5 ms** | 7.3 req/s, p95 2713.4 ms | **Honua** |
-| GeoServices `MapServer/identify` | large bbox | **1589.2 req/s, p95 13.2 ms** | 3.5 req/s, p95 9706.2 ms | **Honua** |
-| GeoServices `MapServer/export` | large bbox | **93.2 req/s, p95 161.2 ms** | — | Honua-only |
+| Track | Scenario | Honua | GeoServer |
+|---|---|---:|---:|
+| Attribute filter | LIKE | 1431.9 req/s, p95 9.2 ms | 51.6 req/s, p95 284.5 ms |
+| Spatial bbox | large bbox | 926.8 req/s, p95 16.4 ms | 26.2 req/s, p95 918.1 ms |
+| Concurrent mixed workload | 100 VUs | 1144.3 req/s, p99 205.2 ms | 49.9 req/s, p99 5772.9 ms |
+| WMS `GetMap` | medium bbox | 88.0 req/s, p95 149.4 ms | 23.3 req/s, p95 1419.2 ms |
+| WMS reprojection | large bbox | 93.3 req/s, p95 133.7 ms | 31.4 req/s, p95 441.2 ms |
+| WFS `GetFeature` | large bbox | 567.9 req/s, p95 33.0 ms | 145.1 req/s, p95 152.4 ms |
+| WFS filtered | LIKE | 1274.9 req/s, p95 7.6 ms | 28.3 req/s, p95 1238.2 ms |
+| WMS `GetFeatureInfo` | medium bbox | 2432.7 req/s, p95 5.8 ms | 141.7 req/s, p95 286.0 ms |
+| WMS filtered `GetMap` | range | 99.6 req/s, p95 190.1 ms | 14.2 req/s, p95 1916.1 ms |
+| GeoServices `FeatureServer/query` | medium bbox | 502.5 req/s, p95 26.5 ms | 7.3 req/s, p95 2713.4 ms |
+| GeoServices `MapServer/identify` | large bbox | 1589.2 req/s, p95 13.2 ms | 3.5 req/s, p95 9706.2 ms |
+| GeoServices `MapServer/export` | large bbox | 93.2 req/s, p95 161.2 ms | Not available |
 
 Full artifacts are under `results/20260428-064506/`, with the two-server report at
 `results/20260428-064506/report-honua-geoserver.md`. Response-shape audits are part of the report;
@@ -61,7 +63,7 @@ python3 scripts/generate-report.py \
   --servers honua,geoserver
 ```
 
-To rerun the same Honua-vs-GeoServer headline profile:
+To rerun the same two-server headline profile:
 
 ```bash
 HONUA_IMAGE=honua-geobench:trunk-09c2f54b-rendercopy1 \
@@ -112,7 +114,7 @@ Each run also writes `*-response-shapes.json` audit files for the selected serve
 report includes a compact payload comparability section plus a response-shape section with status,
 `Content-Type`, byte count, a body hash, and structural notes.
 
-To rank Honua losses across existing reports, generate a loss ledger:
+To rank support gaps, regressions, and close rows across existing reports, generate a loss ledger:
 
 ```bash
 scripts/generate-loss-ledger.py \
@@ -206,7 +208,7 @@ CONCURRENT_DURATION=30s \
 SERVERS="honua geoserver" \
 ./scripts/run-benchmark.sh
 
-# Secondary standards filtered WFS track on the shared Honua/GeoServer WFS 2.0 profile
+# Secondary standards filtered WFS track on the shared WFS 2.0 profile
 TESTS="wfs-filtered" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
 
 # Focused WFS filtered row check
@@ -218,7 +220,7 @@ WFS_FILTERED_VUS=10 \
 SERVERS="honua geoserver" \
 ./scripts/run-benchmark.sh
 
-# WMS filtered GetMap on Honua and GeoServer
+# WMS filtered GetMap on the two-server profile
 TESTS="wms-filtered" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
 
 # WMTS tile suite (GeoServer only, explicit warm-tile-cache track)
@@ -276,10 +278,10 @@ GEOSERVICES_DIAG_DURATION=120s \
 GEOSERVICES_DIAG_VARIANTS="medium-full-10vu,medium-geom-oid-10vu,large-full-10vu,large-geom-oid-10vu" \
 TESTS="geoservices-query-diagnostics" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
 
-# Honua-native raster export track
+# GeoServices MapServer/export track for servers that expose it
 TESTS="geoservices-export" SERVERS="honua" ./scripts/run-benchmark.sh
 
-# Focused Honua-native raster export row check
+# Focused MapServer/export row check
 TESTS="geoservices-export" \
 GEOSERVICES_EXPORT_SCENARIOS=large \
 GEOSERVICES_EXPORT_WARMUP=10s \
@@ -315,10 +317,10 @@ bash tests/smoke-test.sh
 | `wmts` | WMTS `GetTile` tile matrix requests | 10 | 120s each |
 | `wcs` | WCS `GetCoverage` coverage reads (server-specific coverage required) | 10 | 120s each |
 | `wfs-getfeature` | WFS base read plus bbox reads on the standards track | 10 | 120s each |
-| `wfs-filtered` | WFS equality/range/prefix filtering on the shared Honua/GeoServer FES 2.0 profile | 10 | 120s each |
+| `wfs-filtered` | WFS equality/range/prefix filtering on the shared FES 2.0 profile | 10 | 120s each |
 | `geoservices-query` | GeoServices REST FeatureServer/query spatial bbox track | 10 | 120s each |
 | `geoservices-query-diagnostics` | Native query diagnostics: 1 VU vs 10 VU and reduced-payload variants on medium/large bboxes | mixed | 15s warmup + 20s each |
-| `geoservices-export` | GeoServices REST MapServer/export on the Honua-native track | 10 | 120s each |
+| `geoservices-export` | GeoServices REST MapServer/export where the server exposes it | 10 | 120s each |
 | `geoservices-identify` | GeoServices REST MapServer/identify on deterministic points | 10 | 120s each |
 
 The runner captures a lightweight response-shape audit before each timed server run. It is
@@ -358,17 +360,15 @@ reuse, so spatial feature rows should measure indexed query execution under warm
 Static map/map export bboxes follow the same rule. Tiled or cache-hinted feature reads belong in a
 separate tile/cache-assisted track.
 
-GeoWebCache-style wins belong in that separate tile/cache-assisted track: fixed gridsets, finite
+GeoWebCache-style results belong in that separate tile/cache-assisted track: fixed gridsets, finite
 tile matrix keys, style/format parameter filters, seed/truncate jobs, metatiling, and quota-managed
-tile storage. Honua should emulate or improve that model with OGC API Tiles/WMTS/MVT map and vector
-tile paths, cache only snapped tile-style keys, and avoid presenting high-cardinality ad hoc spatial
-response caching as a benchmark advantage.
+tile storage. Servers should cache only snapped tile-style keys for those rows and avoid presenting
+high-cardinality ad hoc spatial response caching as a baseline benchmark advantage.
 
-Deployment guidance for Honua should keep cache roles explicit: Redis metadata/catalog caching is
-useful across microservice and serverless deployments, but exact response and generic query-result
-caching should default off and remain opt-in only for low-cardinality nonspatial reads with measured
-reuse. Tile caches should use bounded external storage, quotas, invalidation, and seeded finite key
-spaces.
+Deployment guidance should keep cache roles explicit. Metadata/catalog caches can be useful across
+microservice and serverless deployments, but exact response and generic query-result caching should
+default off and remain opt-in only for low-cardinality nonspatial reads with measured reuse. Tile
+caches should use bounded external storage, quotas, invalidation, and seeded finite key spaces.
 
 ## Database Admission Guidance
 
@@ -376,9 +376,9 @@ GeoBench treats database admission as an explicit benchmark input. Do not hide t
 behind larger connection pools, implicit adaptive controllers, or cache-assisted rows. The default
 recommendation is bounded admission first:
 
-- Cap active database work per service instance. For Honua, keep
-  `HONUA_MAX_CONCURRENT_QUERIES` and `HONUA_MAX_CONNECTION_POOL_SIZE` aligned unless a named
-  experiment proves that a larger idle pool helps without increasing active database pressure.
+- Cap active database work per service instance. Keep each server's active-query cap and database
+  pool ceiling aligned unless a named experiment proves that a larger idle pool helps without
+  increasing active database pressure.
 - Start from the smallest cap that keeps throughput stable and p95/p99 acceptable. On the local
   small 4-vCPU profile, tested useful caps are in the 4-6 active-query range; simply increasing the
   pool can overfeed PostGIS and worsen tails.
@@ -396,14 +396,9 @@ The comparative profile remains intentionally bounded for both servers
 `GEOSERVER_MAX_CONNECTIONS=6`) so the benchmark does not trade away p99 latency through hidden
 database oversubscription.
 
-Honua adaptive admission is benchmark-visible but off by default. The runner passes through
-`HONUA_ADAPTIVE_ADMISSION_ENABLED=false` with target bounds matching the fixed fair profile
-(`HONUA_ADAPTIVE_ADMISSION_MIN_TARGET=3`,
-`HONUA_ADAPTIVE_ADMISSION_MAX_TARGET=6`,
-`HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET=6`,
-`HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS=100`,
-`HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS=1000`) and records those values in report metadata.
-Enable it only as a named profile and keep fixed-pool results separate from adaptive-admission
+Adaptive admission is benchmark-visible but off by default in the headline profile. The runner
+records server-specific adaptive settings in report metadata when a server exposes them. Enable
+adaptive admission only as a named profile and keep fixed-pool results separate from adaptive
 results. Adaptive reports should include admission telemetry such as current limit, queued waiters,
 duration EWMA, queue-wait EWMA when available, and adjustment count.
 
@@ -418,8 +413,8 @@ GeoServer's GeoServices REST support is not part of the stock image. To benchmar
 nightly build tag such as `docker.osgeo.org/geoserver:2.28.x`, then set
 `GEOSERVER_GSR_ENABLED=1`. The GeoBench adapter verifies the GSR query endpoint before the timed
 run starts. If verification fails, treat the GeoServer GSR row as unavailable for the current image
-and exclude older GSR reports from the current loss ledger instead of ranking them as active Honua
-performance losses.
+and exclude older GSR reports from the current action ledger instead of ranking stale optional
+extension rows as current comparative gaps.
 
 ## Dataset
 
