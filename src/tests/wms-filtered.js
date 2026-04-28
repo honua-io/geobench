@@ -19,6 +19,7 @@ var responseTime = new Trend("wms_filtered_response_time", true);
 var scenarioDuration = __ENV.WMS_FILTERED_DURATION || "120s";
 var warmupDuration = __ENV.WMS_FILTERED_WARMUP || "60s";
 var scenarioVus = parseInt(__ENV.WMS_FILTERED_VUS || "10", 10);
+var logFailures = (__ENV.LOG_FAILURES || "").toLowerCase() === "1";
 var selectedScenarios = (__ENV.WMS_FILTERED_SCENARIOS || "equality,range,like")
   .split(",")
   .map(function (value) {
@@ -85,6 +86,7 @@ if (VARIANTS.length === 0) {
 
 var scenarioThresholds = {};
 VARIANTS.forEach(function (variant) {
+  scenarioThresholds["errors{query_type:" + variant.id + "}"] = ["rate<=0"];
   scenarioThresholds["http_req_duration{query_type:" + variant.id + "}"] = ["max>=0"];
   scenarioThresholds["http_reqs{query_type:" + variant.id + "}"] = ["count>=0"];
 });
@@ -121,7 +123,7 @@ export var options = {
   discardResponseBodies: true,
   scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 
@@ -158,8 +160,26 @@ function runFilter(variant) {
     },
   });
 
-  errorRate.add(!ok);
-  responseTime.add(res.timings.duration);
+  if (!ok && logFailures) {
+    var contentType = res.headers["Content-Type"] || res.headers["content-type"] || "";
+    var bodySize = res.body && res.body.byteLength !== undefined
+      ? res.body.byteLength
+      : (res.body ? String(res.body).length : 0);
+    console.error(JSON.stringify({
+      test: "wms-filtered",
+      query_type: variant.id,
+      status: res.status,
+      error: res.error || "",
+      error_code: res.error_code || 0,
+      content_type: contentType,
+      body_bytes: bodySize,
+      duration_ms: res.timings.duration,
+      url: req.url,
+    }));
+  }
+
+  errorRate.add(!ok, { query_type: variant.id });
+  responseTime.add(res.timings.duration, { query_type: variant.id });
 }
 
 export function equalityFilter() {

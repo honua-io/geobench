@@ -86,7 +86,7 @@ export var options = {
   discardResponseBodies: true,
   scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 

@@ -13,14 +13,34 @@ var responseTime = new Trend("raster_response_time", true);
 var scenarioDuration = __ENV.WMS_GETMAP_DURATION || "120s";
 var warmupDuration = __ENV.WMS_GETMAP_WARMUP || "60s";
 var scenarioVus = parseInt(__ENV.WMS_GETMAP_VUS || "10", 10);
-var scenarioThresholds = {
-  "http_req_duration{bbox_size:small}": ["max>=0"],
-  "http_req_duration{bbox_size:medium}": ["max>=0"],
-  "http_req_duration{bbox_size:large}": ["max>=0"],
-  "http_reqs{bbox_size:small}": ["count>=0"],
-  "http_reqs{bbox_size:medium}": ["count>=0"],
-  "http_reqs{bbox_size:large}": ["count>=0"],
-};
+var logFailures = (__ENV.LOG_FAILURES || "").toLowerCase() === "1";
+var selectedBboxSizes = (__ENV.WMS_GETMAP_SCENARIOS || "small,medium,large")
+  .split(",")
+  .map(function (value) {
+    return value.trim();
+  })
+  .filter(function (value) {
+    return value.length > 0;
+  });
+
+var MAP_VARIANTS = [
+  { id: "small", exec: "smallMap" },
+  { id: "medium", exec: "mediumMap" },
+  { id: "large", exec: "largeMap" },
+].filter(function (variant) {
+  return selectedBboxSizes.indexOf(variant.id) !== -1;
+});
+
+if (MAP_VARIANTS.length === 0) {
+  throw new Error("No WMS GetMap scenarios selected");
+}
+
+var scenarioThresholds = {};
+MAP_VARIANTS.forEach(function (variant) {
+  scenarioThresholds["errors{bbox_size:" + variant.id + "}"] = ["rate<=0"];
+  scenarioThresholds["http_req_duration{bbox_size:" + variant.id + "}"] = ["max>=0"];
+  scenarioThresholds["http_reqs{bbox_size:" + variant.id + "}"] = ["count>=0"];
+});
 
 function supportedServerName() {
   var name = (__ENV.SERVER || "geoserver").toLowerCase();
@@ -35,7 +55,6 @@ function supportedServerName() {
 var SERVER_NAME = supportedServerName();
 
 function buildScenarios() {
-  var offsetSeconds = parseInt(warmupDuration, 10);
   var scenarios = {
     warmup: {
       executor: "constant-vus",
@@ -45,35 +64,20 @@ function buildScenarios() {
       tags: { phase: "warmup" },
       startTime: "0s",
     },
-    small_map: {
+  };
+
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  MAP_VARIANTS.forEach(function (variant) {
+    scenarios[variant.id + "_map"] = {
       executor: "constant-vus",
       vus: scenarioVus,
       duration: scenarioDuration,
-      exec: "smallMap",
-      tags: { bbox_size: "small" },
+      exec: variant.exec,
+      tags: { bbox_size: variant.id },
       startTime: String(offsetSeconds) + "s",
-    },
-  };
-
-  offsetSeconds += parseInt(scenarioDuration, 10);
-  scenarios.medium_map = {
-    executor: "constant-vus",
-    vus: scenarioVus,
-    duration: scenarioDuration,
-    exec: "mediumMap",
-    tags: { bbox_size: "medium" },
-    startTime: String(offsetSeconds) + "s",
-  };
-
-  offsetSeconds += parseInt(scenarioDuration, 10);
-  scenarios.large_map = {
-    executor: "constant-vus",
-    vus: scenarioVus,
-    duration: scenarioDuration,
-    exec: "largeMap",
-    tags: { bbox_size: "large" },
-    startTime: String(offsetSeconds) + "s",
-  };
+    };
+    offsetSeconds += parseInt(scenarioDuration, 10);
+  });
 
   return scenarios;
 }
@@ -81,11 +85,11 @@ function buildScenarios() {
 export var options = {
   scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 
-function runMap(sizeDeg, salt) {
+function runMap(sizeDeg, salt, bboxSize) {
   var req = buildMapRequest(SERVER_NAME, {
     bbox: buildBbox(sizeDeg, salt),
     width: 256,
@@ -109,24 +113,48 @@ function runMap(sizeDeg, salt) {
     },
   });
 
-  errorRate.add(!ok);
-  responseTime.add(res.timings.duration);
+  if (!ok && logFailures) {
+    var contentType = res.headers["Content-Type"] || res.headers["content-type"] || "";
+    var bodySize = res.body && res.body.byteLength !== undefined
+      ? res.body.byteLength
+      : (res.body ? String(res.body).length : 0);
+    console.error(JSON.stringify({
+      test: "wms-getmap",
+      bbox_size: bboxSize,
+      status: res.status,
+      error: res.error || "",
+      error_code: res.error_code || 0,
+      content_type: contentType,
+      body_bytes: bodySize,
+      duration_ms: res.timings.duration,
+      url: req.url,
+    }));
+  }
+
+  errorRate.add(!ok, { bbox_size: bboxSize });
+  responseTime.add(res.timings.duration, { bbox_size: bboxSize });
 }
 
 export function smallMap() {
-  runMap(RASTER_SIZES.small, 0x701);
+  runMap(RASTER_SIZES.small, 0x701, "small");
 }
 
 export function mediumMap() {
-  runMap(RASTER_SIZES.medium, 0x702);
+  runMap(RASTER_SIZES.medium, 0x702, "medium");
 }
 
 export function largeMap() {
-  runMap(RASTER_SIZES.large, 0x703);
+  runMap(RASTER_SIZES.large, 0x703, "large");
 }
 
 export function warmupWmsGetMap() {
-  smallMap();
-  mediumMap();
-  largeMap();
+  MAP_VARIANTS.forEach(function (variant) {
+    if (variant.id === "small") {
+      smallMap();
+    } else if (variant.id === "medium") {
+      mediumMap();
+    } else if (variant.id === "large") {
+      largeMap();
+    }
+  });
 }

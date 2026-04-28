@@ -58,7 +58,7 @@ Out of scope for the first pass:
 
 Global:
 
-- connection pool safety limits
+- bounded database admission and connection pool safety limits
 - process-wide resource limits
 - cache infrastructure toggles
 
@@ -80,15 +80,20 @@ Per layer:
 Future:
 
 - optional adaptive routing between stable profiles based on load and request shape
+- optional multi-node admission coordination only after fixed per-node caps and local adaptive
+  admission are proven insufficient against a shared database budget
 
 ## Immediate Follow-up
 
-Before profile work lands, keep the current structural win:
+Before profile work lands, keep the current structural wins:
 
 - add typed expression indexes for hot fields in Honua's `public.features`
+- keep database admission bounded and benchmark-visible instead of growing pools as the default
+  response to high concurrency
 
-That change is expected to help both low-load and high-load behavior because it removes avoidable
-scan work rather than trading latency for throughput.
+Those changes are expected to help both low-load and high-load behavior because they remove
+avoidable scan work and prevent PostGIS oversubscription rather than trading tail latency for
+throughput.
 
 ## Acceptance Criteria
 

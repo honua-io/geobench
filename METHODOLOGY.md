@@ -55,9 +55,16 @@ The warmup phase uses the same query patterns as the measurement phase. Warmup d
 
 ## Caching Policy
 
-- **GeoWebCache** (GeoServer): Explicitly disabled for benchmark layers. GWC does not affect WFS/OGC API Features queries, only tile requests.
-- **Server-side query caching**: Not disabled (would be artificial). If a server caches query results, that's a legitimate performance characteristic. Documented in system cards.
-- **PostGIS shared buffers**: Default configuration. Same for all servers since they share the instance.
+- **GeoWebCache / tile caches**: Enabled only for explicit tile-cache rows such as `wmts`.
+  Non-tile rows do not use tile-cache results as a baseline feature/query or render result.
+- **Exact response and generic query-result caching**: Default off for baseline rows. Arbitrary
+  bbox, geometry, nearest/distance, spatial predicates, OData `geo.*`, static map bbox, and export
+  requests are high-cardinality paths; they should measure indexed execution under warm service
+  state unless a separate cache-assisted track is explicitly declared.
+- **Metadata/catalog caching**: Allowed when it is part of normal service operation, but it must be
+  disclosed separately from exact response caching.
+- **PostGIS shared buffers and OS cache**: Allowed after warmup. They are part of steady-state
+  database execution, not a hidden application response cache.
 
 ### Cache Tier Taxonomy
 
@@ -87,6 +94,8 @@ roles answer different questions and must be published separately.
 - `OGC API Features`, `WFS`, `GeoServices query`, and primary `WMS GetMap` rows belong in the
   `Baseline` / `Warm Service State` interpretation unless a dedicated cache layer is explicitly
   added and disclosed.
+- Cache-assisted spatial/render rows require an explicit run-time override. This prevents a
+  high-cardinality spatial response cache from accidentally being published as a baseline result.
 - A local Redis or MinIO sidecar is valid only as a separate `Cache-Assisted Product Track`,
   because local Docker cache behavior is not the same thing as managed cloud cache behavior.
 
@@ -117,6 +126,23 @@ All latency measurements are client-side (k6), including Docker bridge network t
 ### Concurrency Levels
 
 The `concurrent` test ramps through: 1, 10, 50, 100 virtual users (VUs). Each level runs for 120 seconds after warmup.
+The mix is 40% viewport bbox, 30% equality, 20% range, and 10% LIKE. Reports include a workload
+breakdown when the k6 summary export contains both `concurrency` and `workload` tags; this is the
+preferred view for diagnosing p95/p99 tails.
+
+Prefix LIKE filters escape wildcard characters in the deterministic prefix value, then append `%`.
+That makes the LIKE row a literal prefix lookup instead of accidentally broadening values such as
+`feature_999` through `_` wildcard matching.
+
+### Viewport BBox vs Exact Spatial Predicates
+
+The `spatial-bbox` benchmark is a viewport/windowing row. It represents map browsing and feature
+window reads, and its validator allows a small edge tolerance (`BBOX_TOLERANCE_DEG`, default
+`0.0001`) to avoid turning floating-point envelope edge cases into false failures.
+
+Exact spatial predicates are a separate benchmark family. `Intersects`, `Contains`, `Within`,
+distance/nearest, CQL2 spatial functions, and non-envelope geometry filters must keep strict
+predicate semantics and should not use the viewport bbox fast path.
 
 ### Error Threshold
 
@@ -239,6 +265,27 @@ No overall claim is valid across mixed cache tiers either. A `Warm Tile Cache` r
 Response-shape audits are reported separately from performance tables and should be treated as
 supporting evidence, not benchmark results.
 
+## Database Admission And Pool Profiles
+
+Database admission is part of the benchmark profile, not an implementation detail. Publishable
+results must report the active-query cap and connection pool settings used for each server.
+
+The recommended baseline posture is bounded fixed admission:
+
+- Prefer a declared fixed active-query cap before increasing database connection pools.
+- Keep active-query caps and pool sizes aligned unless a named experiment proves that extra idle
+  connections improve behavior without raising database pressure.
+- Tune against p95/p99 and workload breakdowns, not only aggregate throughput.
+- For multi-node scenarios, define the shared database budget first and divide it across nodes.
+  Per-node caps must not accidentally multiply beyond what PostGIS can sustain.
+- Keep adaptive-admission rows separate from fixed-cap rows. Adaptive mode is publishable only as a
+  named profile with its min, max, initial target, update interval, and telemetry reported.
+- Treat Redis-coordinated admission as a research track until multi-node tests show that local
+  fixed or adaptive caps are insufficient.
+
+This keeps cache behavior, pool sizing, and adaptive control from being blended into one
+unexplainable performance number.
+
 ## System Cards
 
 Every result set includes a machine-readable `system-card.json` per server documenting:
@@ -248,6 +295,7 @@ Every result set includes a machine-readable `system-card.json` per server docum
 - Resource limits (CPU, memory)
 - Configuration tier
 - Connection pool settings
+- Adaptive admission settings, when exposed by the benchmark profile
 - OGC API Features conformance classes
 - CQL2 support level
 - Any server-specific notes

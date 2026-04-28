@@ -21,6 +21,7 @@ Related notes:
 - [docs/geoserver-honua-performance-investigation.md](./geoserver-honua-performance-investigation.md)
 - [docs/honua-ogc-load-optimization-ticket.md](./honua-ogc-load-optimization-ticket.md)
 - [docs/honua-service-layer-profiles-ticket.md](./honua-service-layer-profiles-ticket.md)
+- [docs/issue-drafts/2026-04-26-loss-ledger-diagnostics-pipeline.md](./issue-drafts/2026-04-26-loss-ledger-diagnostics-pipeline.md)
 
 ## Goals
 
@@ -169,6 +170,9 @@ Raster work needs its own pass:
 
 Needed to make the refactor credible:
 
+- generate a loss ledger from current and canonical `report.json` files
+- collect request/output/SQL/runtime diagnostics dossiers for top losing rows before optimizing
+- inspect GeoServer/GeoTools source paths for rows where GeoServer is the clear winner
 - fix the Honua adapter/bootstrap drift so fresh isolated WFS runs work again
 - complete current WFS and raster reruns on patched builds
 - keep response-shape audit in the loop for every protocol
@@ -271,7 +275,9 @@ Rough split:
 
 Treat this as one umbrella refactor with two delivery milestones:
 
-1. feature protocols first
-2. raster protocols second
+1. loss-ledger and diagnostics pipeline first
+2. feature protocols
+3. raster protocols
 
-That keeps the work shippable while still preserving the larger architecture plan.
+That keeps the work evidence-driven and shippable while still preserving the larger architecture
+plan.

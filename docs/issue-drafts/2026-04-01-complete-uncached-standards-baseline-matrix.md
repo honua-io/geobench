@@ -85,13 +85,25 @@ separate from warm-tile-cache and other cache-assisted tracks.
 
 - Make cache tier a first-class result/report field.
 - Ensure every published row declares its cache tier.
+- Add report-level benchmark semantics so bbox tolerance, response-validation policy, cache tier,
+  and server pool profile are visible beside performance tables.
+- Split mixed concurrent rows by workload tags so p95/p99 regressions can be attributed to bbox,
+  equality, range, or LIKE before product tuning is attempted.
 - Keep `wmts` in `warm tile cache`.
 - Keep `wms-getmap`, feature, and query rows in `baseline` / `warm service state` unless a
   separate cache-assisted track is explicitly introduced.
+- Default non-WMTS benchmark metadata to `baseline`; use `warm service state` only when a run is
+  deliberately labeled that way.
+- Do not present ad hoc spatial feature response caching as part of the baseline. Arbitrary
+  `bbox`, geometry, nearest/distance, CQL2 spatial predicates, and OData `geo.*` filters are too
+  high-cardinality for useful exact response-cache reuse; tiled or cache-hinted feature-query modes
+  should be tracked separately. Static map/map export bboxes follow the same rule.
 
 ## Tasks
 
 - Add `cache_tier` as a first-class field in run metadata and generated reports.
+- Add a guard that rejects cache-assisted labels for high-cardinality spatial/render rows unless
+  the run is explicitly marked as a separate cache-assisted experiment.
 - Investigate and fix or explain Honua `wms-filtered` scenario collapse.
 - Make `geoservices-identify` use guaranteed-hit sample points for audit and validation.
 - Make `wcs` self-contained by publishing a known benchmark coverage in the GeoServer adapter.
@@ -119,3 +131,12 @@ separate from warm-tile-cache and other cache-assisted tracks.
   behavior.
 - Redis, GeoWebCache blobstores, MinIO, or CDN-like layers should be added only as separate
   cache-assisted tracks, not folded into the baseline standards matrix.
+- GeoWebCache-style caching should mean finite tile keys: gridsets, tile matrix coordinates,
+  style/format parameter filters, seed/truncate jobs, metatiling, and quota-managed tile storage.
+  It should not be modeled as exact response caching for arbitrary spatial query strings.
+- Honua deployment guidance should separate Redis metadata/catalog caching from exact response and
+  generic query-result caching. Those result caches should default off; operators can opt in only
+  when a low-cardinality nonspatial workload has measured reuse.
+- Database admission should remain bounded and reported as a benchmark input. Fixed-cap rows are
+  the baseline; adaptive admission and Redis-coordinated admission belong in named experimental
+  tracks until they beat fixed caps under comparable workloads.

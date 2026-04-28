@@ -35,6 +35,15 @@ def env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
+def selected_csv(name: str, default: str) -> set[str]:
+    return {value.strip() for value in env(name, default).split(",") if value.strip()}
+
+
+def bbox_lonlat_to_latlon(bbox: str) -> str:
+    min_lon, min_lat, max_lon, max_lat = bbox.split(",", 3)
+    return f"{min_lat},{min_lon},{max_lat},{max_lon}"
+
+
 def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -374,60 +383,94 @@ def feature_requests(server: ServerConfig) -> list[dict[str, str]]:
 
 
 def wfs_requests(server: ServerConfig) -> list[dict[str, str]]:
+    sample_bbox = "139.2325,35.2325,139.3325,35.3325"
     if server.name == "honua":
         base = f"{server.base_url}/wfs"
+        honua_bbox = bbox_lonlat_to_latlon(sample_bbox)
         return [
             {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "base", "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=bench_points&COUNT=100&OUTPUTFORMAT=application/json"},
-            {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "small-bbox", "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=bench_points&COUNT=100&BBOX=139.2325,35.2325,139.3325,35.3325&OUTPUTFORMAT=application/json"},
+            {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "small-bbox", "url": base + f"?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=bench_points&COUNT=100&BBOX={honua_bbox}&OUTPUTFORMAT=application/json"},
         ]
     if server.name == "geoserver":
         base = f"{server.base_url}/geoserver/wfs"
         return [
             {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "base", "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=geobench:bench_points&COUNT=100&OUTPUTFORMAT=application/json"},
-            {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "small-bbox", "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=geobench:bench_points&COUNT=100&BBOX=139.2325,35.2325,139.3325,35.3325,EPSG:4326&OUTPUTFORMAT=application/json"},
+            {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "small-bbox", "url": base + f"?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=geobench:bench_points&COUNT=100&BBOX={sample_bbox},EPSG:4326&OUTPUTFORMAT=application/json"},
         ]
     if server.name == "qgis":
         map_path = urllib.parse.quote(env("QGIS_MAP_PATH", "/etc/qgisserver/geobench.qgs"))
         base = f"{server.base_url}/ows/"
         return [
             {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "base", "url": base + "?MAP=" + map_path + "&SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature&TYPENAME=bench_points&MAXFEATURES=100&OUTPUTFORMAT=application/vnd.geo+json"},
-            {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "small-bbox", "url": base + "?MAP=" + map_path + "&SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature&TYPENAME=bench_points&MAXFEATURES=100&BBOX=139.2325,35.2325,139.3325,35.3325&OUTPUTFORMAT=application/vnd.geo+json"},
+            {"family": "feature", "protocol": "wfs", "suite": "wfs-getfeature", "request": "small-bbox", "url": base + f"?MAP={map_path}&SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature&TYPENAME=bench_points&MAXFEATURES=100&BBOX={sample_bbox}&OUTPUTFORMAT=application/vnd.geo+json"},
         ]
     return []
 
 
 def wfs_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
-    filter_param = (
-        "%3Cfes%3AFilter%20xmlns%3Afes%3D%22http%3A%2F%2Fwww.opengis.net%2Ffes%2F2.0%22%3E"
-        "%3Cfes%3APropertyIsEqualTo%3E"
-        "%3Cfes%3AValueReference%3Ecategory%3C%2Ffes%3AValueReference%3E"
-        "%3Cfes%3ALiteral%3Epark%3C%2Ffes%3ALiteral%3E"
-        "%3C%2Ffes%3APropertyIsEqualTo%3E"
-        "%3C%2Ffes%3AFilter%3E"
-    )
+    fixtures = [
+        {
+            "request": "equality",
+            "xml": (
+                '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">'
+                "<fes:PropertyIsEqualTo>"
+                "<fes:ValueReference>category</fes:ValueReference>"
+                "<fes:Literal>park</fes:Literal>"
+                "</fes:PropertyIsEqualTo>"
+                "</fes:Filter>"
+            ),
+        },
+        {
+            "request": "range",
+            "xml": (
+                '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">'
+                "<fes:PropertyIsBetween>"
+                "<fes:ValueReference>temperature</fes:ValueReference>"
+                "<fes:LowerBoundary><fes:Literal>25.0</fes:Literal></fes:LowerBoundary>"
+                "<fes:UpperBoundary><fes:Literal>35.0</fes:Literal></fes:UpperBoundary>"
+                "</fes:PropertyIsBetween>"
+                "</fes:Filter>"
+            ),
+        },
+        {
+            "request": "like",
+            "xml": (
+                '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">'
+                '<fes:PropertyIsLike wildCard="%" singleChar="_" escapeChar="\\">'
+                "<fes:ValueReference>feature_name</fes:ValueReference>"
+                "<fes:Literal>feature\\_548%</fes:Literal>"
+                "</fes:PropertyIsLike>"
+                "</fes:Filter>"
+            ),
+        },
+    ]
+    selected = selected_csv("WFS_FILTERED_SCENARIOS", "equality,range,like")
+    fixtures = [fixture for fixture in fixtures if fixture["request"] in selected]
+
     if server.name == "honua":
         base = f"{server.base_url}/wfs"
-        return [
-            {
-                "family": "feature",
-                "protocol": "wfs",
-                "suite": "wfs-filtered",
-                "request": "equality",
-                "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=bench_points&COUNT=100&OUTPUTFORMAT=application/json&FILTER=" + filter_param,
-            },
-        ]
-    if server.name == "geoserver":
+        typename = "bench_points"
+    elif server.name == "geoserver":
         base = f"{server.base_url}/geoserver/wfs"
-        return [
-            {
-                "family": "feature",
-                "protocol": "wfs",
-                "suite": "wfs-filtered",
-                "request": "equality",
-                "url": base + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=geobench:bench_points&COUNT=100&OUTPUTFORMAT=application/json&FILTER=" + filter_param,
-            },
-        ]
-    return []
+        typename = "geobench:bench_points"
+    else:
+        return []
+
+    return [
+        {
+            "family": "feature",
+            "protocol": "wfs",
+            "suite": "wfs-filtered",
+            "request": fixture["request"],
+            "url": (
+                base
+                + "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
+                + f"&TYPENAMES={urllib.parse.quote(typename)}&COUNT=100&OUTPUTFORMAT=application/json"
+                + f"&FILTER={urllib.parse.quote(fixture['xml'])}"
+            ),
+        }
+        for fixture in fixtures
+    ]
 
 
 def wms_getfeatureinfo_requests(server: ServerConfig) -> list[dict[str, str]]:
@@ -488,7 +531,7 @@ def wms_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
         {
             "request": "equality",
             "bbox_4326": "146.5040,-38.5760,151.5040,-33.5760",
-            "xml": (
+            "ogc_xml": (
                 "<Filter xmlns=\"http://www.opengis.net/ogc\">"
                 "<PropertyIsEqualTo>"
                 "<PropertyName>category</PropertyName>"
@@ -496,11 +539,19 @@ def wms_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
                 "</PropertyIsEqualTo>"
                 "</Filter>"
             ),
+            "fes20_xml": (
+                "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\">"
+                "<fes:PropertyIsEqualTo>"
+                "<fes:ValueReference>category</fes:ValueReference>"
+                "<fes:Literal>park</fes:Literal>"
+                "</fes:PropertyIsEqualTo>"
+                "</fes:Filter>"
+            ),
         },
         {
             "request": "range",
             "bbox_4326": "-47.8625,-24.7825,-42.8625,-19.7825",
-            "xml": (
+            "ogc_xml": (
                 "<Filter xmlns=\"http://www.opengis.net/ogc\">"
                 "<PropertyIsBetween>"
                 "<PropertyName>temperature</PropertyName>"
@@ -509,17 +560,34 @@ def wms_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
                 "</PropertyIsBetween>"
                 "</Filter>"
             ),
+            "fes20_xml": (
+                "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\">"
+                "<fes:PropertyIsBetween>"
+                "<fes:ValueReference>temperature</fes:ValueReference>"
+                "<fes:LowerBoundary><fes:Literal>24.968923912383616</fes:Literal></fes:LowerBoundary>"
+                "<fes:UpperBoundary><fes:Literal>34.968923912383616</fes:Literal></fes:UpperBoundary>"
+                "</fes:PropertyIsBetween>"
+                "</fes:Filter>"
+            ),
         },
         {
             "request": "like",
             "bbox_4326": "139.6637,35.6637,144.6637,40.6637",
-            "xml": (
+            "ogc_xml": (
                 "<Filter xmlns=\"http://www.opengis.net/ogc\">"
-                "<PropertyIsLike wildCard=\"%\" singleChar=\"_\" escapeChar=\"\\\\\">"
+                "<PropertyIsLike wildCard=\"%\" singleChar=\"_\" escape=\"\\\\\">"
                 "<PropertyName>feature_name</PropertyName>"
                 "<Literal>feature_548%</Literal>"
                 "</PropertyIsLike>"
                 "</Filter>"
+            ),
+            "fes20_xml": (
+                "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\">"
+                "<fes:PropertyIsLike wildCard=\"%\" singleChar=\"_\" escapeChar=\"\\\\\">"
+                "<fes:ValueReference>feature_name</fes:ValueReference>"
+                "<fes:Literal>feature_548%</fes:Literal>"
+                "</fes:PropertyIsLike>"
+                "</fes:Filter>"
             ),
         },
     ]
@@ -527,9 +595,11 @@ def wms_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
     if server.name == "honua":
         base = f"{server.base_url}/ogc/services/default/wms"
         layer = "bench_points"
+        xml_key = "fes20_xml"
     elif server.name == "geoserver":
         base = f"{server.base_url}/geoserver/wms"
         layer = "geobench:bench_points"
+        xml_key = "ogc_xml"
     else:
         return []
 
@@ -543,7 +613,7 @@ def wms_filtered_requests(server: ServerConfig) -> list[dict[str, str]]:
                 f"{base}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS={layer}&STYLES=&CRS=CRS:84"
                 f"&BBOX={fixture['bbox_4326']}&WIDTH={DEFAULT_IMAGE_SIZE}&HEIGHT={DEFAULT_IMAGE_SIZE}"
                 "&FORMAT=image/png&TRANSPARENT=true"
-                f"&FILTER={urllib.parse.quote(fixture['xml'])}"
+                f"&FILTER={urllib.parse.quote(fixture[xml_key])}"
             ),
         }
         for fixture in fixtures

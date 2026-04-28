@@ -57,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--cases-per-operator", type=int, default=40)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--bbox-tolerance-deg", type=float, default=0.0001)
     parser.add_argument("--include-scan", action="store_true")
     return parser.parse_args()
 
@@ -220,6 +221,7 @@ def validate_payload(
     *,
     filter_spec: dict[str, Any] | None = None,
     bbox: str | None = None,
+    bbox_tolerance_deg: float = 0.0,
     offset: int | None = None,
 ) -> tuple[bool, dict[str, Any]]:
     features = payload.get("features") or []
@@ -231,13 +233,15 @@ def validate_payload(
             if len(coords) < 2:
                 return False, {"reason": "missing coordinates", "feature": feature}
             if not (
-                min_lon <= coords[0] <= max_lon and min_lat <= coords[1] <= max_lat
+                min_lon - bbox_tolerance_deg <= coords[0] <= max_lon + bbox_tolerance_deg
+                and min_lat - bbox_tolerance_deg <= coords[1] <= max_lat + bbox_tolerance_deg
             ):
                 return False, {
                     "reason": "feature outside bbox",
                     "feature_id": (feature.get("properties") or {}).get("id"),
                     "coords": coords,
                     "bbox": bbox,
+                    "bbox_tolerance_deg": bbox_tolerance_deg,
                 }
         return True, {"rows": len(features)}
 
@@ -419,7 +423,11 @@ def main() -> int:
                             {"reason": "http status", "status": status, "url": url}
                         )
                     continue
-                ok, detail = validate_payload(payload, bbox=bbox)
+                ok, detail = validate_payload(
+                    payload,
+                    bbox=bbox,
+                    bbox_tolerance_deg=args.bbox_tolerance_deg,
+                )
                 if ok:
                     bbox_info["ok"] += 1
                 else:

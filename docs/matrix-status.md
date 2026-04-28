@@ -1,6 +1,14 @@
 # GeoBench Matrix Status
 
-Current authoritative matrix status for the rerun campaign on the current local harness.
+Historical matrix status for the earlier rerun campaign. The harness now has stricter cache-tier
+guardrails, viewport-bbox semantics, and concurrent workload breakdown reporting, so these reports
+should be treated as prior artifacts until a fresh 5-run matrix is generated.
+
+## Current Harness Reruns
+
+| Family | Rows | Servers | Status | Report | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Common Standards: Feature | `attribute-filter`, `spatial-bbox`, `concurrent` | Honua, GeoServer | Complete | `results/20260425-213925/report.md` | Fresh 5-run baseline on the current cache-tier/reporting harness with Honua image `honua-geobench:trunk-50847050-harness1`; QGIS still pending for the full three-server matrix |
 
 ## Authoritative Reports
 
@@ -25,6 +33,9 @@ Current authoritative matrix status for the rerun campaign on the current local 
 
 | Family | Row | Target Servers | Status | Notes |
 | --- | --- | --- | --- | --- |
+| Common Standards: Feature | `attribute-filter` | Honua, GeoServer, QGIS | Pending | Rerun on the current cache-tier/reporting harness |
+| Common Standards: Feature | `spatial-bbox` | Honua, GeoServer, QGIS | Pending | Rerun with viewport-bbox semantics and explicit bbox tolerance in report metadata |
+| Common Standards: Feature | `concurrent` | Honua, GeoServer, QGIS | Pending | Rerun with workload-tagged concurrent p95/p99 reporting |
 | Secondary Standards | `wms-filtered` | Honua, GeoServer | Pending | Harness implemented; awaiting canonical rerun on the updated warmup policy |
 | Secondary Standards | `wmts` | GeoServer | Pending | Harness implemented as an explicit warm-tile-cache row; awaiting canonical rerun |
 | Secondary Standards | `wcs` | GeoServer | Runnable | Self-contained benchmark coverage now uploads automatically; canonical 5-run validation still pending |

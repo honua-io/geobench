@@ -13,14 +13,18 @@ import { buildBbox, buildGetFeatureInfoRequest, RASTER_SIZES } from "./raster-he
 
 var errorRate = new Rate("errors");
 var responseTime = new Trend("wms_getfeatureinfo_response_time", true);
-var scenarioThresholds = {
-  "http_req_duration{bbox_size:small}": ["max>=0"],
-  "http_req_duration{bbox_size:medium}": ["max>=0"],
-  "http_req_duration{bbox_size:large}": ["max>=0"],
-  "http_reqs{bbox_size:small}": ["count>=0"],
-  "http_reqs{bbox_size:medium}": ["count>=0"],
-  "http_reqs{bbox_size:large}": ["count>=0"],
-};
+var scenarioDuration = __ENV.WMS_GETFEATUREINFO_DURATION || "120s";
+var warmupDuration = __ENV.WMS_GETFEATUREINFO_WARMUP || "60s";
+var scenarioVus = parseInt(__ENV.WMS_GETFEATUREINFO_VUS || "10", 10);
+var selectedBboxSizes = (__ENV.WMS_GETFEATUREINFO_SCENARIOS || "small,medium,large")
+  .split(",")
+  .map(function (value) {
+    return value.trim();
+  })
+  .filter(function (value) {
+    return value.length > 0;
+  });
+var scenarioThresholds = {};
 
 function supportedServerName() {
   var name = (__ENV.SERVER || "geoserver").toLowerCase();
@@ -33,44 +37,55 @@ function supportedServerName() {
 }
 
 var SERVER_NAME = supportedServerName();
+var BBOX_VARIANTS = [
+  { id: "small", exec: "smallGetFeatureInfo", size: RASTER_SIZES.small, salt: 0x901 },
+  { id: "medium", exec: "mediumGetFeatureInfo", size: RASTER_SIZES.medium, salt: 0x902 },
+  { id: "large", exec: "largeGetFeatureInfo", size: RASTER_SIZES.large, salt: 0x903 },
+].filter(function (variant) {
+  return selectedBboxSizes.indexOf(variant.id) !== -1;
+});
 
-export var options = {
-  scenarios: {
+if (BBOX_VARIANTS.length === 0) {
+  throw new Error("No WMS GetFeatureInfo scenarios selected");
+}
+
+BBOX_VARIANTS.forEach(function (variant) {
+  scenarioThresholds["http_req_duration{bbox_size:" + variant.id + "}"] = ["max>=0"];
+  scenarioThresholds["http_reqs{bbox_size:" + variant.id + "}"] = ["count>=0"];
+});
+
+function buildScenarios() {
+  var scenarios = {
     warmup: {
       executor: "constant-vus",
-      vus: 5,
-      duration: "60s",
+      vus: Math.max(1, Math.min(5, scenarioVus)),
+      duration: warmupDuration,
       exec: "warmupWmsGetFeatureInfo",
       tags: { phase: "warmup" },
       startTime: "0s",
     },
-    small_info: {
+  };
+
+  var offsetSeconds = parseInt(warmupDuration, 10);
+  BBOX_VARIANTS.forEach(function (variant) {
+    scenarios[variant.id + "_info"] = {
       executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "smallGetFeatureInfo",
-      tags: { bbox_size: "small" },
-      startTime: "60s",
-    },
-    medium_info: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "mediumGetFeatureInfo",
-      tags: { bbox_size: "medium" },
-      startTime: "190s",
-    },
-    large_info: {
-      executor: "constant-vus",
-      vus: 10,
-      duration: "120s",
-      exec: "largeGetFeatureInfo",
-      tags: { bbox_size: "large" },
-      startTime: "320s",
-    },
-  },
+      vus: scenarioVus,
+      duration: scenarioDuration,
+      exec: variant.exec,
+      tags: { bbox_size: variant.id },
+      startTime: String(offsetSeconds) + "s",
+    };
+    offsetSeconds += parseInt(scenarioDuration, 10);
+  });
+
+  return scenarios;
+}
+
+export var options = {
+  scenarios: buildScenarios(),
   thresholds: Object.assign({
-    errors: ["rate<0.01"],
+    errors: ["rate<=0"],
   }, scenarioThresholds),
 };
 

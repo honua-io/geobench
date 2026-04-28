@@ -14,6 +14,7 @@ import { deterministicChoice, deterministicRange } from "./deterministic.js";
 
 var DEFAULT_LIMIT = parseInt(__ENV.WFS_RESULT_LIMIT || __ENV.RESULT_LIMIT || "100", 10);
 var DEFAULT_COLLECTION = __ENV.WFS_COLLECTION || "bench_points";
+var BBOX_TOLERANCE_DEG = parseFloat(__ENV.BBOX_TOLERANCE_DEG || "0.0001");
 
 var SERVERS = {
   honua: {
@@ -25,6 +26,7 @@ var SERVERS = {
     limitParam: "COUNT",
     bboxParam: "BBOX",
     bboxCrsSuffix: "",
+    bboxAxisOrder: "lat-lon",
     outputFormat: "application/json",
     filterDialect: "fes-2.0",
   },
@@ -37,6 +39,7 @@ var SERVERS = {
     limitParam: "COUNT",
     bboxParam: "BBOX",
     bboxCrsSuffix: ",EPSG:4326",
+    bboxAxisOrder: "lon-lat",
     outputFormat: "application/json",
     filterDialect: "fes-2.0",
   },
@@ -50,6 +53,7 @@ var SERVERS = {
     limitParam: "MAXFEATURES",
     bboxParam: "BBOX",
     bboxCrsSuffix: "",
+    bboxAxisOrder: "lon-lat",
     outputFormat: "application/vnd.geo+json",
     filterDialect: null,
   },
@@ -180,14 +184,28 @@ function parseBboxBounds(bbox) {
   };
 }
 
+function formatBboxForServer(bbox, server) {
+  var bounds = parseBboxBounds(bbox);
+  if (server.config.bboxAxisOrder === "lat-lon") {
+    return [
+      bounds.minLat,
+      bounds.minLon,
+      bounds.maxLat,
+      bounds.maxLon,
+    ].join(",");
+  }
+
+  return bbox;
+}
+
 function pointWithinBounds(coords, bounds) {
   return (
     coords &&
     coords.length >= 2 &&
-    coords[0] >= bounds.minLon &&
-    coords[0] <= bounds.maxLon &&
-    coords[1] >= bounds.minLat &&
-    coords[1] <= bounds.maxLat
+    coords[0] >= bounds.minLon - BBOX_TOLERANCE_DEG &&
+    coords[0] <= bounds.maxLon + BBOX_TOLERANCE_DEG &&
+    coords[1] >= bounds.minLat - BBOX_TOLERANCE_DEG &&
+    coords[1] <= bounds.maxLat + BBOX_TOLERANCE_DEG
   );
 }
 
@@ -202,23 +220,41 @@ function validateFeatureCollection(response, limit) {
       Array.isArray(payload.features) &&
       features.length > 0 &&
       features.length <= limit &&
-      features.every(function (feature) {
-        return (
-          feature &&
-          feature.type === "Feature" &&
-          feature.geometry &&
-          feature.properties &&
-          feature.geometry.type === "Point" &&
-          Array.isArray(feature.geometry.coordinates)
-        );
-      }),
+      features.every(isValidPointFeature),
     features: features,
     payload: payload,
   };
 }
 
+function validateFeatureCollectionShape(response, limit) {
+  var payload = parseJson(response);
+  var features = payload && Array.isArray(payload.features) ? payload.features : [];
+
+  return {
+    ok:
+      payload !== null &&
+      payload.type === "FeatureCollection" &&
+      Array.isArray(payload.features) &&
+      features.length <= limit &&
+      features.every(isValidPointFeature),
+    features: features,
+    payload: payload,
+  };
+}
+
+function isValidPointFeature(feature) {
+  return (
+    feature &&
+    feature.type === "Feature" &&
+    feature.geometry &&
+    feature.properties &&
+    feature.geometry.type === "Point" &&
+    Array.isArray(feature.geometry.coordinates)
+  );
+}
+
 function validateBboxCollection(response, bbox, limit) {
-  var validated = validateFeatureCollection(response, limit);
+  var validated = validateFeatureCollectionShape(response, limit);
   var bounds = parseBboxBounds(bbox);
 
   return {
@@ -237,7 +273,7 @@ function validateBboxCollection(response, bbox, limit) {
 
 function validateFilteredCollection(response, filterSpec, limit) {
   var normalizedFilter = normalizeFilterSpec(filterSpec);
-  var validated = validateFeatureCollection(response, limit);
+  var validated = validateFeatureCollectionShape(response, limit);
 
   if (!validated.ok) {
     return false;
@@ -310,7 +346,7 @@ export function buildGetFeatureRequest(params) {
   url = addCommonParams(url, server, limit);
 
   if (params.bbox) {
-    url += "&" + server.config.bboxParam + "=" + params.bbox + server.config.bboxCrsSuffix;
+    url += "&" + server.config.bboxParam + "=" + formatBboxForServer(params.bbox, server) + server.config.bboxCrsSuffix;
     validate = function (response) {
       return validateBboxCollection(response, params.bbox, limit).ok;
     };
@@ -375,7 +411,9 @@ export function buildFilteredGetFeatureRequest(params) {
 export function randomWfsBbox(sizeDeg, salt) {
   var center = deterministicChoice(WFS_HOTSPOTS, salt || 0);
   var half = sizeDeg / 2;
-  var jitter = deterministicRange(-half, half, (salt || 0) ^ 0x7f4a7c15);
+  // Keep the sampled hotspot inside the bbox after decimal rounding and
+  // server-specific axis-order normalization.
+  var jitter = deterministicRange(-half * 0.8, half * 0.8, (salt || 0) ^ 0x7f4a7c15);
   var minLon = Math.max(-180, center.lon - half + jitter);
   var minLat = Math.max(-90, center.lat - half + jitter);
   var maxLon = Math.min(180, minLon + sizeDeg);

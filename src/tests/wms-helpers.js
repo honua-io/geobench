@@ -8,12 +8,14 @@ var SERVERS = {
     path: __ENV.HONUA_WMS_PATH || "/ogc/services/default/wms",
     layer: __ENV.HONUA_WMS_LAYER || "bench_points",
     wmsFilterParam: "FILTER",
+    wmsFilterDialect: "fes20",
   },
   geoserver: {
     baseUrl: __ENV.GEOSERVER_URL || "http://geoserver:8080",
     path: "/geoserver/wms",
     layer: __ENV.GEOSERVER_WMS_LAYER || "geobench:bench_points",
     wmsFilterParam: "FILTER",
+    wmsFilterDialect: "ogc",
     wmts: {
       path: "/geoserver/gwc/service/wmts",
       layer: __ENV.GEOSERVER_WMTS_LAYER || "geobench:bench_points",
@@ -32,6 +34,7 @@ var SERVERS = {
     layer: __ENV.QGIS_WMS_LAYER || "bench_points",
     mapPath: __ENV.QGIS_MAP_PATH || "/etc/qgisserver/geobench.qgs",
     wmsFilterParam: "FILTER",
+    wmsFilterDialect: "ogc",
     wmts: null,
     wcs: null,
   },
@@ -76,11 +79,7 @@ export function validateBbox(bbox) {
   return bbox;
 }
 
-export function buildFilterXml(spec) {
-  if (!spec || !spec.type) {
-    throw new Error("WMS filter request requires a filter spec");
-  }
-
+function buildOgcFilterXml(spec) {
   if (spec.type === "eq") {
     return (
       "<Filter xmlns=\"http://www.opengis.net/ogc\">" +
@@ -118,6 +117,60 @@ export function buildFilterXml(spec) {
   throw new Error("Unsupported WMS filter type: " + spec.type);
 }
 
+function buildFes20FilterXml(spec) {
+  if (!spec || !spec.type) {
+    throw new Error("WMS filter request requires a filter spec");
+  }
+
+  if (spec.type === "eq") {
+    return (
+      "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\">" +
+      "<fes:PropertyIsEqualTo>" +
+      "<fes:ValueReference>" + escapeXml(spec.field) + "</fes:ValueReference>" +
+      "<fes:Literal>" + escapeXml(spec.value) + "</fes:Literal>" +
+      "</fes:PropertyIsEqualTo>" +
+      "</fes:Filter>"
+    );
+  }
+
+  if (spec.type === "between") {
+    return (
+      "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\">" +
+      "<fes:PropertyIsBetween>" +
+      "<fes:ValueReference>" + escapeXml(spec.field) + "</fes:ValueReference>" +
+      "<fes:LowerBoundary><fes:Literal>" + toFinite(spec.low, 0) + "</fes:Literal></fes:LowerBoundary>" +
+      "<fes:UpperBoundary><fes:Literal>" + toFinite(spec.high, 0) + "</fes:Literal></fes:UpperBoundary>" +
+      "</fes:PropertyIsBetween>" +
+      "</fes:Filter>"
+    );
+  }
+
+  if (spec.type === "prefix") {
+    return (
+      "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\">" +
+      "<fes:PropertyIsLike wildCard=\"%\" singleChar=\"_\" escapeChar=\"\\\\\">" +
+      "<fes:ValueReference>" + escapeXml(spec.field) + "</fes:ValueReference>" +
+      "<fes:Literal>" + escapeXml(spec.prefix) + "%</fes:Literal>" +
+      "</fes:PropertyIsLike>" +
+      "</fes:Filter>"
+    );
+  }
+
+  throw new Error("Unsupported WMS filter type: " + spec.type);
+}
+
+export function buildFilterXml(spec, dialect) {
+  if (!spec || !spec.type) {
+    throw new Error("WMS filter request requires a filter spec");
+  }
+
+  if ((dialect || "ogc") === "fes20") {
+    return buildFes20FilterXml(spec);
+  }
+
+  return buildOgcFilterXml(spec);
+}
+
 export function buildWmsFilteredMapRequest(serverName, params) {
   var server = getServer(serverName);
   params = params || {};
@@ -147,7 +200,7 @@ export function buildWmsFilteredMapRequest(serverName, params) {
   url += "&HEIGHT=" + height;
   url += "&FORMAT=image/png";
   url += "&TRANSPARENT=true";
-  url += "&" + filterParam + "=" + encodeURIComponent(buildFilterXml(filterSpec));
+  url += "&" + filterParam + "=" + encodeURIComponent(buildFilterXml(filterSpec, server.config.wmsFilterDialect));
 
   return {
     url: url,

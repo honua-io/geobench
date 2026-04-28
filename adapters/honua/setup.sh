@@ -6,7 +6,7 @@
 set -euo pipefail
 
 HONUA_URL="${HONUA_URL:-http://honua:8080}"
-API_KEY="${HONUA_API_KEY:-geobench-admin-key}"
+API_KEY="${HONUA_API_KEY:-GeoBench-Admin-Key-2026!}"
 HEADER_KEY="X-API-Key: ${API_KEY}"
 PGURL="${PGURL:-postgresql://geobench:geobench_pass@postgis-honua:5432/geobench}"
 CONNECTION_NAME="${HONUA_CONNECTION_NAME:-geobench-postgis}"
