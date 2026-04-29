@@ -22,18 +22,19 @@ REST. See [METHODOLOGY.md](METHODOLOGY.md) for the matrix and reporting rules.
 
 ## Current Snapshot
 
-Latest two-server snapshot from April 28, 2026 on the 100K-point dataset. This is a 5-run median,
-baseline/no spatial-response-cache profile with 30s warmup and 30s measured windows per scenario.
-Both servers used the strict bounded database profile: Honua active-query/pool settings were
-`6/6/3`, and GeoServer datastore pool settings were `6/3`. Exact image tags and environment
-variables are shown in the reproduction command below.
+Current headline two-server snapshot, generated April 28, 2026 HST (April 29 UTC in the report
+timestamp), on the 100K-point dataset. This is a 5-run median, baseline/no spatial-response-cache
+profile with 30s warmup and 30s measured windows per scenario. Both servers used the strict bounded
+database profile: Honua active-query/pool settings were `6/6/3`, and GeoServer datastore pool
+settings were `6/3`. Exact image tags and environment variables are shown in the reproduction
+command below.
 
 Across the report, all 204 measured performance cells where both servers had data favored the Honua
 row, and the six comparable error-rate cells were ties at `0.0%`. The table below keeps raw values
 visible instead of repeating a winner label on every line. GeoServices `MapServer/export` has no
 GeoServer row in this harness profile. QGIS Server remains runnable in the harness, but it is
-omitted from this headline table because this snapshot focuses on the currently comparable Honua
-and GeoServer rows.
+omitted from this headline table because this snapshot focuses on the current Honua and GeoServer
+profile.
 
 | Track | Scenario | Honua | GeoServer |
 |---|---|---:|---:|
@@ -54,7 +55,16 @@ Full artifacts are under `results/20260428-192053/`, with the two-server report 
 `results/20260428-192053/report.md` and the action ledger at
 `results/20260428-192053/loss-ledger-final/loss-ledger.md`. Response-shape audits are part of the
 report; some feature/native rows have payload metadata or property-key drift and should be described
-with those caveats in public claims.
+with those caveats in public claims. The result metadata records that Honua rows came from the
+render-gate run in this directory, GeoServer non-refreshed rows came from the strict baseline
+`results/20260428-130814/`, and GeoServer `geoservices-query`/`wms-filtered` rows were refreshed in
+this directory to remove zero-sample and error-rate caveats.
+
+External reproducibility note: the Honua image for this snapshot,
+`honua-geobench:trunk-b650a321-rendergate2`, is a local benchmark build from Honua source around
+`b650a321` with the raster render gate defaults set to 8 concurrent renders and a 5s acquire
+timeout. Publish or pin the corresponding Honua Server source/image before treating this exact
+snapshot as externally rerunnable.
 
 Before publishing a new headline snapshot, run the fairness audit against the result directory:
 
