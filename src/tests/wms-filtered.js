@@ -10,6 +10,7 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import { durationToSeconds } from "./duration-helpers.js";
 import { deterministicInt, deterministicRange } from "./deterministic.js";
 import { buildBbox, validateImageResponse } from "./raster-helpers.js";
 import { buildWmsFilteredMapRequest } from "./wms-helpers.js";
@@ -103,7 +104,7 @@ function buildScenarios() {
     },
   };
 
-  var offsetSeconds = parseInt(warmupDuration, 10);
+  var offsetSeconds = durationToSeconds(warmupDuration);
   VARIANTS.forEach(function (variant) {
     scenarios[variant.id + "_filter"] = {
       executor: "constant-vus",
@@ -113,7 +114,7 @@ function buildScenarios() {
       tags: { query_type: variant.id },
       startTime: String(offsetSeconds) + "s",
     };
-    offsetSeconds += parseInt(scenarioDuration, 10);
+    offsetSeconds += durationToSeconds(scenarioDuration);
   });
 
   return scenarios;

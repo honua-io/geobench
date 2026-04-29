@@ -14,7 +14,7 @@ from typing import Any
 
 
 BASELINE_SERVER = "honua"
-METRICS = ("rps", "p50", "p95", "p99")
+METRICS = ("rps", "p50", "p95", "p99", "error_rate_pct")
 LATENCY_METRICS = {"p50", "p95", "p99"}
 TAIL_METRICS = {"p95", "p99"}
 DEFAULT_NEAR_TIE_THRESHOLD = 0.02
@@ -171,7 +171,7 @@ def better_server(metric: str, baseline_value: float, competitor_value: float) -
 
 
 def classify_bottleneck(test: str, scenario: str, metric: str, status: str) -> str:
-    if status == "unsupported":
+    if status in {"unsupported", "competitor-unsupported"}:
         return "feature-gap"
     if test == "wms-reprojection":
         return "projection"
@@ -194,6 +194,8 @@ def priority_score(row: dict[str, Any]) -> float:
     status = row["status"]
     if status == "unsupported":
         return 1_000_000.0
+    if status == "competitor-unsupported":
+        return 900_000.0
     if status == "near-tie":
         base = 10.0
     elif status == "loss":
@@ -205,6 +207,8 @@ def priority_score(row: dict[str, Any]) -> float:
     if metric == "p99":
         base *= 5
     elif metric == "p95":
+        base *= 4
+    elif metric == "error_rate_pct":
         base *= 4
     elif metric == "rps":
         base *= 3
@@ -278,7 +282,7 @@ def support_status_row(
         "metric_direction": "2xx status",
         "competitor_advantage_ratio": None,
         "competitor_advantage_pct": None,
-        "bottleneck_class": "feature-gap" if status == "unsupported" else "none",
+        "bottleneck_class": "feature-gap" if status in {"unsupported", "competitor-unsupported"} else "none",
         "confidence": confidence_for_runs(runs),
         "runs": runs,
         "report": str(report_path),
@@ -361,12 +365,12 @@ def compare_report(
                 baseline_status = audit_status(audit_index, baseline, test, scenario)
                 competitor_status = audit_status(audit_index, competitor, test, scenario)
                 support_gap_key = (competitor, test, scenario)
-                if (
-                    baseline_status is not None
-                    and competitor_status is not None
-                    and support_gap_key not in support_gaps_seen
-                ):
-                    if baseline_status >= 400 and 200 <= competitor_status < 300:
+                if baseline_status is not None and support_gap_key not in support_gaps_seen:
+                    if (
+                        competitor_status is not None
+                        and baseline_status >= 400
+                        and 200 <= competitor_status < 300
+                    ):
                         rows.append(
                             support_status_row(
                                 report_path,
@@ -383,7 +387,32 @@ def compare_report(
                         support_gaps_seen.add(support_gap_key)
                         continue
 
-                    if 200 <= baseline_status < 300:
+                    if (
+                        competitor_status is not None
+                        and 200 <= baseline_status < 300
+                        and not (200 <= competitor_status < 300)
+                    ):
+                        rows.append(
+                            support_status_row(
+                                report_path,
+                                report,
+                                baseline,
+                                competitor,
+                                test,
+                                scenario,
+                                baseline_status,
+                                competitor_status,
+                                "competitor-unsupported",
+                            )
+                        )
+                        support_gaps_seen.add(support_gap_key)
+                        continue
+
+                    if (
+                        competitor_status is not None
+                        and 200 <= baseline_status < 300
+                        and 200 <= competitor_status < 300
+                    ):
                         rows.append(
                             support_status_row(
                                 report_path,
@@ -401,6 +430,42 @@ def compare_report(
 
                 baseline_scenario = baseline_test.get(scenario)
                 competitor_scenario = competitor_test.get(scenario)
+                if isinstance(baseline_scenario, dict) and not isinstance(competitor_scenario, dict):
+                    if support_gap_key not in support_gaps_seen:
+                        rows.append(
+                            support_status_row(
+                                report_path,
+                                report,
+                                baseline,
+                                competitor,
+                                test,
+                                scenario,
+                                baseline_status if baseline_status is not None else 200,
+                                competitor_status,
+                                "competitor-unsupported",
+                            )
+                        )
+                        support_gaps_seen.add(support_gap_key)
+                    continue
+
+                if not isinstance(baseline_scenario, dict) and isinstance(competitor_scenario, dict):
+                    if support_gap_key not in support_gaps_seen:
+                        rows.append(
+                            support_status_row(
+                                report_path,
+                                report,
+                                baseline,
+                                competitor,
+                                test,
+                                scenario,
+                                baseline_status,
+                                competitor_status if competitor_status is not None else 200,
+                                "unsupported",
+                            )
+                        )
+                        support_gaps_seen.add(support_gap_key)
+                    continue
+
                 if not isinstance(baseline_scenario, dict) or not isinstance(competitor_scenario, dict):
                     continue
 
@@ -508,7 +573,7 @@ def write_markdown(output_dir: Path, metadata: dict[str, Any], rows: list[dict[s
     counts = Counter(row["status"] for row in rows)
     lines.extend(["", "## Summary", ""])
     summary_rows = [["Status", "Count"]]
-    for status in ("unsupported", "loss", "near-tie", "win"):
+    for status in ("unsupported", "competitor-unsupported", "loss", "near-tie", "win"):
         if counts.get(status):
             summary_rows.append([status, str(counts[status])])
     lines.extend(markdown_table(summary_rows))
@@ -557,6 +622,7 @@ def write_markdown(output_dir: Path, metadata: dict[str, Any], rows: list[dict[s
         "",
         "- Positive gap means the competitor is better for that metric.",
         "- `unsupported` rows come from response-shape audits where Honua returned a non-2xx status and a competitor returned 2xx.",
+        "- `competitor-unsupported` rows mean Honua produced a result but the competitor had no comparable result or returned a non-2xx status.",
         "- JSON output contains all retained rows, even when Markdown is truncated.",
         "",
     ])

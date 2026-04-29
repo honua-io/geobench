@@ -15,8 +15,13 @@
     "cpus": 4,
     "memory": "4g"
   },
-  "configTier": "default",
-  "connectionPooling": "framework-managed",
+  "configTier": "bounded-baseline",
+  "connectionPooling": {
+    "maxConcurrentQueries": 6,
+    "maxConnectionPoolSize": 6,
+    "minConnectionPoolSize": 3,
+    "adaptiveAdmissionEnabled": false
+  },
   "spatialIndex": "GiST (PostGIS)",
-  "notes": "Read-only container with tmpfs. No Redis caching in benchmark config."
+  "notes": "Read-only container with tmpfs. No Redis or response caching in the baseline benchmark config. The adapter imports bench_points into Honua's generic feature store and creates benchmark-field expression indexes on that serving table. Exact image tag and any run-time admission overrides are recorded in benchmark-metadata.json."
 }

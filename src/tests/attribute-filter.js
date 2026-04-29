@@ -5,6 +5,7 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import { durationToSeconds } from "./duration-helpers.js";
 import { deterministicChoice, deterministicInt, deterministicRange } from "./deterministic.js";
 import { buildItemsUrl, ogcChecks, CATEGORIES } from "./helpers.js";
 
@@ -52,7 +53,7 @@ function buildScenarios() {
     },
   };
 
-  var offsetSeconds = parseInt(warmupDuration, 10);
+  var offsetSeconds = durationToSeconds(warmupDuration);
   FILTER_VARIANTS.forEach(function (variant) {
     scenarios[variant.id + "_filter"] = {
       executor: "constant-vus",
@@ -62,7 +63,7 @@ function buildScenarios() {
       tags: { query_type: variant.id },
       startTime: String(offsetSeconds) + "s",
     };
-    offsetSeconds += parseInt(scenarioDuration, 10);
+    offsetSeconds += durationToSeconds(scenarioDuration);
   });
 
   return scenarios;

@@ -297,22 +297,28 @@ def compute_metrics(values, scenario_duration_seconds=None):
     }
 
 
-def metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds=None):
+def metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds=None, error_metric=None):
     if not duration_metric or not request_metric:
         return None
 
+    request_count = request_metric.get("count")
+    if request_count is not None and float(request_count) <= 0:
+        return None
+
     if scenario_duration_seconds:
-        request_count = request_metric.get("count")
         rps = (float(request_count) / scenario_duration_seconds) if request_count is not None else None
     else:
         rps = request_metric.get("rate")
 
-    return {
+    parsed = {
         "rps": round_metric(rps),
         "p50": round_metric(duration_metric.get("med")),
         "p95": round_metric(duration_metric.get("p(95)")),
         "p99": round_metric(duration_metric.get("p(99)")),
     }
+    if error_metric and error_metric.get("value") is not None:
+        parsed["error_rate_pct"] = round_metric(float(error_metric.get("value")) * 100)
+    return parsed
 
 
 def parse_metric_name(metric_name):
@@ -408,7 +414,16 @@ def parse_k6_summary(data, test, run_metadata=None):
         tag_value = definition["tag_value"]
         duration_metric = metric_for_tags(metrics, "http_req_duration", {tag_key: tag_value})
         request_metric = metric_for_tags(metrics, "http_reqs", {tag_key: tag_value})
-        parsed = metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds)
+        error_metric = (
+            metric_for_tags(metrics, "errors", {tag_key: tag_value})
+            or metric_for_tags(metrics, "http_req_failed", {tag_key: tag_value})
+        )
+        parsed = metrics_from_summary(
+            duration_metric,
+            request_metric,
+            scenario_duration_seconds,
+            error_metric,
+        )
         if parsed:
             by_scenario[scenario_id] = parsed
 
@@ -418,7 +433,16 @@ def parse_k6_summary(data, test, run_metadata=None):
                 tags = {"concurrency": concurrency, "workload": workload_id}
                 duration_metric = metric_for_tags(metrics, "http_req_duration", tags)
                 request_metric = metric_for_tags(metrics, "http_reqs", tags)
-                parsed = metrics_from_summary(duration_metric, request_metric, scenario_duration_seconds)
+                error_metric = (
+                    metric_for_tags(metrics, "errors", tags)
+                    or metric_for_tags(metrics, "http_req_failed", tags)
+                )
+                parsed = metrics_from_summary(
+                    duration_metric,
+                    request_metric,
+                    scenario_duration_seconds,
+                    error_metric,
+                )
                 if parsed:
                     by_scenario[
                         f"{CONCURRENT_WORKLOAD_PREFIX}{concurrency}:{workload_id}"
@@ -427,6 +451,7 @@ def parse_k6_summary(data, test, run_metadata=None):
     overall = metrics_from_summary(
         metrics.get("http_req_duration"),
         metrics.get("http_reqs"),
+        error_metric=metrics.get("errors") or metrics.get("http_req_failed"),
     )
 
     return by_scenario, overall
@@ -457,7 +482,7 @@ def aggregate_runs(raw):
                 run_metrics = list(raw[server][test][scenario].values())
                 scenario_metrics = {}
 
-                for key in ("rps", "p50", "p95", "p99"):
+                for key in ("rps", "p50", "p95", "p99", "error_rate_pct"):
                     values = [m[key] for m in run_metrics if m.get(key) is not None]
                     if values:
                         scenario_metrics[key] = round_metric(statistics.median(values))
@@ -539,6 +564,7 @@ def add_scenario_section(lines, aggregated, servers, test, heading, first_column
             ("p50", "p50 ms"),
             ("p95", "p95 ms"),
             ("p99", "p99 ms"),
+            ("error_rate_pct", "error %"),
         ]:
             row = [definition["label"] if metric == "rps" else "", metric_label]
             for server in servers:
@@ -620,6 +646,7 @@ def add_concurrent_workload_section(lines, aggregated, servers, run_metadata):
                 ("p50", "p50 ms"),
                 ("p95", "p95 ms"),
                 ("p99", "p99 ms"),
+                ("error_rate_pct", "error %"),
             ]:
                 row = [
                     concurrency if metric == "rps" else "",
@@ -654,6 +681,7 @@ def add_overall_section(lines, aggregated_overall, servers, test, heading):
         ("p50", "p50 ms"),
         ("p95", "p95 ms"),
         ("p99", "p99 ms"),
+        ("error_rate_pct", "error %"),
     ]:
         row = [label]
         for server in servers:

@@ -12,7 +12,13 @@ This document describes how GeoBench ensures fair, reproducible comparisons betw
 
 ### Complete Isolation
 
-Each server runs against its **own dedicated PostGIS instance** with identical data, indexes, and statistics. The orchestrator starts one server at a time (PostGIS + server + k6), runs all benchmarks, then tears the stack down completely before starting the next server. No shared database, no shared buffers, no connection slot contention.
+Each server runs against its **own dedicated PostGIS instance** initialized from the same
+deterministic dataset. The source `bench_points` table has identical data, source indexes, and
+statistics in every database. Server adapters may create product-specific serving objects, such as
+published layers, materialized feature-store rows, or equivalent expression indexes, but those
+objects must be disclosed in the adapter and system card. The orchestrator starts one server at a
+time (PostGIS + server + k6), runs all benchmarks, then tears the stack down completely before
+starting the next server. No shared database, no shared buffers, no connection slot contention.
 
 - **PostGIS image**: `postgis/postgis:17-3.5`
 - **Dataset**: 100K point features, 10 attribute fields, GiST spatial index + btree attribute indexes
@@ -24,8 +30,8 @@ Every server container runs with identical Docker resource limits:
 
 | Resource | Server Containers | PostGIS | k6 (load generator) |
 |----------|------------------|---------|---------------------|
-| CPU | 4 cores | 2 cores | 4 cores |
-| Memory | 4 GB | 2 GB | 2 GB |
+| CPU | 4 cores | 4 cores | 4 cores |
+| Memory | 4 GB | 4 GB | 4 GB |
 
 Limits are enforced via Docker Compose `deploy.resources.limits` (requires Compose v2).
 
@@ -35,23 +41,31 @@ All containers share a single Docker bridge network. k6 runs inside the same net
 
 ## Configuration Tiers
 
-Results are reported at two levels:
+Results can be reported at multiple named profiles:
 
 - **Default**: Server's shipping defaults. No tuning. Tests the out-of-box experience.
-- **Tuned**: Server maintainer's recommended production configuration for the given hardware. All changes documented in system cards.
+- **Bounded baseline**: Explicit, fixed database admission/pool caps intended to keep aggregate
+  PostGIS pressure comparable across servers.
+- **Tuned**: Server maintainer's recommended production configuration for the given hardware.
 
-Both tiers are reported. Neither is hidden.
+Every published result must name the profile and disclose exact server settings in report metadata.
+Do not describe a tuned profile as the bounded baseline if active database budgets differ.
 
 ## Warmup Protocol
 
-**Every** test category begins with a 60-second warmup phase under sustained load before measurement starts. This applies to all servers equally, normalizing:
+By default, every test category begins with a 60-second warmup phase under sustained load before
+measurement starts. Individual benchmark campaigns may override warmup duration, but the effective
+duration must be recorded in `benchmark-metadata.json` and applied equally to all selected servers.
+Warmup normalizes:
 
 - JVM JIT compilation (GeoServer)
 - Connection pool ramp-up
 - OS page cache warming
 - PostGIS query plan caching
 
-The warmup phase uses the same query patterns as the measurement phase. Warmup data points are excluded from reported metrics.
+The warmup phase uses the same query patterns as the measurement phase. Some scripts cap warmup VUs
+to reduce setup-time overload; that cap is identical for each selected server. Warmup data points
+are excluded from reported metrics.
 
 ## Caching Policy
 
@@ -107,9 +121,12 @@ roles answer different questions and must be published separately.
 
 ### Duration & Runs
 
-- **Measurement window**: 120 seconds per test scenario
+- **Default measurement window**: 120 seconds per test scenario
 - **Runs**: 5 independent runs per server/test combination
 - **Reported value**: Median across runs (eliminates outliers)
+
+Shorter or longer campaign-specific windows are valid only when the same window is applied to all
+selected servers and recorded in `benchmark-metadata.json`.
 
 ### Metrics
 
@@ -125,7 +142,8 @@ All latency measurements are client-side (k6), including Docker bridge network t
 
 ### Concurrency Levels
 
-The `concurrent` test ramps through: 1, 10, 50, 100 virtual users (VUs). Each level runs for 120 seconds after warmup.
+The `concurrent` test ramps through: 1, 10, 50, 100 virtual users (VUs). Each level uses the same
+configured measurement window as other selected scenarios after warmup.
 The mix is 40% viewport bbox, 30% equality, 20% range, and 10% LIKE. Reports include a workload
 breakdown when the k6 summary export contains both `concurrency` and `workload` tags; this is the
 preferred view for diagnosing p95/p99 tails.
@@ -288,7 +306,9 @@ unexplainable performance number.
 
 ## System Cards
 
-Every result set includes a machine-readable `system-card.json` per server documenting:
+Every new result set includes a copied machine-readable system card per selected server under
+`results/<timestamp>/system-cards/`, plus `benchmark-metadata.json` with exact per-run settings.
+Together they document:
 
 - Server name, version, Docker image
 - Runtime (JVM, .NET, C++)
@@ -300,7 +320,7 @@ Every result set includes a machine-readable `system-card.json` per server docum
 - CQL2 support level
 - Any server-specific notes
 
-Without a system card, results are not considered publishable.
+Without system cards and run metadata, results are not considered publishable.
 
 ## Known Limitations
 
@@ -329,4 +349,5 @@ docker compose up -d
 ./scripts/run-benchmark.sh
 ```
 
-Results directory contains all JSON metrics, system cards, and the generated report.
+Results directory contains all JSON metrics, copied system cards, run metadata, and the generated
+report.

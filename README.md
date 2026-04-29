@@ -24,41 +24,53 @@ REST. See [METHODOLOGY.md](METHODOLOGY.md) for the matrix and reporting rules.
 
 Latest two-server snapshot from April 28, 2026 on the 100K-point dataset. This is a 5-run median,
 baseline/no spatial-response-cache profile with 30s warmup and 30s measured windows per scenario.
-Both servers were run with bounded database admission/pool settings; exact image tags and
-environment variables are shown in the reproduction command below.
+Both servers used the strict bounded database profile: Honua active-query/pool settings were
+`6/6/3`, and GeoServer datastore pool settings were `6/3`. Exact image tags and environment
+variables are shown in the reproduction command below.
 
-Across the full report, all 204 comparable performance metric cells favored the Honua row. The
-table below keeps the raw values visible instead of repeating a winner label on every line.
-GeoServices `MapServer/export` has no GeoServer row in this harness profile. QGIS Server remains
-runnable in the harness, but it is omitted from this headline table because this snapshot focuses on
-the currently comparable Honua and GeoServer rows.
+Across the report, all 204 measured performance cells where both servers had data favored the Honua
+row, and the six comparable error-rate cells were ties at `0.0%`. The table below keeps raw values
+visible instead of repeating a winner label on every line. GeoServices `MapServer/export` has no
+GeoServer row in this harness profile. QGIS Server remains runnable in the harness, but it is
+omitted from this headline table because this snapshot focuses on the currently comparable Honua
+and GeoServer rows.
 
 | Track | Scenario | Honua | GeoServer |
 |---|---|---:|---:|
-| Attribute filter | LIKE | 1431.9 req/s, p95 9.2 ms | 51.6 req/s, p95 284.5 ms |
-| Spatial bbox | large bbox | 926.8 req/s, p95 16.4 ms | 26.2 req/s, p95 918.1 ms |
-| Concurrent mixed workload | 100 VUs | 1144.3 req/s, p99 205.2 ms | 49.9 req/s, p99 5772.9 ms |
-| WMS `GetMap` | medium bbox | 88.0 req/s, p95 149.4 ms | 23.3 req/s, p95 1419.2 ms |
-| WMS reprojection | large bbox | 93.3 req/s, p95 133.7 ms | 31.4 req/s, p95 441.2 ms |
-| WFS `GetFeature` | large bbox | 567.9 req/s, p95 33.0 ms | 145.1 req/s, p95 152.4 ms |
-| WFS filtered | LIKE | 1274.9 req/s, p95 7.6 ms | 28.3 req/s, p95 1238.2 ms |
-| WMS `GetFeatureInfo` | medium bbox | 2432.7 req/s, p95 5.8 ms | 141.7 req/s, p95 286.0 ms |
-| WMS filtered `GetMap` | range | 99.6 req/s, p95 190.1 ms | 14.2 req/s, p95 1916.1 ms |
-| GeoServices `FeatureServer/query` | medium bbox | 502.5 req/s, p95 26.5 ms | 7.3 req/s, p95 2713.4 ms |
-| GeoServices `MapServer/identify` | large bbox | 1589.2 req/s, p95 13.2 ms | 3.5 req/s, p95 9706.2 ms |
-| GeoServices `MapServer/export` | large bbox | 93.2 req/s, p95 161.2 ms | Not available |
+| Attribute filter | LIKE | 1632.8 req/s, p95 5.2 ms | 22.3 req/s, p95 959.3 ms |
+| Spatial bbox | large bbox | 1069.3 req/s, p95 15.5 ms | 19.5 req/s, p95 977.1 ms |
+| Concurrent mixed workload | 100 VUs | 1190.2 req/s, p99 201.4 ms | 96.2 req/s, p99 1793.2 ms |
+| WMS `GetMap` | medium bbox | 80.1 req/s, p95 186.4 ms | 30.5 req/s, p95 582.5 ms |
+| WMS reprojection | large bbox | 131.9 req/s, p95 99.3 ms | 9.3 req/s, p95 2356.7 ms |
+| WFS `GetFeature` | large bbox | 581.5 req/s, p95 29.0 ms | 57.8 req/s, p95 418.5 ms |
+| WFS filtered | LIKE | 1094.3 req/s, p95 13.2 ms | 54.6 req/s, p95 269.1 ms |
+| WMS `GetFeatureInfo` | medium bbox | 2808.9 req/s, p95 4.9 ms | 407.1 req/s, p95 53.7 ms |
+| WMS filtered `GetMap` | range | 171.4 req/s, p95 105.5 ms | 1.7 req/s, p95 11953.6 ms |
+| GeoServices `FeatureServer/query` | medium bbox | 937.2 req/s, p95 13.8 ms | 228.9 req/s, p95 71.7 ms |
+| GeoServices `MapServer/identify` | large bbox | 2868.9 req/s, p95 6.3 ms | 6.1 req/s, p95 2833.6 ms |
+| GeoServices `MapServer/export` | large bbox | 152.2 req/s, p95 108.6 ms | Not available |
 
-Full artifacts are under `results/20260428-064506/`, with the two-server report at
-`results/20260428-064506/report-honua-geoserver.md`. Response-shape audits are part of the report;
-some feature/native rows have payload metadata or property-key drift and should be described with
-those caveats in public claims.
+Full artifacts are under `results/20260428-192053/`, with the two-server report at
+`results/20260428-192053/report.md` and the action ledger at
+`results/20260428-192053/loss-ledger-final/loss-ledger.md`. Response-shape audits are part of the
+report; some feature/native rows have payload metadata or property-key drift and should be described
+with those caveats in public claims.
+
+Before publishing a new headline snapshot, run the fairness audit against the result directory:
+
+```bash
+python3 scripts/audit-fairness.py \
+  --results-dir results/20260428-192053 \
+  --servers honua,geoserver \
+  --strict-equal-db-budget
+```
 
 To regenerate the headline report from an existing result directory:
 
 ```bash
 python3 scripts/generate-report.py \
-  --results-dir results/20260428-064506 \
-  --output results/20260428-064506/report-honua-geoserver.md \
+  --results-dir results/20260428-192053 \
+  --output results/20260428-192053/report.md \
   --runs 5 \
   --servers honua,geoserver
 ```
@@ -66,13 +78,16 @@ python3 scripts/generate-report.py \
 To rerun the same two-server headline profile:
 
 ```bash
-HONUA_IMAGE=honua-geobench:trunk-09c2f54b-rendercopy1 \
-HONUA_MAX_CONCURRENT_QUERIES=8 \
-HONUA_MAX_CONNECTION_POOL_SIZE=8 \
-HONUA_MIN_CONNECTION_POOL_SIZE=2 \
+HONUA_IMAGE=honua-geobench:trunk-b650a321-rendergate2 \
+HONUA_MAX_CONCURRENT_QUERIES=6 \
+HONUA_MAX_CONNECTION_POOL_SIZE=6 \
+HONUA_MIN_CONNECTION_POOL_SIZE=3 \
+HONUA_ADAPTIVE_ADMISSION_ENABLED=false \
 GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
 GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
 GEOSERVER_GSR_ENABLED=1 \
+GEOSERVER_MAX_CONNECTIONS=6 \
+GEOSERVER_MIN_CONNECTIONS=3 \
 SERVERS="honua geoserver" \
 TESTS="attribute-filter spatial-bbox concurrent wms-getmap wms-reprojection wfs-getfeature wfs-filtered wms-getfeatureinfo wms-filtered geoservices-query geoservices-export geoservices-identify" \
 RUNS=5 \
@@ -391,10 +406,12 @@ recommendation is bounded admission first:
 - Treat Redis coordination as research, not a default. It is only justified if multi-node tests
   show that local fixed or adaptive caps cannot protect a shared PostGIS budget.
 
-The comparative profile remains intentionally bounded for both servers
+The runner defaults remain intentionally bounded for both servers
 (`HONUA_MAX_CONCURRENT_QUERIES=6`, `HONUA_MAX_CONNECTION_POOL_SIZE=6`,
-`GEOSERVER_MAX_CONNECTIONS=6`) so the benchmark does not trade away p99 latency through hidden
-database oversubscription.
+`HONUA_MIN_CONNECTION_POOL_SIZE=3`, `GEOSERVER_MAX_CONNECTIONS=6`,
+`GEOSERVER_MIN_CONNECTIONS=3`) so the benchmark does not trade away p99 latency through hidden
+database oversubscription. If a result overrides those values, publish it as a named profile and
+keep the exact values visible in the report metadata.
 
 Adaptive admission is benchmark-visible but off by default in the headline profile. The runner
 records server-specific adaptive settings in report metadata when a server exposes them. Enable
@@ -430,7 +447,7 @@ extension rows as current comparative gaps.
 See [METHODOLOGY.md](METHODOLOGY.md) for the complete fairness and reproducibility framework, including:
 
 - Identical resource constraints per server
-- 60-second warmup before all measurements
+- Declared warmup window before all measurements
 - 5 runs with median reporting
 - Mandatory system cards
 - Caching and connection pool policies

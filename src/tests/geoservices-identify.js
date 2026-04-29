@@ -7,6 +7,7 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import { durationToSeconds } from "./duration-helpers.js";
 import {
   buildGeoservicesIdentifyRequest,
   GEOSERVICES_QUERY_SIZES,
@@ -98,7 +99,7 @@ function buildScenarios() {
     },
   };
 
-  var offsetSeconds = parseInt(warmupDuration, 10);
+  var offsetSeconds = durationToSeconds(warmupDuration);
   SCENARIOS.forEach(function (scenario) {
     scenarios[scenario.id + "_identify"] = {
       executor: "constant-vus",
@@ -108,7 +109,7 @@ function buildScenarios() {
       tags: { bbox_size: scenario.id },
       startTime: String(offsetSeconds) + "s",
     };
-    offsetSeconds += parseInt(scenarioDuration, 10);
+    offsetSeconds += durationToSeconds(scenarioDuration);
   });
 
   return scenarios;

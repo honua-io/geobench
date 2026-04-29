@@ -13,6 +13,7 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import { durationToSeconds } from "./duration-helpers.js";
 import {
   buildGetFeatureRequest,
   randomWfsBbox,
@@ -65,7 +66,7 @@ function buildScenarios() {
     },
   };
 
-  var offsetSeconds = parseInt(warmupDuration, 10);
+  var offsetSeconds = durationToSeconds(warmupDuration);
   VARIANTS.forEach(function (variant) {
     var tags = {};
     tags[variant.tagName] = variant.tagValue;
@@ -77,7 +78,7 @@ function buildScenarios() {
       tags: tags,
       startTime: String(offsetSeconds) + "s",
     };
-    offsetSeconds += parseInt(scenarioDuration, 10);
+    offsetSeconds += durationToSeconds(scenarioDuration);
   });
 
   return scenarios;

@@ -709,6 +709,28 @@ with open(output_path, "w") as f:
 PY2
 }
 
+copy_system_cards() {
+  local cards_dir="${RESULTS_DIR}/system-cards"
+  mkdir -p "${cards_dir}"
+
+  local server
+  local card
+  for server in "${SERVERS[@]}"; do
+    case "${server}" in
+      honua) card="${PROJECT_DIR}/system-cards/honua.json" ;;
+      geoserver) card="${PROJECT_DIR}/system-cards/geoserver.json" ;;
+      qgis) card="${PROJECT_DIR}/system-cards/qgis-server.json" ;;
+      *) card="" ;;
+    esac
+
+    if [ -n "${card}" ] && [ -f "${card}" ]; then
+      cp "${card}" "${cards_dir}/"
+    else
+      echo "WARNING: no system card found for ${server}" >&2
+    fi
+  done
+}
+
 # ─── Main loop: one server at a time, fully isolated ─────────────────
 
 validate_cache_policy
@@ -728,6 +750,7 @@ if [ "${TOTAL_TESTS}" -eq 0 ]; then
 fi
 
 write_run_metadata
+copy_system_cards
 
 CURRENT=0
 
@@ -792,7 +815,11 @@ for server in "${SERVERS[@]}"; do
 
       if [ "${k6_status}" -ne 0 ]; then
         echo "    ERROR: k6 exited with status ${k6_status}"
-        exit "${k6_status}"
+        if [ "${CONTINUE_ON_K6_FAILURE:-0}" = "1" ]; then
+          echo "    Continuing because CONTINUE_ON_K6_FAILURE=1; result JSON is retained for diagnostics"
+        else
+          exit "${k6_status}"
+        fi
       fi
     done
   done
@@ -813,6 +840,27 @@ python3 "${SCRIPT_DIR}/generate-report.py" \
   --results-dir "${RESULTS_DIR}" \
   --output "${RESULTS_DIR}/report.md" \
   --runs "${RUNS}" 2>&1
+
+if [ -x "${SCRIPT_DIR}/audit-fairness.py" ]; then
+  echo "Auditing fairness..."
+  FAIRNESS_SERVERS="$(IFS=,; echo "${SERVERS[*]}")"
+  FAIRNESS_ARGS=(
+    --results-dir "${RESULTS_DIR}"
+    --servers "${FAIRNESS_SERVERS}"
+  )
+  if [ "${STRICT_EQUAL_DB_BUDGET:-0}" = "1" ]; then
+    FAIRNESS_ARGS+=(--strict-equal-db-budget)
+  fi
+  if [ "${STRICT_PAYLOAD_COMPARABLE:-0}" = "1" ]; then
+    FAIRNESS_ARGS+=(--strict-payload-comparable)
+  fi
+  python3 "${SCRIPT_DIR}/audit-fairness.py" "${FAIRNESS_ARGS[@]}" 2>&1 || {
+    status="$?"
+    if [ "${STRICT_FAIRNESS:-0}" = "1" ]; then
+      exit "${status}"
+    fi
+  }
+fi
 
 if [ "${DIAGNOSTICS}" = "1" ]; then
   python3 "${SCRIPT_DIR}/generate-diagnostics-summary.py" \

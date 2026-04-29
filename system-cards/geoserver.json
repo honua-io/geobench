@@ -15,16 +15,16 @@
     "cpus": 4,
     "memory": "4g"
   },
-  "configTier": "default",
-  "jvmFlags": "kartoza image defaults",
+  "configTier": "bounded-baseline",
+  "jvmFlags": "GeoServer image defaults",
   "connectionPooling": {
-    "minConnections": 5,
-    "maxConnections": 20,
+    "minConnections": 3,
+    "maxConnections": 6,
     "looseBbox": false,
     "preparedStatements": false,
     "encodeFunctions": true
   },
   "spatialIndex": "GiST (PostGIS)",
   "geoWebCache": "disabled for benchmark layers",
-  "notes": "GeoWebCache explicitly disabled for bench_points layer. Default JVM heap from kartoza image."
+  "notes": "GeoWebCache explicitly disabled for non-WMTS bench_points rows. GeoServer serves the typed bench_points source table with the dataset btree/GiST indexes. Exact image tag and any run-time pool overrides are recorded in benchmark-metadata.json."
 }

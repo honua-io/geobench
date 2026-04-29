@@ -1,14 +1,20 @@
 # GeoBench Matrix Status
 
-Historical matrix status for the earlier rerun campaign. The harness now has stricter cache-tier
-guardrails, viewport-bbox semantics, and concurrent workload breakdown reporting, so these reports
-should be treated as prior artifacts until a fresh 5-run matrix is generated.
+Current and historical matrix status. The current publishable two-server matrix uses the stricter
+cache-tier guardrails, viewport-bbox semantics, concurrent workload breakdown reporting, and strict
+equal database budget.
 
 ## Current Harness Reruns
 
 | Family | Rows | Servers | Status | Report | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Common Standards: Feature | `attribute-filter`, `spatial-bbox`, `concurrent` | Honua, GeoServer | Complete | `results/20260425-213925/report.md` | Fresh 5-run baseline on the current cache-tier/reporting harness with Honua image `honua-geobench:trunk-50847050-harness1`; QGIS still pending for the full three-server matrix |
+| Full two-server headline matrix | `attribute-filter`, `spatial-bbox`, `concurrent`, `wms-getmap`, `wms-reprojection`, `wfs-getfeature`, `wfs-filtered`, `wms-getfeatureinfo`, `wms-filtered`, `geoservices-query`, `geoservices-export`, `geoservices-identify` | Honua, GeoServer where supported | Complete | `results/20260428-192053/report.md` | Strict bounded DB profile: Honua `6/6/3`, GeoServer `6/3`; 204 comparable performance cells favored Honua, six comparable error-rate cells tied at `0.0%`, and GeoServer has no comparable `geoservices-export` row |
+| Loss/action ledger | Full two-server headline matrix | Honua vs GeoServer | Complete | `results/20260428-192053/loss-ledger-final/loss-ledger.md` | No performance losses; retained rows are three GeoServer-unsupported `geoservices-export` support gaps and six zero-error ties |
+
+## Historical Reports
+
+The reports below are prior artifacts from earlier rerun campaigns. Keep them for regression
+context, but use `results/20260428-192053/` for current headline claims.
 
 ## Authoritative Reports
 

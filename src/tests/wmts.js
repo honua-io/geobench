@@ -5,6 +5,7 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import { durationToSeconds } from "./duration-helpers.js";
 import { validateImageResponse } from "./raster-helpers.js";
 import { buildWmtsGetTileRequest } from "./wms-helpers.js";
 
@@ -66,7 +67,7 @@ function buildScenarios() {
     },
   };
 
-  var offsetSeconds = parseInt(warmupDuration, 10);
+  var offsetSeconds = durationToSeconds(warmupDuration);
   SCENARIOS.forEach(function (scenario) {
     scenarios[scenario.id + "_tile"] = {
       executor: "constant-vus",
@@ -76,7 +77,7 @@ function buildScenarios() {
       tags: { tile_level: scenario.id },
       startTime: String(offsetSeconds) + "s",
     };
-    offsetSeconds += parseInt(scenarioDuration, 10);
+    offsetSeconds += durationToSeconds(scenarioDuration);
   });
 
   return scenarios;

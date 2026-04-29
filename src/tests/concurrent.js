@@ -6,6 +6,7 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
+import { durationToSeconds } from "./duration-helpers.js";
 import {
   deterministicChoice,
   deterministicInt,
@@ -88,7 +89,7 @@ function buildScenarios() {
     },
   };
 
-  var offsetSeconds = parseInt(warmupDuration, 10);
+  var offsetSeconds = durationToSeconds(warmupDuration);
   concurrencyLevels.forEach(function (level) {
     var vus = parseInt(level, 10);
     scenarios["vus_" + level] = {
@@ -99,7 +100,7 @@ function buildScenarios() {
       tags: { concurrency: level },
       startTime: String(offsetSeconds) + "s",
     };
-    offsetSeconds += parseInt(scenarioDuration, 10);
+    offsetSeconds += durationToSeconds(scenarioDuration);
   });
 
   return scenarios;
