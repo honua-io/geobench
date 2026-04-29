@@ -13,7 +13,7 @@ benchmark definitions, system cards, and artifacts that anyone can rerun.
 | Server | Runtime | Image |
 |--------|---------|-------|
 | [Honua Server](https://github.com/honua-io/honua-server) | .NET 10 | `honuaio/honua-server:latest` |
-| [GeoServer](https://geoserver.org/) | Java / JVM | `docker.osgeo.org/geoserver:2.28.0` |
+| [GeoServer](https://geoserver.org/) | Java / JVM | `docker.osgeo.org/geoserver:2.28.x` for the headline profile |
 | [QGIS Server](https://qgis.org/en/site/about/features.html#qgis-server) | C++ / Qt | `qgis/qgis-server:3.38` |
 
 GeoBench now supports separate tracks for **common feature APIs**, **common raster APIs**,
@@ -28,6 +28,12 @@ profile with 30s warmup and 30s measured windows per scenario. Both servers used
 database profile: Honua active-query/pool settings were `6/6/3`, and GeoServer datastore pool
 settings were `6/3`. Exact image tags and environment variables are shown in the reproduction
 command below.
+
+GeoServer was run as `docker.osgeo.org/geoserver:2.28.x` with
+`GEOSERVER_COMMUNITY_EXTENSIONS=gsr` for the GeoServices rows. The local image used for this
+snapshot resolved to
+`docker.osgeo.org/geoserver@sha256:48fcd9488f35c29ef8b8dd2d0b6ae491d1bef73cea83f0ef27f6fa124ddcf245`
+and was created on April 20, 2026.
 
 Across the report, all 204 measured performance cells where both servers had data favored the Honua
 row, and the six comparable error-rate cells were ties at `0.0%`. The table below keeps raw values
@@ -93,7 +99,7 @@ HONUA_MAX_CONCURRENT_QUERIES=6 \
 HONUA_MAX_CONNECTION_POOL_SIZE=6 \
 HONUA_MIN_CONNECTION_POOL_SIZE=3 \
 HONUA_ADAPTIVE_ADMISSION_ENABLED=false \
-GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver@sha256:48fcd9488f35c29ef8b8dd2d0b6ae491d1bef73cea83f0ef27f6fa124ddcf245 \
 GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
 GEOSERVER_GSR_ENABLED=1 \
 GEOSERVER_MAX_CONNECTIONS=6 \

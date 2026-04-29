@@ -1,7 +1,8 @@
 {
   "name": "GeoServer",
-  "version": "2.28.0",
-  "image": "docker.osgeo.org/geoserver:2.28.0",
+  "version": "2.28.x",
+  "image": "docker.osgeo.org/geoserver:2.28.x",
+  "imageDigest": "docker.osgeo.org/geoserver@sha256:48fcd9488f35c29ef8b8dd2d0b6ae491d1bef73cea83f0ef27f6fa124ddcf245",
   "runtime": "Java (JVM, Jetty)",
   "language": "Java",
   "ogcApiFeatures": {
@@ -17,6 +18,10 @@
   },
   "configTier": "bounded-baseline",
   "jvmFlags": "GeoServer image defaults",
+  "extensions": {
+    "stable": ["ogcapi-features"],
+    "community": ["gsr"]
+  },
   "connectionPooling": {
     "minConnections": 3,
     "maxConnections": 6,
@@ -26,5 +31,5 @@
   },
   "spatialIndex": "GiST (PostGIS)",
   "geoWebCache": "disabled for benchmark layers",
-  "notes": "GeoWebCache explicitly disabled for non-WMTS bench_points rows. GeoServer serves the typed bench_points source table with the dataset btree/GiST indexes. Exact image tag and any run-time pool overrides are recorded in benchmark-metadata.json."
+  "notes": "Headline April 2026 runs use the 2.28.x nightly image with the GSR community extension enabled. GeoWebCache is explicitly disabled for non-WMTS bench_points rows. GeoServer serves the typed bench_points source table with the dataset btree/GiST indexes. Exact image tag and any run-time pool overrides are recorded in benchmark-metadata.json."
 }
