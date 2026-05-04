@@ -2,6 +2,8 @@
 
 Open, vendor-neutral benchmark suite for geospatial feature servers. Think [TechEmpower](https://www.techempower.com/benchmarks/) for GIS.
 
+Current benchmark capabilities are summarized in [docs/features/README.md](docs/features/README.md).
+
 ## Why
 
 There's no standardized way to compare geospatial feature server performance. Published numbers are
