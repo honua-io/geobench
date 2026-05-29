@@ -5,7 +5,7 @@ This map summarizes source-backed benchmark capabilities in this repository.
 ## Implemented Surfaces
 
 - Vendor-neutral benchmark harness for Honua Server, GeoServer, and QGIS Server.
-- Common feature API tracks: attribute filters, spatial bbox queries, concurrent workloads, and row-shape checks.
+- Common feature API tracks: attribute filters, spatial bbox queries, deep pagination, concurrent workloads, and row-shape checks.
 - Common raster API tracks: WMS `GetMap`, WMS reprojection, WMS `GetFeatureInfo`, WMTS tiles, and WCS `GetCoverage`.
 - Secondary standards and native tracks: WFS filtered rows, GeoServices `FeatureServer/query`, `MapServer/identify`, and `MapServer/export`.
 - Reproducible datasets, system cards, run ledgers, result reports, fairness audits, and response-shape audits.

@@ -282,6 +282,13 @@ build_k6_env_flags() {
     CONCURRENT_WARMUP
     CONCURRENT_LEVELS
     CONCURRENT_WORKLOADS
+    PAGINATION_DURATION
+    PAGINATION_WARMUP
+    PAGINATION_VUS
+    PAGINATION_SCENARIOS
+    PAGINATION_SHALLOW_OFFSET
+    PAGINATION_MEDIUM_OFFSET
+    PAGINATION_DEEP_OFFSET
     LOG_FAILURES
     WFS_FILTERED_DURATION
     WFS_FILTERED_WARMUP
@@ -363,7 +370,7 @@ supports_test_for_server() {
   local test="$2"
 
   case "${test}" in
-    attribute-filter|spatial-bbox|concurrent|wfs-getfeature)
+    attribute-filter|spatial-bbox|concurrent|pagination|wfs-getfeature)
       return 0
       ;;
     wfs-filtered)
@@ -426,7 +433,7 @@ supports_test_for_server() {
 
 is_cache_sensitive_spatial_test() {
   case "$1" in
-    spatial-bbox|concurrent|wfs-getfeature|wms-getmap|wms-reprojection|wms-getfeatureinfo|wms-filtered|wcs|geoservices-query|geoservices-query-diagnostics|geoservices-export|geoservices-identify)
+    spatial-bbox|concurrent|pagination|wfs-getfeature|wms-getmap|wms-reprojection|wms-getfeatureinfo|wms-filtered|wcs|geoservices-query|geoservices-query-diagnostics|geoservices-export|geoservices-identify)
       return 0
       ;;
     *)
@@ -616,6 +623,7 @@ TEST_PROFILES = {
     "attribute-filter": ("ATTRIBUTE_FILTER_DURATION", "120s", "ATTRIBUTE_FILTER_WARMUP", "60s", "ATTRIBUTE_FILTER_VUS", "10", "ATTRIBUTE_FILTER_SCENARIOS", "equality,range,like"),
     "spatial-bbox": ("SPATIAL_BBOX_DURATION", "120s", "SPATIAL_BBOX_WARMUP", "60s", "SPATIAL_BBOX_VUS", "10", "SPATIAL_BBOX_SCENARIOS", "small,medium,large"),
     "concurrent": ("CONCURRENT_DURATION", "120s", "CONCURRENT_WARMUP", "60s", None, None, None, None),
+    "pagination": ("PAGINATION_DURATION", "120s", "PAGINATION_WARMUP", "60s", "PAGINATION_VUS", "10", "PAGINATION_SCENARIOS", "shallow,medium,deep"),
     "wfs-getfeature": ("WFS_GETFEATURE_DURATION", "120s", "WFS_GETFEATURE_WARMUP", "60s", "WFS_GETFEATURE_VUS", "10", "WFS_GETFEATURE_SCENARIOS", "base,small,medium,large"),
     "wfs-filtered": ("WFS_FILTERED_DURATION", "120s", "WFS_FILTERED_WARMUP", "60s", "WFS_FILTERED_VUS", "10", "WFS_FILTERED_SCENARIOS", "equality,range,like"),
     "wms-getmap": ("WMS_GETMAP_DURATION", "120s", "WMS_GETMAP_WARMUP", "60s", "WMS_GETMAP_VUS", "10", "WMS_GETMAP_SCENARIOS", "small,medium,large"),

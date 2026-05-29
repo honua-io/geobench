@@ -382,6 +382,27 @@ def feature_requests(server: ServerConfig) -> list[dict[str, str]]:
     return []
 
 
+def pagination_requests(server: ServerConfig) -> list[dict[str, str]]:
+    # Deep-offset page sample: skip ~90,000 rows of the 100K dataset, ordered by id.
+    deep_offset = "90000"
+    if server.name == "honua":
+        base = f"{server.base_url}/ogc/features/collections/1/items"
+        return [
+            {"family": "feature", "protocol": "ogc-api", "suite": "pagination", "request": "deep", "url": base + f"?f=json&limit=100&offset={deep_offset}&sortby=id"},
+        ]
+    if server.name == "geoserver":
+        base = f"{server.base_url}/geoserver/ogc/features/v1/collections/geobench:bench_points/items"
+        return [
+            {"family": "feature", "protocol": "ogc-api", "suite": "pagination", "request": "deep", "url": base + f"?f=json&limit=100&startIndex={deep_offset}&sortby=id"},
+        ]
+    if server.name == "qgis":
+        base = f"{server.base_url}/wfs3/collections/bench_points/items"
+        return [
+            {"family": "feature", "protocol": "ogc-api", "suite": "pagination", "request": "deep", "url": base + f"?limit=100&offset={deep_offset}&SORTBY=id"},
+        ]
+    return []
+
+
 def wfs_requests(server: ServerConfig) -> list[dict[str, str]]:
     sample_bbox = "139.2325,35.2325,139.3325,35.3325"
     if server.name == "honua":
@@ -989,6 +1010,8 @@ def main() -> int:
     requests: list[dict[str, str]] = []
     if any(test in enabled_tests for test in ("attribute-filter", "spatial-bbox", "concurrent")):
         requests.extend(feature_requests(server))
+    if "pagination" in enabled_tests:
+        requests.extend(pagination_requests(server))
     if "geoservices-query" in enabled_tests:
         requests.extend(geoservices_feature_requests(server))
     if "geoservices-query-diagnostics" in enabled_tests:

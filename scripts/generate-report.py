@@ -39,6 +39,7 @@ DEFAULT_CONCURRENT_MIX = {
 SPATIAL_CACHE_SENSITIVE_TESTS = {
     "spatial-bbox",
     "concurrent",
+    "pagination",
     "wfs-getfeature",
     "wms-getmap",
     "wms-reprojection",
@@ -80,6 +81,16 @@ TEST_DEFINITIONS = {
             {"id": "10", "label": "10", "tag_key": "concurrency", "tag_value": "10"},
             {"id": "50", "label": "50", "tag_key": "concurrency", "tag_value": "50"},
             {"id": "100", "label": "100", "tag_key": "concurrency", "tag_value": "100"},
+        ],
+    },
+    "pagination": {
+        "group": "Common Standards: Feature",
+        "heading": "### OGC API Features Pagination",
+        "first_column": "Page Depth",
+        "scenarios": [
+            {"id": "shallow", "label": "shallow", "tag_key": "page_depth", "tag_value": "shallow"},
+            {"id": "medium", "label": "medium", "tag_key": "page_depth", "tag_value": "medium"},
+            {"id": "deep", "label": "deep", "tag_key": "page_depth", "tag_value": "deep"},
         ],
     },
     "wms-getmap": {
@@ -210,7 +221,7 @@ TEST_DEFINITIONS = {
     },
 }
 REPORT_GROUPS = [
-    ("Common Standards: Feature", ["attribute-filter", "spatial-bbox", "concurrent"]),
+    ("Common Standards: Feature", ["attribute-filter", "spatial-bbox", "pagination", "concurrent"]),
     ("Common Standards: Raster", ["wms-getmap", "wms-reprojection"]),
     ("Secondary Standards", ["wfs-getfeature", "wfs-filtered", "wms-getfeatureinfo", "wms-filtered", "wmts", "wcs"]),
     ("Supplemental Native Protocols", ["geoservices-query", "geoservices-query-diagnostics", "geoservices-export", "geoservices-identify"]),
