@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [trunk]
+  pull_request:
+    branches: [trunk]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (lint + compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ruff
+        run: pipx install ruff
+
+      - name: Ruff lint
+        run: ruff check scripts
+
+      - name: Compile-check all scripts
+        run: python -m py_compile scripts/*.py
+
+  javascript:
+    name: k6 scripts (syntax check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Syntax-check k6 test scripts
+        run: |
+          status=0
+          for f in src/tests/*.js; do
+            if ! node --check "$f"; then
+              echo "Syntax error in $f"
+              status=1
+            fi
+          done
+          exit $status
+
+  shell:
+    name: Shell scripts (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        run: |
+          shopt -s globstar nullglob
+          # severity=warning: flag real bugs while allowing intentional,
+          # behavior-load-bearing word-splitting (e.g. SERVERS / curl auth args).
+          shellcheck --severity=warning scripts/*.sh tests/*.sh adapters/**/*.sh

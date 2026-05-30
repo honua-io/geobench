@@ -3,7 +3,7 @@
 # Validates the entire pipeline without running a full benchmark.
 set -euo pipefail
 
-SERVERS=(${SERVERS:-honua geoserver qgis})
+IFS=' ' read -r -a SERVERS <<< "${SERVERS:-honua geoserver qgis}"
 FAILED=0
 
 echo "=== GeoBench Smoke Test ==="

@@ -12,7 +12,6 @@ import json
 import os
 import statistics
 import subprocess
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path

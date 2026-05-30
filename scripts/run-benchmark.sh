@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 TIMESTAMP="${RESULT_TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}"
 RESULTS_DIR="${PROJECT_DIR}/results/${TIMESTAMP}"
-SERVERS=(${SERVERS:-honua geoserver qgis})
+IFS=' ' read -r -a SERVERS <<< "${SERVERS:-honua geoserver qgis}"
 if [ -n "${TESTS:-}" ]; then
   IFS=' ' read -r -a TESTS <<< "${TESTS}"
 else
