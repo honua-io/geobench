@@ -1,5 +1,7 @@
 # GeoBench
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/honua-io/geobench/badge)](https://scorecard.dev/viewer/?uri=github.com/honua-io/geobench)
+
 GeoBench is an open, vendor-neutral benchmark suite for geospatial feature and
 map servers. It provides reproducible workloads, system cards, response-shape
 audits, and run artifacts so teams can compare server behavior under the same
