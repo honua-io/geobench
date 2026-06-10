@@ -19,7 +19,7 @@ unrelated protocols into a single "fastest server" claim.
 
 | Track | Coverage |
 |-------|----------|
-| Common feature APIs | OGC API Features reads, attribute filters, bbox filters, and mixed concurrent workloads |
+| Common feature APIs | OGC API Features reads, attribute filters, bbox filters, deep pagination, and mixed concurrent workloads |
 | Common raster APIs | WMS `GetMap`, WMS reprojection, and WMS `GetFeatureInfo` |
 | Secondary standards | WFS `GetFeature`, filtered WFS, filtered WMS `GetMap`, WMTS, and experimental WCS |
 | Supplemental native protocols | GeoServices REST `FeatureServer/query`, `MapServer/identify`, and `MapServer/export` |
@@ -215,6 +215,9 @@ response-shape audits, and a generated report.
 Select benchmark families with `TESTS` and server targets with `SERVERS`:
 
 ```bash
+# OGC API Features deep-pagination track
+TESTS="pagination" SERVERS="honua geoserver qgis" ./scripts/run-benchmark.sh
+
 # Common raster track
 TESTS="wms-getmap" SERVERS="honua geoserver qgis" ./scripts/run-benchmark.sh
 
@@ -265,6 +268,7 @@ monitor samples, and `diagnostics/comparison.json`.
 |----------|-------------|------------:|---------------------------:|
 | `attribute-filter` | Equality, range, and literal-prefix LIKE queries via CQL2 | 10 | 120s each |
 | `spatial-bbox` | Small, medium, and large viewport bounding-box queries | 10 | 120s each |
+| `pagination` | OGC API Features `offset`/`startIndex` paging at shallow, medium, and deep depths | 10 | 120s each |
 | `concurrent` | Mixed workload at 1, 10, 50, and 100 VUs | 1-100 | 120s each |
 | `wms-getmap` | WMS raster rendering on the common standards track | 10 | 120s each |
 | `wms-reprojection` | WMS `GetMap` with deterministic `EPSG:3857` reprojection from `EPSG:4326` source data | 10 | 120s each |

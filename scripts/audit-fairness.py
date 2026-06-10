@@ -14,6 +14,7 @@ from typing import Any
 SPATIAL_CACHE_SENSITIVE_TESTS = {
     "spatial-bbox",
     "concurrent",
+    "pagination",
     "wfs-getfeature",
     "wms-getmap",
     "wms-reprojection",
@@ -34,7 +35,7 @@ SERVER_CARD_FILES = {
 
 
 def supports_test(server: str, test: str) -> bool:
-    if test in {"attribute-filter", "spatial-bbox", "concurrent", "wfs-getfeature"}:
+    if test in {"attribute-filter", "spatial-bbox", "concurrent", "pagination", "wfs-getfeature"}:
         return True
     if test in {"wfs-filtered", "wms-filtered"}:
         return server in {"honua", "geoserver"}
