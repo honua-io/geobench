@@ -152,6 +152,9 @@ jobs:
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
         run: |
+          # Capture the exit code without failing this step so that subsequent
+          # steps (artifact upload, summary) still run.  The "Fail on regression"
+          # step below will surface the failure with a clear message.
           set +e
           python3 scripts/check-regression.py \
             --results-dir "results/${RESULT_TIMESTAMP}" \
@@ -162,7 +165,6 @@ jobs:
             --cold-start "results/${RESULT_TIMESTAMP}/honua-cold-start.json"
           exit_code=$?
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
-          exit "${exit_code}"
 
       - name: Save results as new baseline
         if: env.SAVE_BASELINE == 'true'
