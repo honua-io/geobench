@@ -161,6 +161,49 @@ def save_baseline(
     print(f"Baseline saved to {output}")
 
 
+def validate_results_complete(
+    results_dir: Path,
+    server: str,
+    tests: list[str],
+    expected_runs: int,
+    cold_start_path: Path | None,
+) -> list[str]:
+    """Return validation failures for missing result files or tracked metrics."""
+    failures: list[str] = []
+
+    for test in tests:
+        run_files = sorted(results_dir.glob(f"{server}-{test}-run*.json"))
+        if not run_files:
+            failures.append(f"MISSING {server}/{test}: no result files found")
+            continue
+        if expected_runs > 0 and len(run_files) < expected_runs:
+            failures.append(
+                f"MISSING {server}/{test}: expected {expected_runs} result files, found {len(run_files)}"
+            )
+
+        for result_key, baseline_key, _ in TRACKED_METRICS:
+            if aggregate_runs(run_files, result_key) is None:
+                failures.append(f"MISSING {server}/{test} {baseline_key}: metric not present in result files")
+
+    if cold_start_path:
+        if not cold_start_path.exists():
+            failures.append(f"MISSING cold-start results: {cold_start_path}")
+        else:
+            try:
+                with cold_start_path.open() as f:
+                    cs = json.load(f)
+            except Exception as exc:
+                failures.append(f"INVALID cold-start results {cold_start_path}: {exc}")
+            else:
+                for cs_key, _ in COLD_START_TRACKED:
+                    section_key, sub_key = cs_key.split(".", 1)
+                    section = cs.get(section_key, {})
+                    if not isinstance(section, dict) or section.get(sub_key) is None:
+                        failures.append(f"MISSING cold_start {cs_key}: metric not present")
+
+    return failures
+
+
 def check_regression(
     results_dir: Path,
     baseline: dict,
@@ -282,6 +325,12 @@ def main() -> int:
         help="Path to cold-start JSON produced by measure-cold-start.sh.",
     )
     parser.add_argument(
+        "--expected-runs",
+        type=int,
+        default=0,
+        help="Require at least this many result JSON files per selected test.",
+    )
+    parser.add_argument(
         "--save-baseline",
         type=Path,
         default=None,
@@ -297,6 +346,19 @@ def main() -> int:
     results_dir = args.results_dir
     if not results_dir.exists():
         print(f"ERROR: results directory not found: {results_dir}", file=sys.stderr)
+        return 1
+
+    completeness_failures = validate_results_complete(
+        results_dir=results_dir,
+        server=args.server,
+        tests=args.tests,
+        expected_runs=args.expected_runs,
+        cold_start_path=args.cold_start,
+    )
+    if completeness_failures:
+        print(f"FAILED — {len(completeness_failures)} completeness issue(s) detected:")
+        for failure in completeness_failures:
+            print(f"  {failure}")
         return 1
 
     if args.save_baseline:

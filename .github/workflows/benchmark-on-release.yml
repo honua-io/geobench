@@ -161,13 +161,14 @@ jobs:
             --baseline "results/baselines/honua-baseline.json" \
             --server honua \
             --tests attribute-filter spatial-bbox concurrent \
+            --expected-runs "${RUNS}" \
             --threshold "${REGRESSION_THRESHOLD}" \
             --cold-start "results/${RESULT_TIMESTAMP}/honua-cold-start.json"
           exit_code=$?
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
 
       - name: Save results as new baseline
-        if: env.SAVE_BASELINE == 'true'
+        if: env.SAVE_BASELINE == 'true' && steps.regression.outputs.exit_code == '0'
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
         run: |
@@ -175,6 +176,7 @@ jobs:
             --results-dir "results/${RESULT_TIMESTAMP}" \
             --server honua \
             --tests attribute-filter spatial-bbox concurrent \
+            --expected-runs "${RUNS}" \
             --cold-start "results/${RESULT_TIMESTAMP}/honua-cold-start.json" \
             --save-baseline "results/baselines/honua-baseline.json" \
             --release-tag "${{ steps.image.outputs.tag }}"
