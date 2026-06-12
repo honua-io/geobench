@@ -46,7 +46,7 @@ on:
         default: 'false'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: geobench-release-${{ github.event.client_payload.release_tag || github.event.inputs.release_tag }}
@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GEOBENCH_RESULTS_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GEOBENCH_RESULTS_PUSH_TOKEN }}
 
       - name: Resolve Honua image reference
         id: image
