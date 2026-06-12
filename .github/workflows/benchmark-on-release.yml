@@ -1,0 +1,253 @@
+name: Per-Release Benchmark (Honua Server)
+
+# Triggered by honua-server on each release tag via repository_dispatch, or
+# manually via workflow_dispatch for ad-hoc replays.
+#
+# Responsibilities:
+#   1. Run the benchmark suite against the tagged honua-server image.
+#   2. Measure cold-start latency (server startup → first successful request).
+#   3. Compare p50/p95/p99 latency, RPS, and error rate against the stored
+#      baseline and fail the job when any metric regresses beyond the threshold.
+#   4. Persist results and the updated baseline as workflow artifacts and as a
+#      commit to results/releases/ in this repo.
+#
+# Secrets required (set in geobench repo settings):
+#   GEOBENCH_RESULTS_PUSH_TOKEN  — PAT with contents:write on this repo, used
+#                                   to commit the results and baseline back.
+#
+# The baseline JSON is stored at results/baselines/honua-baseline.json and
+# committed to this repo so it persists across workflow runs without external
+# storage.
+
+on:
+  repository_dispatch:
+    types: [honua-server-release]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'honua-server release tag (e.g. v1.2.3). Used as image tag and results key.'
+        required: true
+        default: 'latest'
+      honua_image:
+        description: 'Full Docker image reference to benchmark. Defaults to ghcr.io/honua-io/honua-server:<tag>.'
+        required: false
+        default: ''
+      regression_threshold:
+        description: 'Regression budget as a decimal fraction (default 0.20 = 20%).'
+        required: false
+        default: '0.20'
+      runs:
+        description: 'k6 runs per test category (default 3).'
+        required: false
+        default: '3'
+      save_baseline:
+        description: 'Commit the results as the new baseline (true/false). Only set true on clean stable releases.'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geobench-release-${{ github.event.client_payload.release_tag || github.event.inputs.release_tag }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.client_payload.release_tag || github.event.inputs.release_tag || 'latest' }}
+  HONUA_IMAGE_INPUT: ${{ github.event.client_payload.honua_image || github.event.inputs.honua_image || '' }}
+  REGRESSION_THRESHOLD: ${{ github.event.client_payload.regression_threshold || github.event.inputs.regression_threshold || '0.20' }}
+  RUNS: ${{ github.event.client_payload.runs || github.event.inputs.runs || '3' }}
+  SAVE_BASELINE: ${{ github.event.client_payload.save_baseline || github.event.inputs.save_baseline || 'false' }}
+  # Honua-only run (single server, core test tracks).
+  SERVERS: honua
+  TESTS: attribute-filter spatial-bbox concurrent
+  # Shortened warmup / duration for CI (full soak is for nightly deep-dive).
+  ATTRIBUTE_FILTER_WARMUP: 30s
+  ATTRIBUTE_FILTER_DURATION: 60s
+  SPATIAL_BBOX_WARMUP: 30s
+  SPATIAL_BBOX_DURATION: 60s
+  CONCURRENT_WARMUP: 30s
+  CONCURRENT_DURATION: 60s
+  # Skip shape audit in CI to reduce runtime.
+  AUDIT_SHAPES: '0'
+
+jobs:
+  benchmark:
+    name: Benchmark ${{ github.event.client_payload.release_tag || github.event.inputs.release_tag || 'latest' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout geobench
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GEOBENCH_RESULTS_PUSH_TOKEN }}
+
+      - name: Resolve Honua image reference
+        id: image
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG}"
+          if [ -n "${HONUA_IMAGE_INPUT}" ]; then
+            image="${HONUA_IMAGE_INPUT}"
+          elif [ "${tag}" = "latest" ]; then
+            image="ghcr.io/honua-io/honua-server:latest"
+          else
+            image="ghcr.io/honua-io/honua-server:${tag}"
+          fi
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Using image: ${image}"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Pull Honua image
+        run: |
+          echo "Pulling ${{ steps.image.outputs.image }} ..."
+          docker pull "${{ steps.image.outputs.image }}"
+
+      - name: Generate benchmark dataset
+        run: python3 data/small/generate.py
+
+      - name: Set RESULT_TIMESTAMP
+        id: ts
+        run: echo "ts=$(date +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Run benchmark suite
+        env:
+          HONUA_IMAGE: ${{ steps.image.outputs.image }}
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+        run: |
+          RUNS="${RUNS}" \
+          SERVERS="${SERVERS}" \
+          TESTS="${TESTS}" \
+          AUDIT_SHAPES="${AUDIT_SHAPES}" \
+          ATTRIBUTE_FILTER_WARMUP="${ATTRIBUTE_FILTER_WARMUP}" \
+          ATTRIBUTE_FILTER_DURATION="${ATTRIBUTE_FILTER_DURATION}" \
+          SPATIAL_BBOX_WARMUP="${SPATIAL_BBOX_WARMUP}" \
+          SPATIAL_BBOX_DURATION="${SPATIAL_BBOX_DURATION}" \
+          CONCURRENT_WARMUP="${CONCURRENT_WARMUP}" \
+          CONCURRENT_DURATION="${CONCURRENT_DURATION}" \
+          CONTINUE_ON_K6_FAILURE=1 \
+          bash scripts/run-benchmark.sh
+
+      - name: Measure cold-start latency
+        env:
+          HONUA_IMAGE: ${{ steps.image.outputs.image }}
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+        run: |
+          COLD_START_RUNS=3 \
+          COLD_START_OUTPUT="results/${{ steps.ts.outputs.ts }}/honua-cold-start.json" \
+          bash scripts/measure-cold-start.sh
+
+      - name: Check for regressions
+        id: regression
+        env:
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+        run: |
+          # Capture the exit code without failing this step so that subsequent
+          # steps (artifact upload, summary) still run.  The "Fail on regression"
+          # step below will surface the failure with a clear message.
+          set +e
+          python3 scripts/check-regression.py \
+            --results-dir "results/${RESULT_TIMESTAMP}" \
+            --baseline "results/baselines/honua-baseline.json" \
+            --server honua \
+            --tests attribute-filter spatial-bbox concurrent \
+            --expected-runs "${RUNS}" \
+            --threshold "${REGRESSION_THRESHOLD}" \
+            --cold-start "results/${RESULT_TIMESTAMP}/honua-cold-start.json"
+          exit_code=$?
+          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+
+      - name: Save results as new baseline
+        if: env.SAVE_BASELINE == 'true' && steps.regression.outputs.exit_code == '0'
+        env:
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+        run: |
+          python3 scripts/check-regression.py \
+            --results-dir "results/${RESULT_TIMESTAMP}" \
+            --server honua \
+            --tests attribute-filter spatial-bbox concurrent \
+            --expected-runs "${RUNS}" \
+            --cold-start "results/${RESULT_TIMESTAMP}/honua-cold-start.json" \
+            --save-baseline "results/baselines/honua-baseline.json" \
+            --release-tag "${{ steps.image.outputs.tag }}"
+          echo "Baseline updated from ${{ steps.image.outputs.tag }}"
+
+      - name: Copy results to release archive
+        env:
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+        run: |
+          tag="${RELEASE_TAG}"
+          archive="results/releases/${tag}"
+          mkdir -p "${archive}"
+          cp -r "results/${RESULT_TIMESTAMP}/." "${archive}/"
+          echo "Results archived to ${archive}"
+
+      - name: Commit results and baseline
+        env:
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+        run: |
+          set -euo pipefail
+          git config user.name "Mike McDougall"
+          git config user.email "mike@honua.io"
+
+          # Stage archived release results.
+          tag="${RELEASE_TAG}"
+          git add "results/releases/${tag}/" || true
+
+          # Stage updated baseline if save_baseline was requested.
+          if [ "${SAVE_BASELINE}" = "true" ]; then
+            git add "results/baselines/honua-baseline.json" || true
+          fi
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit (results directory may be gitignored)."
+          else
+            git commit -m "bench: record ${tag} benchmark results"
+            git push origin HEAD:trunk
+          fi
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: geobench-results-${{ steps.image.outputs.tag }}-${{ steps.ts.outputs.ts }}
+          path: results/${{ steps.ts.outputs.ts }}/
+          retention-days: 90
+
+      - name: Summarise results
+        if: always()
+        env:
+          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          echo "## Benchmark Results — ${IMAGE_TAG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          report="results/${RESULT_TIMESTAMP}/report.md"
+          if [ -f "${report}" ]; then
+            cat "${report}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_Report not generated (benchmark may have partially failed)._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cold_start="results/${RESULT_TIMESTAMP}/honua-cold-start.json"
+          if [ -f "${cold_start}" ]; then
+            echo "### Cold-Start Latency" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            python3 scripts/summarise-cold-start.py "${cold_start}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fail on regression
+        if: steps.regression.outputs.exit_code != '0'
+        run: |
+          echo "Benchmark regression detected. See 'Check for regressions' step for details."
+          exit 1

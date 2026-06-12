@@ -1,6 +1,11 @@
 # Results (regenerated each run)
 results/*/
 !results/.gitkeep
+# Per-release archives and baselines are intentionally tracked.
+!results/releases/
+results/releases/*/
+!results/releases/**
+!results/baselines/
 
 # Python
 __pycache__/
