@@ -206,15 +206,38 @@ metrics = data.get("metrics")
 if not isinstance(metrics, dict):
     sys.exit(1)
 
-def metric_value(name):
-    metric = metrics.get(name)
-    if not isinstance(metric, dict):
-        return 0.0
-    value = metric.get("value")
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
+def parse_metric_name(name):
+    # "http_req_failed{phase:warmup}" -> ("http_req_failed", {"phase": "warmup"})
+    if "{" not in name or not name.endswith("}"):
+        return name, {}
+    base, raw = name.split("{", 1)
+    tags = {}
+    for part in raw[:-1].split(","):
+        if not part or ":" not in part:
+            continue
+        key, val = part.split(":", 1)
+        tags[key] = val
+    return base, tags
+
+def measured_error_value(metric_names):
+    # Sum the error 'value' across measured (non-warmup) tagged sub-metrics.
+    # The global untagged errors / http_req_failed metrics aggregate warmup +
+    # measured traffic, so warmup-only failures must not fail the run gate.
+    total = 0.0
+    for key, metric in metrics.items():
+        if not isinstance(metric, dict):
+            continue
+        base, tags = parse_metric_name(key)
+        if base not in metric_names:
+            continue
+        if not tags or tags.get("phase") == "warmup":
+            continue
+        value = metric.get("value")
+        try:
+            total += float(value)
+        except (TypeError, ValueError):
+            continue
+    return total
 
 checks = metrics.get("checks")
 check_fails = 0
@@ -224,7 +247,9 @@ if isinstance(checks, dict):
     except (TypeError, ValueError):
         check_fails = 1
 
-if check_fails == 0 and metric_value("errors") <= 0 and metric_value("http_req_failed") <= 0:
+measured_errors = measured_error_value(("errors",)) + measured_error_value(("http_req_failed",))
+
+if check_fails == 0 and measured_errors <= 0:
     sys.exit(0)
 
 sys.exit(1)
