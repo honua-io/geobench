@@ -80,7 +80,16 @@ def extract_metric(metrics: dict, dotted_key: str) -> float | None:
         if isinstance(top, (int, float)):
             return float(top)
         if isinstance(top, dict):
-            v = top.get("value") or top.get("rate") or top.get("count")
+            # Explicit membership checks: an `or`-chain would drop a legitimate
+            # 0.0 and fall through to the next field.
+            if "value" in top:
+                v = top["value"]
+            elif "rate" in top:
+                v = top["rate"]
+            elif "count" in top:
+                v = top["count"]
+            else:
+                v = None
             return float(v) if v is not None else None
         return None
     sub_key = parts[1]

@@ -56,6 +56,30 @@ full_stack_down() {
   docker compose --profile honua down -v --remove-orphans 2>&1 | tail -3 | sed 's/^/  /' || true
 }
 
+# Returns 0 once the honua container reports docker state "running" (i.e. the
+# image is pulled and the container has been scheduled/started). Used to anchor
+# the cold-start timer so it measures only server initialisation, not docker
+# image pull / container scheduling.
+honua_container_running() {
+  local state
+  state=$(docker compose --profile honua ps --status running --format '{{.Service}}' 2>/dev/null \
+            | grep -Fx honua || true)
+  [ -n "${state}" ]
+}
+
+wait_honua_running() {
+  local max="$1"
+  local waited=0
+  while [ "${waited}" -lt "${max}" ]; do
+    if honua_container_running; then
+      return 0
+    fi
+    sleep 1
+    waited=$(( waited + 1 ))
+  done
+  return 1
+}
+
 # ── Phase 1: start PostGIS and run the adapter to seed data ──────────
 
 echo "[1/3] Starting PostGIS and seeding data..."
@@ -121,12 +145,22 @@ for run in $(seq 1 "${COLD_START_RUNS}"); do
   echo "    Stopping server..."
   stop_honua_container
 
-  # Record wall-clock start.
-  start_ns=$(date +%s%N)
-
-  # Start the server.
+  # Start the server. We do NOT start the cold-start timer here: "docker
+  # compose up" may pull the image and schedule the container, and that
+  # orchestration cost is not server initialisation. We anchor the timer once
+  # the container is in the "running" state so we measure time-to-healthy only.
   echo "    Starting server..."
   docker compose --profile honua up -d honua 2>&1 | tail -3 | sed 's/^/      /'
+
+  if ! wait_honua_running "${COLD_START_MAX_WAIT}"; then
+    echo "    ERROR: server container did not reach running state within ${COLD_START_MAX_WAIT}s" >&2
+    full_stack_down
+    exit 1
+  fi
+
+  # Record wall-clock start now that the container is running, so the elapsed
+  # time reflects server initialisation only (not image pull / scheduling).
+  start_ns=$(date +%s%N)
 
   # Poll until healthy (1-second ticks; sub-second precision is not required
   # for cold-start since startup takes several hundred ms at minimum).

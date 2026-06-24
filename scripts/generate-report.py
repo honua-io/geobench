@@ -412,6 +412,75 @@ def parse_k6_point_stream(filepath, run_metadata=None):
     return parsed
 
 
+def measured_overall_from_summary(metrics):
+    """Aggregate the measured (non-warmup) phase into a single Overall row.
+
+    The global untagged ``http_req_duration`` / ``http_reqs`` / ``errors``
+    metrics k6 emits aggregate BOTH the warmup and measured phases, so reading
+    them directly inflates the Overall summary with warmup traffic. Instead we
+    walk the tagged sub-metrics and combine only those that are not tagged
+    ``phase=warmup`` (k6 tags warmup scenarios with ``phase:warmup`` and leaves
+    measured scenarios with their scenario tags).
+
+    Request throughput is taken from k6's per-sub-metric ``rate`` (requests per
+    whole-run second), summed across measured sub-metrics — the same semantics
+    the global untagged metric used, minus warmup. Percentiles cannot be exactly
+    recombined from per-sub-metric summaries, so they are count-weighted across
+    the measured sub-metrics, which is the best estimate available from a
+    summary export.
+    """
+    total_rps = 0.0
+    have_requests = False
+    duration_weight = 0.0
+    p_sums = {"p50": 0.0, "p95": 0.0, "p99": 0.0}
+    error_weight = 0.0
+    error_sum = 0.0
+
+    for key, value in metrics.items():
+        if not isinstance(value, dict):
+            continue
+        base, tags = parse_metric_name(key)
+        # Skip untagged globals (no tags) and warmup-tagged sub-metrics.
+        if not tags or tags.get("phase") == "warmup":
+            continue
+
+        if base == "http_reqs":
+            count = value.get("count")
+            rate = value.get("rate")
+            if count is not None and float(count) > 0:
+                have_requests = True
+            if rate is not None:
+                total_rps += float(rate)
+        elif base == "http_req_duration":
+            count = value.get("count")
+            weight = float(count) if count is not None else 1.0
+            for field, pkey in (("med", "p50"), ("p(95)", "p95"), ("p(99)", "p99")):
+                pv = value.get(field)
+                if pv is not None:
+                    p_sums[pkey] += float(pv) * weight
+            duration_weight += weight
+        elif base in ("errors", "http_req_failed"):
+            ev = value.get("value")
+            if ev is not None:
+                # Weight error rate by request count where available.
+                count = value.get("count")
+                weight = float(count) if count is not None else 1.0
+                error_sum += float(ev) * weight
+                error_weight += weight
+
+    if not have_requests or duration_weight <= 0:
+        return None
+
+    overall = {}
+    overall["rps"] = round_metric(total_rps) if total_rps > 0 else None
+    overall["p50"] = round_metric(p_sums["p50"] / duration_weight)
+    overall["p95"] = round_metric(p_sums["p95"] / duration_weight)
+    overall["p99"] = round_metric(p_sums["p99"] / duration_weight)
+    if error_weight > 0:
+        overall["error_rate_pct"] = round_metric((error_sum / error_weight) * 100)
+    return overall
+
+
 def parse_k6_summary(data, test, run_metadata=None):
     """Parse a k6 summary-export JSON object into scenario and overall metrics."""
     metrics = data.get("metrics", {})
@@ -459,11 +528,11 @@ def parse_k6_summary(data, test, run_metadata=None):
                         f"{CONCURRENT_WORKLOAD_PREFIX}{concurrency}:{workload_id}"
                     ] = parsed
 
-    overall = metrics_from_summary(
-        metrics.get("http_req_duration"),
-        metrics.get("http_reqs"),
-        error_metric=metrics.get("errors") or metrics.get("http_req_failed"),
-    )
+    # Overall must reflect only the measured phase. The global untagged
+    # http_req_duration / http_reqs / errors metrics aggregate warmup +
+    # measured traffic, so aggregate the measured (non-warmup) tagged
+    # sub-metrics instead.
+    overall = measured_overall_from_summary(metrics)
 
     return by_scenario, overall
 
