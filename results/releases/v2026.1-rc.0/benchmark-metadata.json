@@ -1,0 +1,94 @@
+{
+  "servers": [
+    "honua"
+  ],
+  "runs": 3,
+  "audit_shapes": 0,
+  "default_cache_tier": "baseline",
+  "wmts_cache_policy": "warm",
+  "bbox_tolerance_deg": 0.0001,
+  "measurement_policy": {
+    "response_body_policy": "k6 discards default bodies; measured feature requests set responseType=text so checks can validate payload semantics",
+    "spatial_bbox_semantics": "viewport_windowing",
+    "spatial_response_caching_default": false,
+    "concurrent_mix": {
+      "bbox": 0.4,
+      "equality": 0.3,
+      "range": 0.2,
+      "like": 0.1
+    }
+  },
+  "server_images": {
+    "honua": "ghcr.io/honua-io/honua-server:nightly-aot",
+    "geoserver": "docker.osgeo.org/geoserver:2.28.0",
+    "qgis": "qgis/qgis-server:3.38",
+    "postgis": "postgis/postgis:17-3.5",
+    "k6": "grafana/k6:0.54.0"
+  },
+  "server_tuning": {
+    "honua": {
+      "max_concurrent_queries": 6,
+      "max_connection_pool_size": 6,
+      "min_connection_pool_size": 3,
+      "adaptive_admission_enabled": false,
+      "adaptive_admission_min_target": 3,
+      "adaptive_admission_max_target": 6,
+      "adaptive_admission_initial_target": 6,
+      "adaptive_admission_target_duration_ms": 100,
+      "adaptive_admission_update_interval_ms": 1000,
+      "response_caching_enabled": false
+    },
+    "geoserver": {
+      "max_connections": 6,
+      "min_connections": 3
+    }
+  },
+  "tests": {
+    "attribute-filter": {
+      "cache_tier": "baseline",
+      "scenario_duration_seconds": 60.0,
+      "warmup_duration_seconds": 30.0,
+      "vus": 10,
+      "selected_scenarios": [
+        "equality",
+        "range",
+        "like"
+      ]
+    },
+    "spatial-bbox": {
+      "cache_tier": "baseline",
+      "scenario_duration_seconds": 60.0,
+      "warmup_duration_seconds": 30.0,
+      "vus": 10,
+      "selected_scenarios": [
+        "small",
+        "medium",
+        "large"
+      ]
+    },
+    "concurrent": {
+      "cache_tier": "baseline",
+      "scenario_duration_seconds": 60.0,
+      "warmup_duration_seconds": 30.0,
+      "concurrent_levels": [
+        "1",
+        "10",
+        "50",
+        "100"
+      ],
+      "concurrent_workloads": [
+        "bbox",
+        "equality",
+        "range",
+        "like"
+      ],
+      "concurrent_workload_profile": "canonical_mixed",
+      "concurrent_mix": {
+        "bbox": 0.4,
+        "equality": 0.3,
+        "range": 0.2,
+        "like": 0.1
+      }
+    }
+  }
+}

@@ -1,0 +1,301 @@
+{
+  "timestamp": "2026-07-03T05:30:42.259569+00:00",
+  "dataset": "small",
+  "runs": 3,
+  "run_metadata": {
+    "servers": [
+      "honua"
+    ],
+    "runs": 3,
+    "audit_shapes": 0,
+    "default_cache_tier": "baseline",
+    "wmts_cache_policy": "warm",
+    "bbox_tolerance_deg": 0.0001,
+    "measurement_policy": {
+      "response_body_policy": "k6 discards default bodies; measured feature requests set responseType=text so checks can validate payload semantics",
+      "spatial_bbox_semantics": "viewport_windowing",
+      "spatial_response_caching_default": false,
+      "concurrent_mix": {
+        "bbox": 0.4,
+        "equality": 0.3,
+        "range": 0.2,
+        "like": 0.1
+      }
+    },
+    "server_images": {
+      "honua": "ghcr.io/honua-io/honua-server:nightly-aot",
+      "geoserver": "docker.osgeo.org/geoserver:2.28.0",
+      "qgis": "qgis/qgis-server:3.38",
+      "postgis": "postgis/postgis:17-3.5",
+      "k6": "grafana/k6:0.54.0"
+    },
+    "server_tuning": {
+      "honua": {
+        "max_concurrent_queries": 6,
+        "max_connection_pool_size": 6,
+        "min_connection_pool_size": 3,
+        "adaptive_admission_enabled": false,
+        "adaptive_admission_min_target": 3,
+        "adaptive_admission_max_target": 6,
+        "adaptive_admission_initial_target": 6,
+        "adaptive_admission_target_duration_ms": 100,
+        "adaptive_admission_update_interval_ms": 1000,
+        "response_caching_enabled": false
+      },
+      "geoserver": {
+        "max_connections": 6,
+        "min_connections": 3
+      }
+    },
+    "tests": {
+      "attribute-filter": {
+        "cache_tier": "baseline",
+        "scenario_duration_seconds": 60.0,
+        "warmup_duration_seconds": 30.0,
+        "vus": 10,
+        "selected_scenarios": [
+          "equality",
+          "range",
+          "like"
+        ]
+      },
+      "concurrent": {
+        "cache_tier": "baseline",
+        "scenario_duration_seconds": 60.0,
+        "warmup_duration_seconds": 30.0,
+        "concurrent_levels": [
+          "1",
+          "10",
+          "50",
+          "100"
+        ],
+        "concurrent_workloads": [
+          "bbox",
+          "equality",
+          "range",
+          "like"
+        ],
+        "concurrent_workload_profile": "canonical_mixed",
+        "concurrent_mix": {
+          "bbox": 0.4,
+          "equality": 0.3,
+          "range": 0.2,
+          "like": 0.1
+        }
+      },
+      "spatial-bbox": {
+        "cache_tier": "baseline",
+        "scenario_duration_seconds": 60.0,
+        "warmup_duration_seconds": 30.0,
+        "vus": 10,
+        "selected_scenarios": [
+          "small",
+          "medium",
+          "large"
+        ]
+      }
+    }
+  },
+  "cache_tiers": {
+    "attribute-filter": "baseline",
+    "concurrent": "baseline",
+    "spatial-bbox": "baseline"
+  },
+  "results": {
+    "honua": {
+      "attribute-filter": {
+        "equality": {
+          "rps": 4605.4,
+          "p50": 1.7,
+          "p95": 3.7,
+          "p99": 5.3
+        },
+        "range": {
+          "rps": 4449.4,
+          "p50": 1.7,
+          "p95": 3.6,
+          "p99": 5.2
+        },
+        "like": {
+          "rps": 4389.9,
+          "p50": 1.7,
+          "p95": 3.7,
+          "p99": 5.5
+        }
+      },
+      "concurrent": {
+        "1": {
+          "rps": 1411.2,
+          "p50": 0.4,
+          "p95": 0.5,
+          "p99": 1.8
+        },
+        "10": {
+          "rps": 4048.3,
+          "p50": 1.7,
+          "p95": 3.9,
+          "p99": 6.4
+        },
+        "50": {
+          "rps": 4819.5,
+          "p50": 8.7,
+          "p95": 17.7,
+          "p99": 27.0
+        },
+        "100": {
+          "rps": 4808.4,
+          "p50": 17.9,
+          "p95": 32.8,
+          "p99": 47.6
+        },
+        "workload:1:bbox": {
+          "rps": 562.3,
+          "p50": 0.4,
+          "p95": 0.5,
+          "p99": 16.9
+        },
+        "workload:1:equality": {
+          "rps": 423.9,
+          "p50": 0.4,
+          "p95": 0.5,
+          "p99": 0.7
+        },
+        "workload:1:range": {
+          "rps": 280.2,
+          "p50": 0.4,
+          "p95": 0.5,
+          "p99": 3.4
+        },
+        "workload:1:like": {
+          "rps": 141.4,
+          "p50": 0.4,
+          "p95": 0.5,
+          "p99": 5.9
+        },
+        "workload:10:bbox": {
+          "rps": 1615.0,
+          "p50": 1.7,
+          "p95": 3.9,
+          "p99": 6.8
+        },
+        "workload:10:equality": {
+          "rps": 1218.5,
+          "p50": 1.7,
+          "p95": 3.9,
+          "p99": 5.9
+        },
+        "workload:10:range": {
+          "rps": 808.1,
+          "p50": 1.8,
+          "p95": 4.0,
+          "p99": 6.5
+        },
+        "workload:10:like": {
+          "rps": 406.6,
+          "p50": 1.8,
+          "p95": 4.0,
+          "p99": 6.8
+        },
+        "workload:50:bbox": {
+          "rps": 1928.7,
+          "p50": 8.7,
+          "p95": 17.7,
+          "p99": 27.5
+        },
+        "workload:50:equality": {
+          "rps": 1441.9,
+          "p50": 8.7,
+          "p95": 17.6,
+          "p99": 25.7
+        },
+        "workload:50:range": {
+          "rps": 966.4,
+          "p50": 8.8,
+          "p95": 17.7,
+          "p99": 27.3
+        },
+        "workload:50:like": {
+          "rps": 482.5,
+          "p50": 8.8,
+          "p95": 17.5,
+          "p99": 27.8
+        },
+        "workload:100:bbox": {
+          "rps": 1925.5,
+          "p50": 17.9,
+          "p95": 32.9,
+          "p99": 49.0
+        },
+        "workload:100:equality": {
+          "rps": 1442.3,
+          "p50": 17.9,
+          "p95": 32.8,
+          "p99": 46.3
+        },
+        "workload:100:range": {
+          "rps": 960.0,
+          "p50": 18.0,
+          "p95": 32.7,
+          "p99": 47.9
+        },
+        "workload:100:like": {
+          "rps": 480.5,
+          "p50": 17.9,
+          "p95": 32.9,
+          "p99": 48.2
+        }
+      },
+      "spatial-bbox": {
+        "small": {
+          "rps": 4523.0,
+          "p50": 1.7,
+          "p95": 3.7,
+          "p99": 5.5
+        },
+        "medium": {
+          "rps": 4102.2,
+          "p50": 1.7,
+          "p95": 3.6,
+          "p99": 5.5
+        },
+        "large": {
+          "rps": 4154.5,
+          "p50": 1.6,
+          "p95": 3.7,
+          "p99": 5.8
+        }
+      }
+    }
+  },
+  "overall_results": {
+    "honua": {
+      "attribute-filter": {
+        "overall": {
+          "rps": 3842.9,
+          "p50": 2.7,
+          "p95": 12.2,
+          "p99": 18.2
+        }
+      },
+      "concurrent": {
+        "overall": {
+          "rps": 6694.5,
+          "p50": 8.0,
+          "p95": 42.3,
+          "p99": 63.2
+        }
+      },
+      "spatial-bbox": {
+        "overall": {
+          "rps": 3654.2,
+          "p50": 9.3,
+          "p95": 29.3,
+          "p99": 37.3
+        }
+      }
+    }
+  },
+  "response_shape_audits": {
+    "honua": []
+  }
+}

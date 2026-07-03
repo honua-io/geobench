@@ -1,0 +1,27 @@
+{
+  "name": "Honua Server",
+  "version": "latest",
+  "image": "honuaio/honua-server:latest",
+  "runtime": ".NET 10 (ASP.NET Core)",
+  "language": "C#",
+  "ogcApiFeatures": {
+    "basePath": "/ogc/features",
+    "conformance": ["Part 1: Core", "Part 2: CRS", "Part 3: Filtering (CQL2)", "Part 4: Transactions"],
+    "cql2Support": true,
+    "cql2Dialects": ["cql2-text"],
+    "outputFormats": ["geojson", "json", "gml", "csv"]
+  },
+  "resources": {
+    "cpus": 4,
+    "memory": "4g"
+  },
+  "configTier": "bounded-baseline",
+  "connectionPooling": {
+    "maxConcurrentQueries": 6,
+    "maxConnectionPoolSize": 6,
+    "minConnectionPoolSize": 3,
+    "adaptiveAdmissionEnabled": false
+  },
+  "spatialIndex": "GiST (PostGIS)",
+  "notes": "Read-only container with tmpfs. No Redis or response caching in the baseline benchmark config. The adapter imports bench_points into Honua's generic feature store and creates benchmark-field expression indexes on that serving table. Exact image tag and any run-time admission overrides are recorded in benchmark-metadata.json."
+}

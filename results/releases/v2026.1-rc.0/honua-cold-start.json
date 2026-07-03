@@ -1,0 +1,33 @@
+{
+  "measured_at": "2026-07-03T05:31:29.148597+00:00",
+  "cold_start_healthy": {
+    "samples": 3,
+    "min_ms": 1091,
+    "max_ms": 1093,
+    "median_ms": 1092,
+    "mean_ms": 1092,
+    "p95_ms": 1093
+  },
+  "cold_start_first_request": {
+    "samples": 3,
+    "min_ms": 14,
+    "max_ms": 14,
+    "median_ms": 14,
+    "mean_ms": 14,
+    "p95_ms": 14
+  },
+  "raw": [
+    {
+      "healthy_ms": 1091,
+      "first_req_ms": 14
+    },
+    {
+      "healthy_ms": 1093,
+      "first_req_ms": 14
+    },
+    {
+      "healthy_ms": 1092,
+      "first_req_ms": 14
+    }
+  ]
+}

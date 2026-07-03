@@ -1,0 +1,35 @@
+{
+  "server": "honua",
+  "release_tag": "v2026.1-rc.0",
+  "measured_at": "2026-07-03T05:31:29.589249+00:00",
+  "metrics": {
+    "attribute-filter": {
+      "http_req_duration.med": 1.621195,
+      "http_req_duration.p(95)": 3.555176,
+      "http_req_duration.p(99)": 5.146954,
+      "http_reqs.rate": 4358.230234,
+      "errors.rate": 0.99563,
+      "http_req_failed.rate": 0.99563
+    },
+    "spatial-bbox": {
+      "http_req_duration.med": 1.548055,
+      "http_req_duration.p(95)": 3.586431,
+      "http_req_duration.p(99)": 5.647638,
+      "http_reqs.rate": 4150.738749,
+      "errors.rate": 0.996558,
+      "http_req_failed.rate": 0.996558
+    },
+    "concurrent": {
+      "http_req_duration.med": 6.599954,
+      "http_req_duration.p(95)": 25.304553,
+      "http_req_duration.p(99)": 36.98331,
+      "http_reqs.rate": 3698.385836,
+      "errors.rate": 0.995034,
+      "http_req_failed.rate": 0.995034
+    }
+  },
+  "cold_start": {
+    "cold_start_healthy.median_ms": 1092.0,
+    "cold_start_first_request.median_ms": 14.0
+  }
+}
