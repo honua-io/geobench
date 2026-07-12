@@ -3,6 +3,7 @@
 [![CI](https://github.com/honua-io/geobench/actions/workflows/ci.yml/badge.svg)](https://github.com/honua-io/geobench/actions/workflows/ci.yml)
 [![Security](https://github.com/honua-io/geobench/actions/workflows/security.yml/badge.svg)](https://github.com/honua-io/geobench/actions/workflows/security.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/honua-io/geobench/badge)](https://scorecard.dev/viewer/?uri=github.com/honua-io/geobench)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 GeoBench is an open, vendor-neutral benchmark suite for geospatial feature and
 map servers. It runs reproducible [k6](https://k6.io/) workloads against each
