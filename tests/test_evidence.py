@@ -58,6 +58,51 @@ class EvidenceTests(unittest.TestCase):
             path.write_text("\n".join(json.dumps(record) for record in records))
             self.assertTrue(file_failures(path, allow_point_stream=True))
 
+    def test_every_configured_or_emitted_scenario_is_required(self):
+        report = load_script("generate-report")
+        gate = load_script("check-regression")
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            metadata = directory / "benchmark-metadata.json"
+            metadata.write_text(json.dumps({"tests": {"attribute-filter": {
+                "selected_scenarios": ["equality", "range", "like"],
+            }}}))
+            path = directory / "honua-attribute-filter-run1.json"
+            path.write_text(json.dumps(self.data))
+            self.assertTrue(file_failures(path))
+            self.assertTrue(gate.validate_results_complete(directory, "honua", ["attribute-filter"], 1, None))
+            report.generate_report(temp, str(directory / "report.md"), 1, ["honua"])
+            self.assertFalse(json.loads((directory / "report.json").read_text())["valid"])
+            metrics = self.data["metrics"]
+            for scenario in ("range", "like"):
+                for name in ("http_reqs", "http_req_duration"):
+                    metrics[f"{name}{{query_type:{scenario}}}"] = copy.deepcopy(metrics[name])
+            path.write_text(json.dumps(self.data))
+            self.assertEqual([], file_failures(path))
+            metadata.unlink()
+            metrics["http_reqs{query_type:range}"]["count"] = 0
+            path.write_text(json.dumps(self.data))
+            self.assertTrue(file_failures(path))  # Emitted thresholds also declare required scenarios.
+
+    def test_concurrent_metadata_requires_every_level_workload_pair(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory / "benchmark-metadata.json").write_text(json.dumps({"tests": {"concurrent": {
+                "concurrent_levels": ["1", "10"], "concurrent_workloads": ["bbox", "equality"],
+            }}}))
+            records = []
+            path = directory / "honua-concurrent-run1.json"
+            for level in ("1", "10"):
+                for workload in ("bbox", "equality"):
+                    self.assertTrue(file_failures(path, allow_point_stream=True))
+                    for name, value in [("http_reqs", 1), ("checks", 1), ("errors", 0),
+                                        ("http_req_failed", 0), ("http_req_duration", 2)]:
+                        records.append({"type": "Point", "metric": name, "data": {
+                            "value": value, "tags": {"concurrency": level, "workload": workload},
+                        }})
+                    path.write_text("\n".join(json.dumps(record) for record in records))
+            self.assertEqual([], file_failures(path, allow_point_stream=True))
+
     def test_accepts_valid_zero_in_both_summary_formats(self):
         self.assertEqual([], validation_failures(self.data))
         for name in ("checks", "errors", "http_req_failed"):

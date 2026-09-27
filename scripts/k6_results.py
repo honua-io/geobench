@@ -12,6 +12,24 @@ def measured_tags(tags):
     return tags.get("phase") != "warmup" and bool(MEASURED_TAGS.intersection(tags))
 
 
+def configured_scenarios(path):
+    metadata_path = Path(path).parent / "benchmark-metadata.json"
+    if not metadata_path.exists():
+        return set()
+    metadata = json.loads(metadata_path.read_text())
+    test = Path(path).name.split("-", 1)[1].rsplit("-run", 1)[0]
+    entry = metadata.get("tests", {}).get(test, {})
+    if test == "concurrent":
+        return {frozenset({("concurrency", str(level)), ("workload", str(workload))})
+                for level in entry.get("concurrent_levels", [])
+                for workload in entry.get("concurrent_workloads", [])}
+    tag = {"attribute-filter": "query_type", "wfs-filtered": "query_type",
+           "wms-filtered": "query_type", "pagination": "page_depth",
+           "wmts": "tile_level", "geoservices-query-diagnostics": "variant"}.get(test, "bbox_size")
+    return {frozenset({("query_type" if test == "wfs-getfeature" and scenario == "base" else tag,
+                        str(scenario))}) for scenario in entry.get("selected_scenarios", [])}
+
+
 def rate_value(metric):
     if not isinstance(metric, dict):
         return None
@@ -21,7 +39,7 @@ def rate_value(metric):
     return None
 
 
-def validation_failures(data):
+def validation_failures(data, expected_scenarios=()):
     """Require traffic, passing checks, and zero errors, including warmup.
 
     This deliberately matches the suite's strict zero-error thresholds. Historical
@@ -55,32 +73,37 @@ def validation_failures(data):
                     not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0
                 ):
                     failures.append(f"invalid timing {name}.{field}={value}")
-    measured = False
+    measured = {}
     for name, metric in metrics.items():
-        if not name.startswith("http_reqs{") or not name.endswith("}"):
+        if "{" not in name or not name.endswith("}"):
             continue
-        suffix = name[len("http_reqs"):]
-        tags = dict(part.split(":", 1) for part in suffix[1:-1].split(",") if ":" in part)
-        if not measured_tags(tags):
+        base, suffix = name.split("{", 1)
+        tags = dict(part.split(":", 1) for part in suffix[:-1].split(",") if ":" in part)
+        if base not in {"http_reqs", "http_req_duration"} or not measured_tags(tags):
             continue
-        count = metric.get("count", 0)
-        duration = metrics.get(f"http_req_duration{suffix}", {})
-        if (isinstance(count, (int, float)) and math.isfinite(count) and count > 0
+        measured.setdefault(frozenset(tags.items()), {})[base] = metric
+    for tags in set(measured) | set(expected_scenarios):
+        pair = measured.get(tags, {})
+        count = pair.get("http_reqs", {}).get("count", 0)
+        duration = pair.get("http_req_duration", {})
+        if not (isinstance(count, (int, float)) and math.isfinite(count) and count > 0
                 and all(isinstance(duration.get(field), (int, float))
                         and math.isfinite(duration[field]) and duration[field] >= 0
                         for field in ("med", "p(95)", "p(99)"))):
-            measured = True
+            failures.append(f"missing or incomplete measured scenario: {dict(sorted(tags))}")
     if not measured:
         failures.append("no measured-phase request and duration metrics")
     return failures
 
 
-def point_stream_failures(contents):
+def point_stream_failures(contents, expected_scenarios=()):
     """Validate all point samples, including warmup, without retaining them."""
     seen = set()
     requests = 0
     measured_requests = 0
     measured_durations = 0
+    scenario_requests = set()
+    scenario_durations = set()
     for line in contents.splitlines():
         if not line.strip():
             continue
@@ -114,25 +137,39 @@ def point_stream_failures(contents):
             return ["invalid timing http_req_duration"]
         if name == "http_req_duration" and measured:
             measured_durations += 1
+        if measured:
+            tags = data.get("tags", {})
+            scenario = frozenset((key, str(value)) for key, value in tags.items()
+                                 if key in MEASURED_TAGS or key == "workload")
+            if name == "http_reqs" and value > 0:
+                scenario_requests.add(scenario)
+            elif name == "http_req_duration":
+                scenario_durations.add(scenario)
     failures = [f"missing point metric: {name}" for name in
                 ("checks", "errors", "http_req_failed", "http_req_duration") if name not in seen]
     if requests <= 0:
         failures.append("no completed requests")
     if measured_requests <= 0 or measured_durations == 0:
         failures.append("no measured-phase request and duration points")
+    for scenario in set(expected_scenarios) | scenario_requests | scenario_durations:
+        if not any(scenario <= tags for tags in scenario_requests) or not any(
+            scenario <= tags for tags in scenario_durations
+        ):
+            failures.append(f"missing or incomplete measured scenario: {dict(sorted(scenario))}")
     return failures
 
 
 def file_failures(path, allow_point_stream=False):
     try:
         contents = Path(path).read_text()
+        expected = configured_scenarios(path)
         try:
             data = json.loads(contents)
         except json.JSONDecodeError:
             if allow_point_stream:
-                return point_stream_failures(contents)
+                return point_stream_failures(contents, expected)
             return ["invalid summary: expected a summary-export JSON object"]
-        return validation_failures(data)
+        return validation_failures(data, expected)
     except (OSError, ValueError, TypeError, AttributeError) as exc:
         return [f"invalid summary: {exc}"]
 
