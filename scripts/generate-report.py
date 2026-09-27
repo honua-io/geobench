@@ -613,7 +613,8 @@ def collect_shape_audits(results_dir):
         try:
             with open(filepath) as f:
                 data = json.load(f)
-        except Exception:
+        except (OSError, ValueError) as exc:
+            print(f"WARNING: cannot read shape audit {filepath}: {exc}", file=sys.stderr)
             continue
 
         server = data.get("server")

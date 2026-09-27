@@ -10,7 +10,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-
 SPATIAL_CACHE_SENSITIVE_TESTS = {
     "spatial-bbox",
     "concurrent",

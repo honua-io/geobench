@@ -12,7 +12,6 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-
 CATEGORIES = [
     "park",
     "building",
@@ -401,7 +400,7 @@ def main() -> int:
                         info["sample_failures"].append(
                             {"url": url, "detail": detail, "rows": len(payload.get("features") or [])}
                         )
-            except Exception as exc:  # pragma: no cover - diagnostic output
+            except Exception as exc:  # noqa: BLE001 - record each failed diagnostic request
                 info["fail"] += 1
                 if len(info["sample_failures"]) < 3:
                     info["sample_failures"].append(
@@ -434,7 +433,7 @@ def main() -> int:
                     bbox_info["fail"] += 1
                     if len(bbox_info["sample_failures"]) < 3:
                         bbox_info["sample_failures"].append({"url": url, "detail": detail})
-            except Exception as exc:  # pragma: no cover - diagnostic output
+            except Exception as exc:  # noqa: BLE001 - record each failed diagnostic request
                 bbox_info["fail"] += 1
                 if len(bbox_info["sample_failures"]) < 3:
                     bbox_info["sample_failures"].append(
@@ -464,7 +463,7 @@ def main() -> int:
                         scan_info["fail"] += 1
                         if len(scan_info["sample_failures"]) < 3:
                             scan_info["sample_failures"].append({"url": url, "detail": detail})
-                except Exception as exc:  # pragma: no cover - diagnostic output
+                except Exception as exc:  # noqa: BLE001 - record each failed diagnostic request
                     scan_info["fail"] += 1
                     if len(scan_info["sample_failures"]) < 3:
                         scan_info["sample_failures"].append(

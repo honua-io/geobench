@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 BASELINE_SERVER = "honua"
 METRICS = ("rps", "p50", "p95", "p99", "error_rate_pct")
 LATENCY_METRICS = {"p50", "p95", "p99"}
@@ -206,9 +205,7 @@ def priority_score(row: dict[str, Any]) -> float:
     metric = row.get("metric")
     if metric == "p99":
         base *= 5
-    elif metric == "p95":
-        base *= 4
-    elif metric == "error_rate_pct":
+    elif metric == "p95" or metric == "error_rate_pct":
         base *= 4
     elif metric == "rps":
         base *= 3
@@ -307,8 +304,7 @@ def parse_row_time(row: dict[str, Any]) -> datetime:
     match = re.match(r"^(\d{8})-(\d{6})$", report_id)
     if match:
         try:
-            parsed = datetime.strptime("".join(match.groups()), "%Y%m%d%H%M%S")
-            return parsed.replace(tzinfo=timezone.utc)
+            return datetime.strptime("".join(match.groups()), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
         except ValueError:
             pass
 

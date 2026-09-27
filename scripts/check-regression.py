@@ -110,7 +110,8 @@ def aggregate_runs(result_files: list[Path], metric_key: str) -> float | None:
         try:
             with f.open() as fh:
                 data = json.load(fh)
-        except Exception:
+        except (OSError, ValueError) as exc:
+            print(f"WARNING: cannot read result {f}: {exc}", file=sys.stderr)
             continue
         metrics = data.get("metrics", {})
         v = extract_metric(metrics, metric_key)
@@ -211,7 +212,7 @@ def validate_results_complete(
             try:
                 with cold_start_path.open() as f:
                     cs = json.load(f)
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 failures.append(f"INVALID cold-start results {cold_start_path}: {exc}")
             else:
                 for cs_key, _ in COLD_START_TRACKED:

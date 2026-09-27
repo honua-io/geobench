@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def run(args: list[str], timeout: float = 5.0) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, check=False)
+    return subprocess.run(args, text=True, capture_output=True, timeout=timeout, check=False)
 
 
 def compose_service_id(server: str, service: str) -> str | None:
