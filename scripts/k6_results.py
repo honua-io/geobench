@@ -22,6 +22,12 @@ def validation_failures(data):
     files without per-scenario errors cannot prove that failures were warmup-only.
     """
     metrics = data.get("metrics", {}) if isinstance(data, dict) else {}
+    if not isinstance(metrics, dict):
+        return ["invalid metrics object"]
+    malformed = [f"invalid metric object: {name}" for name, metric in metrics.items()
+                 if not isinstance(metric, dict)]
+    if malformed:
+        return malformed
     failures = []
     count = metrics.get("http_reqs", {}).get("count", 0)
     if not isinstance(count, (int, float)) or not math.isfinite(count) or count <= 0:

@@ -101,6 +101,26 @@ env:
   GEOSERVICES_QUERY_DURATION: ${{ inputs.duration || '60s' }}
   GEOSERVICES_IDENTIFY_WARMUP: ${{ inputs.warmup || '30s' }}
   GEOSERVICES_IDENTIFY_DURATION: ${{ inputs.duration || '60s' }}
+  PAGINATION_WARMUP: ${{ inputs.warmup || '30s' }}
+  PAGINATION_DURATION: ${{ inputs.duration || '60s' }}
+  WFS_GETFEATURE_WARMUP: ${{ inputs.warmup || '30s' }}
+  WFS_GETFEATURE_DURATION: ${{ inputs.duration || '60s' }}
+  WFS_FILTERED_WARMUP: ${{ inputs.warmup || '30s' }}
+  WFS_FILTERED_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_REPROJECTION_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_REPROJECTION_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_GETFEATUREINFO_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_GETFEATUREINFO_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_FILTERED_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_FILTERED_DURATION: ${{ inputs.duration || '60s' }}
+  WMTS_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMTS_DURATION: ${{ inputs.duration || '60s' }}
+  WCS_WARMUP: ${{ inputs.warmup || '30s' }}
+  WCS_DURATION: ${{ inputs.duration || '60s' }}
+  GEOSERVICES_DIAG_WARMUP: ${{ inputs.warmup || '30s' }}
+  GEOSERVICES_DIAG_DURATION: ${{ inputs.duration || '60s' }}
+  GEOSERVICES_EXPORT_WARMUP: ${{ inputs.warmup || '30s' }}
+  GEOSERVICES_EXPORT_DURATION: ${{ inputs.duration || '60s' }}
   AUDIT_SHAPES: '1'
 
 jobs:

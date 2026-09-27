@@ -50,6 +50,24 @@ class EvidenceTests(unittest.TestCase):
             self.data["metrics"]["http_req_duration"]["min"] = value
             self.assertTrue(validation_failures(self.data))
 
+    def test_malformed_metric_objects_produce_invalid_reports(self):
+        report = load_script("generate-report")
+        cases = [{"metrics": None}, {"metrics": []}]
+        for name in self.data["metrics"]:
+            data = copy.deepcopy(self.data)
+            data["metrics"][name] = "bad"
+            cases.append(data)
+        for data in cases:
+            with self.subTest(data=data), tempfile.TemporaryDirectory() as temp:
+                self.assertTrue(validation_failures(data))
+                directory = Path(temp)
+                filename = "honua-attribute-filter-run1.json"
+                (directory / filename).write_text(json.dumps(data))
+                report.generate_report(temp, str(directory / "report.md"), 1, ["honua"])
+                result = json.loads((directory / "report.json").read_text())
+                self.assertFalse(result["valid"])
+                self.assertIn(filename, result["invalid_runs"])
+
     def test_historical_failed_campaign_cannot_be_promoted_or_reported(self):
         directory = ROOT / "results/releases/v2026.1-rc.0"
         gate = load_script("check-regression")
