@@ -29,6 +29,34 @@ class EvidenceTests(unittest.TestCase):
             "http_req_failed": {"value": 0},
             "http_req_duration": {"med": 1, "p(95)": 2, "p(99)": 3},
         }}
+        metrics = self.data["metrics"]
+        metrics["http_reqs{query_type:equality}"] = metrics["http_reqs"]
+        metrics["http_req_duration{query_type:equality}"] = metrics["http_req_duration"]
+
+    def test_warmup_only_run_cannot_hide_beside_successful_run(self):
+        report = load_script("generate-report")
+        gate = load_script("check-regression")
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory / "honua-attribute-filter-run1.json").write_text(json.dumps(self.data))
+            warmup = copy.deepcopy(self.data)
+            metrics = warmup["metrics"]
+            for name in ("http_reqs", "http_req_duration"):
+                metrics[f"{name}{{phase:warmup}}"] = metrics.pop(f"{name}{{query_type:equality}}")
+            path = directory / "honua-attribute-filter-run2.json"
+            path.write_text(json.dumps(warmup))
+            self.assertTrue(file_failures(path))
+            self.assertTrue(gate.validate_results_complete(directory, "honua", ["attribute-filter"], 2, None))
+            report.generate_report(temp, str(directory / "report.md"), 2, ["honua"])
+            result = json.loads((directory / "report.json").read_text())
+            self.assertFalse(result["valid"])
+            self.assertIn(path.name, result["invalid_runs"])
+            records = [{"type": "Point", "metric": name, "data": {
+                "value": value, "tags": {"phase": "warmup", "query_type": "equality"},
+            }} for name, value in [("http_reqs", 1), ("checks", 1), ("errors", 0),
+                                  ("http_req_failed", 0), ("http_req_duration", 2)]]
+            path.write_text("\n".join(json.dumps(record) for record in records))
+            self.assertTrue(file_failures(path, allow_point_stream=True))
 
     def test_accepts_valid_zero_in_both_summary_formats(self):
         self.assertEqual([], validation_failures(self.data))
