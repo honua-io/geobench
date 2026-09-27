@@ -14,6 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from benchmark_config import supports_test
 from k6_results import file_failures, rate_value, validation_failures
 
 SERVERS = ("honua", "geoserver", "qgis")
@@ -1070,18 +1071,24 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
         discovered_servers.add(path.name.split("-", 1)[0])
     expected_servers = selected_servers or run_metadata.get("servers", [])
     discovered_servers.update(expected_servers)
+    # Old receipts did not record this flag. Require GSR evidence when unknown;
+    # only an explicitly disabled profile may skip the GeoServer GSR tracks.
+    geoserver_gsr = run_metadata.get("server_tuning", {}).get("geoserver", {}).get("gsr_enabled", True)
     for server in expected_servers:
         for test in run_metadata.get("tests", {}):
-            # Core feature tracks are shared. For optional tracks, validate the
-            # run count once a server/test pair has at least one result.
-            if test not in ("attribute-filter", "spatial-bbox", "concurrent", "pagination") and not any(
-                Path(results_dir).glob(f"{server}-{test}-run*.json")
-            ):
+            try:
+                supported = supports_test(server, test, geoserver_gsr)
+            except ValueError as exc:
+                invalid_runs[f"{server}-{test}"] = [str(exc)]
+                continue
+            if not supported:
                 continue
             for run in range(1, runs + 1):
                 name = f"{server}-{test}-run{run}.json"
                 if not (Path(results_dir) / name).exists():
                     invalid_runs[name] = ["missing expected run"]
+    if not invalid_runs and not aggregated and not aggregated_overall:
+        invalid_runs["campaign"] = ["no valid measurements for supported server/test pairs"]
     if selected_servers:
         servers = [server for server in selected_servers if server in discovered_servers]
     else:

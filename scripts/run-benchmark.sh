@@ -29,6 +29,9 @@ RESUME_EXISTING="${RESUME_EXISTING:-0}"
 CACHE_TIER_DEFAULT="${CACHE_TIER_DEFAULT:-${CACHE_TIER:-baseline}}"
 WMTS_CACHE_TIER="${WMTS_CACHE_TIER:-warm_tile_cache}"
 WMTS_CACHE_POLICY="${WMTS_CACHE_POLICY:-warm}"
+if [ "${GEOSERVER_GSR_ENABLED:-0}" = "1" ]; then
+  export GEOSERVER_IMAGE="${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:3.0.x}"
+fi
 
 if [ "${DIAGNOSTICS}" = "1" ]; then
   export POSTGIS_LOG_MIN_DURATION_STATEMENT="${POSTGIS_LOG_MIN_DURATION_STATEMENT:-0}"
@@ -329,69 +332,7 @@ get_pgurl() {
 }
 
 supports_test_for_server() {
-  local server="$1"
-  local test="$2"
-
-  case "${test}" in
-    attribute-filter|spatial-bbox|concurrent|pagination|wfs-getfeature)
-      return 0
-      ;;
-    wfs-filtered)
-      [[ "${server}" == "honua" || "${server}" == "geoserver" ]]
-      return
-      ;;
-    wms-getmap|wms-reprojection|wms-getfeatureinfo)
-      [[ "${server}" == "honua" || "${server}" == "geoserver" || "${server}" == "qgis" ]]
-      return
-      ;;
-    wms-filtered)
-      [[ "${server}" == "honua" || "${server}" == "geoserver" ]]
-      return
-      ;;
-    wmts)
-      [[ "${server}" == "geoserver" ]]
-      return
-      ;;
-    wcs)
-      [[ "${server}" == "geoserver" ]]
-      return
-      ;;
-    geoservices-query)
-      if [[ "${server}" == "honua" ]]; then
-        return 0
-      fi
-      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    geoservices-query-diagnostics)
-      if [[ "${server}" == "honua" ]]; then
-        return 0
-      fi
-      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    geoservices-export)
-      [[ "${server}" == "honua" ]]
-      return
-      ;;
-    geoservices-identify)
-      if [[ "${server}" == "honua" ]]; then
-        return 0
-      fi
-      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    *)
-      echo "Unknown test: ${test}" >&2
-      return 1
-      ;;
-  esac
+  python3 "${SCRIPT_DIR}/benchmark_config.py" supports "$1" "$2" "${GEOSERVER_GSR_ENABLED:-0}"
 }
 
 is_cache_sensitive_spatial_test() {
@@ -531,6 +472,7 @@ write_run_metadata() {
   GEOBENCH_HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET="${HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET:-6}" \
   GEOBENCH_HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS="${HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS:-100}" \
   GEOBENCH_HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS="${HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS:-1000}" \
+  GEOBENCH_GEOSERVER_GSR_ENABLED="${GEOSERVER_GSR_ENABLED:-0}" \
   GEOBENCH_GEOSERVER_MAX_CONNECTIONS="${GEOSERVER_MAX_CONNECTIONS:-6}" \
   GEOBENCH_GEOSERVER_MIN_CONNECTIONS="${GEOSERVER_MIN_CONNECTIONS:-3}" \
   GEOBENCH_HONUA_IMAGE="${HONUA_IMAGE:-honuaio/honua-server:latest}" \
@@ -669,6 +611,7 @@ metadata = {
             "rate_limiting_enabled": False,
         },
         "geoserver": {
+            "gsr_enabled": env_bool("GEOBENCH_GEOSERVER_GSR_ENABLED"),
             "max_connections": int(os.environ.get("GEOBENCH_GEOSERVER_MAX_CONNECTIONS", "6")),
             "min_connections": int(os.environ.get("GEOBENCH_GEOSERVER_MIN_CONNECTIONS", "3")),
         },

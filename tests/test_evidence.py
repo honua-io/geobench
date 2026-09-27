@@ -9,7 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from k6_results import validation_failures  # noqa: E402
+from benchmark_config import resolve_workflow_image
+from k6_results import validation_failures
 
 
 def load_script(name):
@@ -102,6 +103,52 @@ class EvidenceTests(unittest.TestCase):
             data = json.loads((directory / "report.json").read_text())
             self.assertFalse(data["valid"])
             self.assertEqual(3, len(data["invalid_runs"]))
+
+    def test_report_requires_wholly_missing_optional_tracks(self):
+        report = load_script("generate-report")
+        cases = [
+            (["honua"], "wms-getmap", False, "honua"),
+            (["honua", "geoserver"], "wmts", False, "geoserver"),
+            (["honua", "geoserver"], "geoservices-query", False, "honua"),
+            (["geoserver"], "geoservices-query", True, "geoserver"),
+        ]
+        for servers, track, gsr, expected_server in cases:
+            with self.subTest(track=track, gsr=gsr), tempfile.TemporaryDirectory() as temp:
+                directory = Path(temp)
+                (directory / "benchmark-metadata.json").write_text(json.dumps({
+                    "servers": servers, "tests": {track: {}},
+                    "server_tuning": {"geoserver": {"gsr_enabled": gsr}},
+                }))
+                report.generate_report(temp, str(directory / "report.md"), 3, servers)
+                data = json.loads((directory / "report.json").read_text())
+                self.assertFalse(data["valid"])
+                self.assertEqual(
+                    {f"{expected_server}-{track}-run{run}.json" for run in range(1, 4)},
+                    set(data["invalid_runs"]),
+                )
+
+    def test_workflow_rejects_custom_release_campaigns(self):
+        for config in ({"SERVERS": "geoserver"}, {"TESTS": "wms-getmap"}):
+            with self.subTest(config=config), self.assertRaisesRegex(ValueError, "evidence_only"):
+                resolve_workflow_image(config)
+        self.assertEqual("docker.osgeo.org/geoserver:3.0.1", resolve_workflow_image({}))
+        self.assertEqual("docker.osgeo.org/geoserver:3.0.1", resolve_workflow_image({
+            "EVIDENCE_ONLY": "true", "SERVERS": "geoserver", "TESTS": "wms-getmap",
+        }))
+
+    def test_workflow_resolves_matching_gsr_image_and_rejects_stable(self):
+        config = {"EVIDENCE_ONLY": "true", "SERVERS": "geoserver",
+                  "TESTS": "geoservices-query", "GEOSERVER_GSR_ENABLED": "1"}
+        self.assertEqual("docker.osgeo.org/geoserver:3.0.x", resolve_workflow_image(config))
+        digest_image = "docker.osgeo.org/geoserver:3.0.x@sha256:" + "a" * 64
+        self.assertEqual(digest_image, resolve_workflow_image({**config, "GEOSERVER_IMAGE": digest_image}))
+        with self.assertRaisesRegex(ValueError, "matching :3.0.x"):
+            resolve_workflow_image({**config, "GEOSERVER_IMAGE": "docker.osgeo.org/geoserver:3.0.1"})
+
+    def test_workflow_rejects_unknown_or_unsupported_selections(self):
+        for tracks in ("wmts", "attribute-filter unknown-track"):
+            with self.subTest(tracks=tracks), self.assertRaises(ValueError):
+                resolve_workflow_image({"EVIDENCE_ONLY": "true", "SERVERS": "honua", "TESTS": tracks})
 
 
 if __name__ == "__main__":
