@@ -1,16 +1,25 @@
 {
   "name": "GeoServer",
-  "version": "2.28.x",
-  "image": "docker.osgeo.org/geoserver:2.28.x",
-  "imageDigest": "docker.osgeo.org/geoserver@sha256:48fcd9488f35c29ef8b8dd2d0b6ae491d1bef73cea83f0ef27f6fa124ddcf245",
-  "runtime": "Java (JVM, Jetty)",
+  "version": "3.0.1",
+  "image": "docker.osgeo.org/geoserver:3.0.1",
+  "runtime": "Java (JVM, Tomcat)",
   "language": "Java",
   "ogcApiFeatures": {
     "basePath": "/geoserver/ogc/features/v1",
-    "conformance": ["Part 1: Core", "Part 2: CRS", "Part 3: Filtering (CQL2)"],
+    "conformance": [
+      "Part 1: Core",
+      "Part 2: CRS",
+      "Part 3: Filtering (CQL2)"
+    ],
     "cql2Support": true,
-    "cql2Dialects": ["cql2-text"],
-    "outputFormats": ["geojson", "gml", "shapefile"]
+    "cql2Dialects": [
+      "cql2-text"
+    ],
+    "outputFormats": [
+      "geojson",
+      "gml",
+      "shapefile"
+    ]
   },
   "resources": {
     "cpus": 4,
@@ -19,8 +28,10 @@
   "configTier": "bounded-baseline",
   "jvmFlags": "GeoServer image defaults",
   "extensions": {
-    "stable": ["ogcapi-features"],
-    "community": ["gsr"]
+    "stable": [
+      "ogcapi-features"
+    ],
+    "community": []
   },
   "connectionPooling": {
     "minConnections": 3,
@@ -31,5 +42,5 @@
   },
   "spatialIndex": "GiST (PostGIS)",
   "geoWebCache": "disabled for benchmark layers",
-  "notes": "Headline April 2026 runs use the 2.28.x nightly image with the GSR community extension enabled. GeoWebCache is explicitly disabled for non-WMTS bench_points rows. GeoServer serves the typed bench_points source table with the dataset btree/GiST indexes. Exact image tag and any run-time pool overrides are recorded in benchmark-metadata.json."
+  "notes": "GeoServer 3.0.1 stable with OGC API Features extension. GSR is a separate optional community-extension profile. GeoWebCache is disabled for non-WMTS bench_points rows. Typed source table uses dataset btree/GiST indexes. Actual resolved images and resource limits are captured in server-runtime.json; run overrides are in benchmark-metadata.json."
 }

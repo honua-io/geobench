@@ -44,6 +44,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from k6_results import file_failures, rate_value
 
 # Metrics extracted per test (result file).  Keys match k6 summary JSON fields.
 TRACKED_METRICS: list[tuple[str, str, str]] = [
@@ -94,6 +95,8 @@ def extract_metric(metrics: dict, dotted_key: str) -> float | None:
         return None
     sub_key = parts[1]
     if isinstance(top, dict):
+        if parts[0] in ("errors", "http_req_failed") and sub_key in ("value", "rate"):
+            return rate_value(top)
         v = top.get(sub_key)
         if isinstance(v, (int, float)):
             return float(v)
@@ -189,6 +192,13 @@ def validate_results_complete(
             failures.append(
                 f"MISSING {server}/{test}: expected {expected_runs} result files, found {len(run_files)}"
             )
+
+        for path in run_files:
+            failures.extend(f"INVALID {path.name}: {reason}" for reason in file_failures(path))
+            # Every run must contain every metric; a median must not hide a broken run.
+            for result_key, baseline_key, _ in TRACKED_METRICS:
+                if aggregate_runs([path], result_key) is None:
+                    failures.append(f"MISSING {path.name} {baseline_key}")
 
         for result_key, baseline_key, _ in TRACKED_METRICS:
             if aggregate_runs(run_files, result_key) is None:
@@ -394,6 +404,13 @@ def main() -> int:
 
     print(f"Loading baseline from {args.baseline}")
     baseline = load_baseline(args.baseline)
+    if baseline.get("valid") is False or any(
+        values.get(key, 1) != 0
+        for values in baseline.get("metrics", {}).values()
+        for key in ("errors.rate", "http_req_failed.rate")
+    ):
+        print("FAILED — stored baseline contains failed requests; establish a valid baseline.")
+        return 1
 
     print(f"Checking {args.server} results in {results_dir} (threshold={args.threshold*100:.0f}%)...")
     print()

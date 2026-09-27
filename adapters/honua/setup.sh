@@ -92,7 +92,15 @@ wait_for_public_items() {
 
 require_cmd curl
 require_cmd jq
-require_cmd psql
+if ! command -v psql >/dev/null 2>&1; then
+  require_cmd docker
+  # The orchestrator already provisions a PostgreSQL client in this container.
+  psql() {
+    shift # host PGURL; use the same isolated database through Compose
+    docker compose --profile honua exec -T postgis-honua \
+      psql -U geobench -d geobench "$@"
+  }
+fi
 
 echo "=== Honua Server Adapter ==="
 echo "Server: ${HONUA_URL}"

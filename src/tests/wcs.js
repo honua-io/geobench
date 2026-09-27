@@ -60,6 +60,8 @@ var scenarioThresholds = {};
 SCENARIOS.forEach(function (scenario) {
   scenarioThresholds["http_req_duration{bbox_size:" + scenario.id + "}"] = ["max>=0"];
   scenarioThresholds["http_reqs{bbox_size:" + scenario.id + "}"] = ["count>=0"];
+  scenarioThresholds["errors{bbox_size:" + scenario.id + "}"] = ["rate<=0"];
+  scenarioThresholds["http_req_failed{bbox_size:" + scenario.id + "}"] = ["rate<=0"];
 });
 
 function buildScenarios() {

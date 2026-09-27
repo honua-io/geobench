@@ -1,0 +1,13 @@
+# Supplemental GeoServices REST profile. Community modules must match the
+# nightly server branch; never install a snapshot plugin into the stable image.
+# GEOSERVER_GSR_ENABLED=1 COMPOSE_FILE=docker-compose.yml:docker-compose.gsr.yml ...
+services:
+  geoserver:
+    image: ${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:3.0.x}
+    environment:
+      INSTALL_EXTENSIONS: "true"
+      STABLE_EXTENSIONS: "ogcapi-features"
+      COMMUNITY_EXTENSIONS: "gsr"
+      # The 3.0.x image currently embeds main URLs; pin the matching branch.
+      STABLE_PLUGIN_URL: "https://build.geoserver.org/geoserver/3.0.x/ext-latest"
+      COMMUNITY_PLUGIN_URL: "https://build.geoserver.org/geoserver/3.0.x/community-latest"

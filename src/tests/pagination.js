@@ -50,6 +50,8 @@ var scenarioThresholds = {};
 PAGE_VARIANTS.forEach(function (variant) {
   scenarioThresholds["http_req_duration{page_depth:" + variant.id + "}"] = ["max>=0"];
   scenarioThresholds["http_reqs{page_depth:" + variant.id + "}"] = ["count>=0"];
+  scenarioThresholds["errors{page_depth:" + variant.id + "}"] = ["rate<=0"];
+  scenarioThresholds["http_req_failed{page_depth:" + variant.id + "}"] = ["rate<=0"];
 });
 
 function buildScenarios() {

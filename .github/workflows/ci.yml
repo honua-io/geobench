@@ -30,6 +30,9 @@ jobs:
       - name: Compile-check all scripts
         run: python -m py_compile scripts/*.py
 
+      - name: Validate evidence gates
+        run: python -m unittest discover -s tests -p 'test_*.py'
+
   javascript:
     name: k6 scripts (syntax check)
     runs-on: ubuntu-latest

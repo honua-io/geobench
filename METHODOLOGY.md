@@ -164,6 +164,15 @@ predicate semantics and should not use the viewport bbox fast path.
 
 ### Error Threshold
 
+The current automated evidence gate is stricter than the discard limits below:
+every run must have completed traffic, passing response checks, and zero HTTP
+or semantic errors, including warmup. Invalid or missing error metrics fail
+closed. Failed runs remain available for diagnosis but are excluded from
+performance tables and cannot become a release baseline. This avoids reporting
+fast HTTP 429 responses as feature throughput. Honua application rate limiting
+is explicitly disabled in the isolated capacity benchmark, disclosed separately
+from database admission (which remains bounded).
+
 - Standard tests: Results discarded if error rate > 1%
 - High-concurrency tests (50+ VUs): Results discarded if error rate > 5%
 

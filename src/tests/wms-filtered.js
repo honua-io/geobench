@@ -90,6 +90,7 @@ VARIANTS.forEach(function (variant) {
   scenarioThresholds["errors{query_type:" + variant.id + "}"] = ["rate<=0"];
   scenarioThresholds["http_req_duration{query_type:" + variant.id + "}"] = ["max>=0"];
   scenarioThresholds["http_reqs{query_type:" + variant.id + "}"] = ["count>=0"];
+  scenarioThresholds["http_req_failed{query_type:" + variant.id + "}"] = ["rate<=0"];
 });
 
 function buildScenarios() {
