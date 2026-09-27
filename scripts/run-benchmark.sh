@@ -29,6 +29,9 @@ RESUME_EXISTING="${RESUME_EXISTING:-0}"
 CACHE_TIER_DEFAULT="${CACHE_TIER_DEFAULT:-${CACHE_TIER:-baseline}}"
 WMTS_CACHE_TIER="${WMTS_CACHE_TIER:-warm_tile_cache}"
 WMTS_CACHE_POLICY="${WMTS_CACHE_POLICY:-warm}"
+if [ "${GEOSERVER_GSR_ENABLED:-0}" = "1" ]; then
+  export GEOSERVER_IMAGE="${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:3.0.x}"
+fi
 
 if [ "${DIAGNOSTICS}" = "1" ]; then
   export POSTGIS_LOG_MIN_DURATION_STATEMENT="${POSTGIS_LOG_MIN_DURATION_STATEMENT:-0}"
@@ -190,70 +193,8 @@ result_file_successful() {
     return 1
   fi
 
-  python3 - "${result_file}" <<'PY2'
-import json
-import sys
+  python3 "${SCRIPT_DIR}/k6_results.py" "${result_file}"
 
-path = sys.argv[1]
-
-try:
-    with open(path) as f:
-        data = json.load(f)
-except Exception:
-    sys.exit(1)
-
-metrics = data.get("metrics")
-if not isinstance(metrics, dict):
-    sys.exit(1)
-
-def parse_metric_name(name):
-    # "http_req_failed{phase:warmup}" -> ("http_req_failed", {"phase": "warmup"})
-    if "{" not in name or not name.endswith("}"):
-        return name, {}
-    base, raw = name.split("{", 1)
-    tags = {}
-    for part in raw[:-1].split(","):
-        if not part or ":" not in part:
-            continue
-        key, val = part.split(":", 1)
-        tags[key] = val
-    return base, tags
-
-def measured_error_value(metric_names):
-    # Sum the error 'value' across measured (non-warmup) tagged sub-metrics.
-    # The global untagged errors / http_req_failed metrics aggregate warmup +
-    # measured traffic, so warmup-only failures must not fail the run gate.
-    total = 0.0
-    for key, metric in metrics.items():
-        if not isinstance(metric, dict):
-            continue
-        base, tags = parse_metric_name(key)
-        if base not in metric_names:
-            continue
-        if not tags or tags.get("phase") == "warmup":
-            continue
-        value = metric.get("value")
-        try:
-            total += float(value)
-        except (TypeError, ValueError):
-            continue
-    return total
-
-checks = metrics.get("checks")
-check_fails = 0
-if isinstance(checks, dict):
-    try:
-        check_fails = int(checks.get("fails") or 0)
-    except (TypeError, ValueError):
-        check_fails = 1
-
-measured_errors = measured_error_value(("errors",)) + measured_error_value(("http_req_failed",))
-
-if check_fails == 0 and measured_errors <= 0:
-    sys.exit(0)
-
-sys.exit(1)
-PY2
 }
 
 cleanup_on_exit() {
@@ -391,69 +332,7 @@ get_pgurl() {
 }
 
 supports_test_for_server() {
-  local server="$1"
-  local test="$2"
-
-  case "${test}" in
-    attribute-filter|spatial-bbox|concurrent|pagination|wfs-getfeature)
-      return 0
-      ;;
-    wfs-filtered)
-      [[ "${server}" == "honua" || "${server}" == "geoserver" ]]
-      return
-      ;;
-    wms-getmap|wms-reprojection|wms-getfeatureinfo)
-      [[ "${server}" == "honua" || "${server}" == "geoserver" || "${server}" == "qgis" ]]
-      return
-      ;;
-    wms-filtered)
-      [[ "${server}" == "honua" || "${server}" == "geoserver" ]]
-      return
-      ;;
-    wmts)
-      [[ "${server}" == "geoserver" ]]
-      return
-      ;;
-    wcs)
-      [[ "${server}" == "geoserver" ]]
-      return
-      ;;
-    geoservices-query)
-      if [[ "${server}" == "honua" ]]; then
-        return 0
-      fi
-      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    geoservices-query-diagnostics)
-      if [[ "${server}" == "honua" ]]; then
-        return 0
-      fi
-      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    geoservices-export)
-      [[ "${server}" == "honua" ]]
-      return
-      ;;
-    geoservices-identify)
-      if [[ "${server}" == "honua" ]]; then
-        return 0
-      fi
-      if [[ "${server}" == "geoserver" && "${GEOSERVER_GSR_ENABLED:-0}" == "1" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    *)
-      echo "Unknown test: ${test}" >&2
-      return 1
-      ;;
-  esac
+  python3 "${SCRIPT_DIR}/benchmark_config.py" supports "$1" "$2" "${GEOSERVER_GSR_ENABLED:-0}"
 }
 
 is_cache_sensitive_spatial_test() {
@@ -593,10 +472,11 @@ write_run_metadata() {
   GEOBENCH_HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET="${HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET:-6}" \
   GEOBENCH_HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS="${HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS:-100}" \
   GEOBENCH_HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS="${HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS:-1000}" \
+  GEOBENCH_GEOSERVER_GSR_ENABLED="${GEOSERVER_GSR_ENABLED:-0}" \
   GEOBENCH_GEOSERVER_MAX_CONNECTIONS="${GEOSERVER_MAX_CONNECTIONS:-6}" \
   GEOBENCH_GEOSERVER_MIN_CONNECTIONS="${GEOSERVER_MIN_CONNECTIONS:-3}" \
   GEOBENCH_HONUA_IMAGE="${HONUA_IMAGE:-honuaio/honua-server:latest}" \
-  GEOBENCH_GEOSERVER_IMAGE="${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:2.28.0}" \
+  GEOBENCH_GEOSERVER_IMAGE="${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:3.0.1}" \
   GEOBENCH_QGIS_IMAGE="${QGIS_IMAGE:-qgis/qgis-server:3.38}" \
   GEOBENCH_POSTGIS_IMAGE="${POSTGIS_IMAGE:-postgis/postgis:17-3.5}" \
   GEOBENCH_K6_IMAGE="${K6_IMAGE:-grafana/k6:0.54.0}" \
@@ -711,7 +591,7 @@ metadata = {
     },
     "server_images": {
         "honua": os.environ.get("GEOBENCH_HONUA_IMAGE", "honuaio/honua-server:latest"),
-        "geoserver": os.environ.get("GEOBENCH_GEOSERVER_IMAGE", "docker.osgeo.org/geoserver:2.28.0"),
+        "geoserver": os.environ.get("GEOBENCH_GEOSERVER_IMAGE", "docker.osgeo.org/geoserver:3.0.1"),
         "qgis": os.environ.get("GEOBENCH_QGIS_IMAGE", "qgis/qgis-server:3.38"),
         "postgis": os.environ.get("GEOBENCH_POSTGIS_IMAGE", "postgis/postgis:17-3.5"),
         "k6": os.environ.get("GEOBENCH_K6_IMAGE", "grafana/k6:0.54.0"),
@@ -728,8 +608,10 @@ metadata = {
             "adaptive_admission_target_duration_ms": int(os.environ.get("GEOBENCH_HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS", "100")),
             "adaptive_admission_update_interval_ms": int(os.environ.get("GEOBENCH_HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS", "1000")),
             "response_caching_enabled": False,
+            "rate_limiting_enabled": False,
         },
         "geoserver": {
+            "gsr_enabled": env_bool("GEOBENCH_GEOSERVER_GSR_ENABLED"),
             "max_connections": int(os.environ.get("GEOBENCH_GEOSERVER_MAX_CONNECTIONS", "6")),
             "min_connections": int(os.environ.get("GEOBENCH_GEOSERVER_MIN_CONNECTIONS", "3")),
         },
@@ -786,6 +668,7 @@ write_run_metadata
 copy_system_cards
 
 CURRENT=0
+FAILED_RUNS=0
 
 for server in "${SERVERS[@]}"; do
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -798,6 +681,8 @@ for server in "${SERVERS[@]}"; do
   STACK_ACTIVE=1
   wait_for_server "${server}"
   cleanup_k6_runs
+  python3 "${SCRIPT_DIR}/capture-runtime.py" --server "${server}" \
+    --output "${RESULTS_DIR}/${server}-runtime.json"
 
   # 2. Run adapter
   echo "[2/4] Setting up ${server}..."
@@ -842,16 +727,17 @@ for server in "${SERVERS[@]}"; do
           --tag "test=${test}" \
           --tag "run=${run}" \
           --quiet \
-          "/tests/${test}.js" 2>&1 | grep -E 'checks|errors\b|http_reqs\b|http_req_duration\b|level=error msg=.*test' | sed 's/^/    /'
+          "/tests/${test}.js" 2>&1 | tee "${HOST_RESULT_PATH%.json}.log" | grep -E 'checks|errors\b|http_reqs\b|http_req_duration\b|level=(error|warning)' | sed 's/^/    /'
       k6_status=${PIPESTATUS[0]}
       set -e
 
-      if [ "${k6_status}" -ne 0 ]; then
+      if [ "${k6_status}" -ne 0 ] || ! result_file_successful "${HOST_RESULT_PATH}"; then
+        FAILED_RUNS=$((FAILED_RUNS + 1))
         echo "    ERROR: k6 exited with status ${k6_status}"
         if [ "${CONTINUE_ON_K6_FAILURE:-0}" = "1" ]; then
           echo "    Continuing because CONTINUE_ON_K6_FAILURE=1; result JSON is retained for diagnostics"
         else
-          exit "${k6_status}"
+          exit 1
         fi
       fi
     done
@@ -910,3 +796,8 @@ if [ -f "${RESULTS_DIR}/report.md" ]; then
 fi
 echo ""
 echo "Full results: ${RESULTS_DIR}/"
+
+if [ "${FAILED_RUNS}" -gt 0 ]; then
+  echo "ERROR: ${FAILED_RUNS} failed runs; artifacts retained for diagnosis, campaign is invalid." >&2
+  exit 1
+fi

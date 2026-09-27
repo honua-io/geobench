@@ -31,5 +31,7 @@
   "cold_start": {
     "cold_start_healthy.median_ms": 1092.0,
     "cold_start_first_request.median_ms": 14.0
-  }
+  },
+  "valid": false,
+  "invalid_reason": "Archived July campaign has approximately 99.5% failed requests; retain as diagnostic evidence only. Replace with a validated, pinned campaign."
 }

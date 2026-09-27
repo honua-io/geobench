@@ -57,11 +57,15 @@ function buildScenarioThresholds() {
     var concurrency = concurrencyLevels[i];
     thresholds["http_req_duration{concurrency:" + concurrency + "}"] = ["max>=0"];
     thresholds["http_reqs{concurrency:" + concurrency + "}"] = ["count>=0"];
+    thresholds["errors{concurrency:" + concurrency + "}"] = ["rate<=0"];
+    thresholds["http_req_failed{concurrency:" + concurrency + "}"] = ["rate<=0"];
 
     for (var j = 0; j < selectedWorkloadNames.length; j++) {
       var workload = selectedWorkloadNames[j];
       thresholds["http_req_duration{concurrency:" + concurrency + ",workload:" + workload + "}"] = ["max>=0"];
       thresholds["http_reqs{concurrency:" + concurrency + ",workload:" + workload + "}"] = ["count>=0"];
+      thresholds["errors{concurrency:" + concurrency + ",workload:" + workload + "}"] = ["rate<=0"];
+      thresholds["http_req_failed{concurrency:" + concurrency + ",workload:" + workload + "}"] = ["rate<=0"];
     }
   }
 

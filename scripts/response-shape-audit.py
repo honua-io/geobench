@@ -21,7 +21,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_IMAGE_SIZE = 256
 
 
@@ -63,7 +62,7 @@ def http_get_json(url: str) -> tuple[int, str, bytes, Any]:
     if body:
         try:
             payload = json.loads(body.decode("utf-8"))
-        except Exception:
+        except (UnicodeDecodeError, json.JSONDecodeError):
             payload = None
     return status, content_type, body, payload
 
@@ -1052,7 +1051,7 @@ def main() -> int:
                     "content_type": content_type,
                 }
                 entries.append(summarize_entry(entry, body, None))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - record each failed diagnostic request
             entries.append(summarize_error(spec, type(exc).__name__))
 
     output = {

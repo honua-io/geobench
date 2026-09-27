@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RESULTS_ROOT = REPO_ROOT / "results"
 
@@ -98,7 +97,7 @@ def run_single_salt(
     cmd = ["./scripts/run-benchmark.sh"]
 
     print(f"[run] salt={salt} scenario={scenario} duration={duration} warmup={warmup}", flush=True)
-    result = subprocess.run(cmd, cwd=REPO_ROOT, env=env)
+    result = subprocess.run(cmd, cwd=REPO_ROOT, env=env, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"benchmark run failed for salt {salt} with exit code {result.returncode}")
 
@@ -235,7 +234,7 @@ def main() -> int:
     if not runs:
         raise RuntimeError("no sweep runs were collected")
 
-    summary_dir = RESULTS_ROOT / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-geoservices-query-sweep"
+    summary_dir = RESULTS_ROOT / f"{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-geoservices-query-sweep"
     report_path = summarize_runs(runs, args.scenario, summary_dir)
     print(f"[summary] wrote {report_path}")
     return 0

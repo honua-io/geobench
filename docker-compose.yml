@@ -127,6 +127,8 @@ services:
       HONUA_BENCHMARK_QUIET_LOGS: "true"
       HONUA_TEST_SCHEMA_HEADERS: "true"
       Cache__ResponseCachingEnabled: "false"
+      # Measure query execution, not the security profile's HTTP 429 responses.
+      RateLimiting__Enabled: "false"
       OgcFeatures__NumberMatchedPolicy: "OmitWhenExpensive"
       OgcFeatures__IncludeFeatureLinks: "false"
       Wfs20__NumberMatchedPolicy: "UnknownWhenExpensive"
@@ -157,7 +159,7 @@ services:
           memory: 4g
 
   geoserver:
-    image: ${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:2.28.0}
+    image: ${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:3.0.1}
     profiles: ["geoserver"]
     ports:
       - "${GEOSERVER_PORT:-8082}:8080"

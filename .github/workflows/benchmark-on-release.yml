@@ -41,9 +41,32 @@ on:
         required: false
         default: '3'
       save_baseline:
-        description: 'Commit the results as the new baseline (true/false). Only set true on clean stable releases.'
+        description: 'Commit a clean baseline (true/false); permits replacing an invalid old baseline after validating new evidence.'
         required: false
         default: 'false'
+      evidence_only:
+        description: 'Diagnostic campaign: upload artifacts without updating a release archive or baseline.'
+        type: boolean
+        default: false
+      servers:
+        description: 'Servers to benchmark (space separated); custom selections require evidence_only.'
+        default: 'honua'
+      tests:
+        description: 'Benchmark tracks (space separated); custom selections require evidence_only.'
+        default: 'attribute-filter spatial-bbox concurrent'
+      geoserver_image:
+        description: 'Optional image; defaults to 3.0.1, or 3.0.x with GSR. Pin GSR as :3.0.x@sha256:<digest>.'
+        default: ''
+      gsr_enabled:
+        description: 'Use the matching 3.0.x nightly + GSR profile (requires a 3.0.x image).'
+        type: boolean
+        default: false
+      warmup:
+        description: 'Warmup per track, e.g. 30s.'
+        default: '30s'
+      duration:
+        description: 'Measurement per scenario, e.g. 60s.'
+        default: '60s'
 
 permissions:
   contents: read
@@ -58,18 +81,47 @@ env:
   REGRESSION_THRESHOLD: ${{ github.event.client_payload.regression_threshold || github.event.inputs.regression_threshold || '0.20' }}
   RUNS: ${{ github.event.client_payload.runs || github.event.inputs.runs || '3' }}
   SAVE_BASELINE: ${{ github.event.client_payload.save_baseline || github.event.inputs.save_baseline || 'false' }}
-  # Honua-only run (single server, core test tracks).
-  SERVERS: honua
-  TESTS: attribute-filter spatial-bbox concurrent
+  # Release archives remain Honua/core only; custom campaigns are evidence-only.
+  EVIDENCE_ONLY: ${{ inputs.evidence_only && 'true' || 'false' }}
+  SERVERS: ${{ inputs.servers || 'honua' }}
+  TESTS: ${{ inputs.tests || 'attribute-filter spatial-bbox concurrent' }}
+  GEOSERVER_IMAGE: ${{ inputs.geoserver_image || '' }}
+  GEOSERVER_GSR_ENABLED: ${{ inputs.gsr_enabled && '1' || '0' }}
+  COMPOSE_FILE: ${{ inputs.gsr_enabled && 'docker-compose.yml:docker-compose.gsr.yml' || 'docker-compose.yml' }}
   # Shortened warmup / duration for CI (full soak is for nightly deep-dive).
-  ATTRIBUTE_FILTER_WARMUP: 30s
-  ATTRIBUTE_FILTER_DURATION: 60s
-  SPATIAL_BBOX_WARMUP: 30s
-  SPATIAL_BBOX_DURATION: 60s
-  CONCURRENT_WARMUP: 30s
-  CONCURRENT_DURATION: 60s
-  # Skip shape audit in CI to reduce runtime.
-  AUDIT_SHAPES: '0'
+  ATTRIBUTE_FILTER_WARMUP: ${{ inputs.warmup || '30s' }}
+  ATTRIBUTE_FILTER_DURATION: ${{ inputs.duration || '60s' }}
+  SPATIAL_BBOX_WARMUP: ${{ inputs.warmup || '30s' }}
+  SPATIAL_BBOX_DURATION: ${{ inputs.duration || '60s' }}
+  CONCURRENT_WARMUP: ${{ inputs.warmup || '30s' }}
+  CONCURRENT_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_GETMAP_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_GETMAP_DURATION: ${{ inputs.duration || '60s' }}
+  GEOSERVICES_QUERY_WARMUP: ${{ inputs.warmup || '30s' }}
+  GEOSERVICES_QUERY_DURATION: ${{ inputs.duration || '60s' }}
+  GEOSERVICES_IDENTIFY_WARMUP: ${{ inputs.warmup || '30s' }}
+  GEOSERVICES_IDENTIFY_DURATION: ${{ inputs.duration || '60s' }}
+  PAGINATION_WARMUP: ${{ inputs.warmup || '30s' }}
+  PAGINATION_DURATION: ${{ inputs.duration || '60s' }}
+  WFS_GETFEATURE_WARMUP: ${{ inputs.warmup || '30s' }}
+  WFS_GETFEATURE_DURATION: ${{ inputs.duration || '60s' }}
+  WFS_FILTERED_WARMUP: ${{ inputs.warmup || '30s' }}
+  WFS_FILTERED_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_REPROJECTION_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_REPROJECTION_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_GETFEATUREINFO_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_GETFEATUREINFO_DURATION: ${{ inputs.duration || '60s' }}
+  WMS_FILTERED_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMS_FILTERED_DURATION: ${{ inputs.duration || '60s' }}
+  WMTS_WARMUP: ${{ inputs.warmup || '30s' }}
+  WMTS_DURATION: ${{ inputs.duration || '60s' }}
+  WCS_WARMUP: ${{ inputs.warmup || '30s' }}
+  WCS_DURATION: ${{ inputs.duration || '60s' }}
+  GEOSERVICES_DIAG_WARMUP: ${{ inputs.warmup || '30s' }}
+  GEOSERVICES_DIAG_DURATION: ${{ inputs.duration || '60s' }}
+  GEOSERVICES_EXPORT_WARMUP: ${{ inputs.warmup || '30s' }}
+  GEOSERVICES_EXPORT_DURATION: ${{ inputs.duration || '60s' }}
+  AUDIT_SHAPES: '1'
 
 jobs:
   benchmark:
@@ -82,9 +134,13 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          token: ${{ secrets.GEOBENCH_RESULTS_PUSH_TOKEN }}
+          token: ${{ secrets.GEOBENCH_RESULTS_PUSH_TOKEN || github.token }}
+
+      - name: Validate campaign selection and resolve GeoServer profile
+        run: python3 scripts/benchmark_config.py workflow
 
       - name: Resolve Honua image reference
+        if: env.HONUA_SELECTED == 'true'
         id: image
         run: |
           set -euo pipefail
@@ -109,6 +165,7 @@ jobs:
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Pull Honua image
+        if: env.HONUA_SELECTED == 'true'
         run: |
           echo "Pulling ${{ steps.image.outputs.image }} ..."
           docker pull "${{ steps.image.outputs.image }}"
@@ -139,6 +196,7 @@ jobs:
           bash scripts/run-benchmark.sh
 
       - name: Measure cold-start latency
+        if: ${{ !inputs.evidence_only }}
         env:
           HONUA_IMAGE: ${{ steps.image.outputs.image }}
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
@@ -148,6 +206,7 @@ jobs:
           bash scripts/measure-cold-start.sh
 
       - name: Check for regressions
+        if: ${{ !inputs.evidence_only }}
         id: regression
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
@@ -156,9 +215,14 @@ jobs:
           # steps (artifact upload, summary) still run.  The "Fail on regression"
           # step below will surface the failure with a clear message.
           set +e
+          baseline_options=()
+          if [ "${SAVE_BASELINE}" = "true" ]; then
+            baseline_options+=(--allow-invalid-baseline)
+          fi
           python3 scripts/check-regression.py \
             --results-dir "results/${RESULT_TIMESTAMP}" \
             --baseline "results/baselines/honua-baseline.json" \
+            "${baseline_options[@]}" \
             --server honua \
             --tests attribute-filter spatial-bbox concurrent \
             --expected-runs "${RUNS}" \
@@ -168,7 +232,7 @@ jobs:
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
 
       - name: Save results as new baseline
-        if: env.SAVE_BASELINE == 'true' && steps.regression.outputs.exit_code == '0'
+        if: ${{ !inputs.evidence_only && env.SAVE_BASELINE == 'true' && steps.regression.outputs.exit_code == '0' }}
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
         run: |
@@ -183,6 +247,7 @@ jobs:
           echo "Baseline updated from ${{ steps.image.outputs.tag }}"
 
       - name: Copy results to release archive
+        if: ${{ !inputs.evidence_only && steps.regression.outputs.exit_code == '0' }}
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
         run: |
@@ -193,6 +258,7 @@ jobs:
           echo "Results archived to ${archive}"
 
       - name: Commit results and baseline
+        if: ${{ !inputs.evidence_only && steps.regression.outputs.exit_code == '0' }}
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
         run: |
@@ -217,7 +283,7 @@ jobs:
           fi
 
       - name: Upload benchmark artifacts
-        if: always()
+        if: ${{ always() && steps.ts.outputs.ts != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: geobench-results-${{ steps.image.outputs.tag }}-${{ steps.ts.outputs.ts }}
@@ -225,7 +291,7 @@ jobs:
           retention-days: 90
 
       - name: Summarise results
-        if: always()
+        if: ${{ always() && steps.ts.outputs.ts != '' }}
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
           IMAGE_TAG: ${{ steps.image.outputs.tag }}
@@ -247,7 +313,7 @@ jobs:
           fi
 
       - name: Fail on regression
-        if: steps.regression.outputs.exit_code != '0'
+        if: ${{ !inputs.evidence_only && steps.regression.outputs.exit_code != '0' }}
         run: |
           echo "Benchmark regression detected. See 'Check for regressions' step for details."
           exit 1

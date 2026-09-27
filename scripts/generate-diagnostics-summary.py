@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 SQL_DURATION_MARKER = "duration:"
 
 
@@ -36,8 +35,7 @@ def percentile(sorted_values: list[float], fraction: float) -> float | None:
     if not sorted_values:
         return None
     index = int(len(sorted_values) * fraction)
-    if index < 1:
-        index = 1
+    index = max(index, 1)
     return sorted_values[index - 1]
 
 

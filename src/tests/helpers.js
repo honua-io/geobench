@@ -342,9 +342,14 @@ export function buildItemsUrl(params) {
 /**
  * Standard response checks for feature-service requests.
  */
+var loggedFailure = false;
 export function ogcChecks(request) {
   return {
     "status is 200": function (r) {
+      if (r.status !== 200 && __ENV.LOG_FAILURES === "1" && !loggedFailure) {
+        loggedFailure = true;
+        console.warn("First failed feature request: status=" + r.status + " body=" + String(r.body).slice(0, 500));
+      }
       return r.status === 200;
     },
     "response matches request": function (r) {

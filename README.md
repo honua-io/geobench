@@ -47,7 +47,7 @@ servers support which rows.
 
 | Server | Runtime | Default Image |
 |--------|---------|---------------|
-| [GeoServer](https://geoserver.org/) | Java / JVM | `docker.osgeo.org/geoserver:2.28.0` |
+| [GeoServer](https://geoserver.org/) | Java / JVM | `docker.osgeo.org/geoserver:3.0.1` |
 | [Honua Server](https://github.com/honua-io/honua-server) | .NET 10 | `honuaio/honua-server:latest` |
 | [QGIS Server](https://qgis.org/en/site/about/features.html#qgis-server) | C++ / Qt | `qgis/qgis-server:3.38` |
 
@@ -104,8 +104,8 @@ TESTS="wms-reprojection" SERVERS="honua geoserver qgis" ./scripts/run-benchmark.
 TESTS="wfs-getfeature wfs-filtered" SERVERS="honua geoserver" ./scripts/run-benchmark.sh
 
 # Supplemental GeoServices REST track (GeoServer needs the GSR extension, below)
-GEOSERVER_IMAGE=docker.osgeo.org/geoserver:2.28.x \
-GEOSERVER_COMMUNITY_EXTENSIONS=gsr \
+GEOSERVER_IMAGE=docker.osgeo.org/geoserver:3.0.x \
+COMPOSE_FILE=docker-compose.yml:docker-compose.gsr.yml \
 GEOSERVER_GSR_ENABLED=1 \
 TESTS="geoservices-query geoservices-identify" \
 SERVERS="honua geoserver" \
@@ -216,6 +216,14 @@ gate, not a cross-server comparison.
 
 ## Published Comparison Snapshots
 
+**September 2026 audit:** the July `v2026.1-rc.0` release archive and stored
+baseline contain approximately 99.5% failed requests and are invalid performance
+evidence. The corrected report excludes those rows. A fresh reproduction
+confirmed HTTP 429 throttling from Honua's loaded security configuration. The
+isolated benchmark profile now explicitly disables application rate limiting,
+validates every run, and records actual image identities and resource limits.
+See [the refresh investigation](docs/refresh-2026-09-26.md).
+
 The most recent cross-server snapshot (Honua vs GeoServer, April 28, 2026,
 100K-point dataset, 5-run median, 30s warmup + 30s measured windows, baseline
 cache tier, strict bounded database profile: Honua active-query/pool `6/6/3`,
@@ -308,7 +316,8 @@ result directory (see command above).
 GeoServer's GeoServices REST support is not part of the stock image. To
 benchmark `FeatureServer/query` or `MapServer/identify`, run GeoServer with the
 `gsr` community extension on a matching nightly build tag such as
-`docker.osgeo.org/geoserver:2.28.x`, then set `GEOSERVER_GSR_ENABLED=1`. If GSR
+`docker.osgeo.org/geoserver:3.0.x`, using the `docker-compose.gsr.yml` override
+(which selects matching branch plugin URLs), then set `GEOSERVER_GSR_ENABLED=1`. If GSR
 endpoint verification fails, treat the GeoServer GSR row as unavailable for the
 current image.
 

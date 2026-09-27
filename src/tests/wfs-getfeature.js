@@ -52,6 +52,8 @@ var scenarioThresholds = {};
 VARIANTS.forEach(function (variant) {
   scenarioThresholds["http_req_duration{" + variant.tagName + ":" + variant.tagValue + "}"] = ["max>=0"];
   scenarioThresholds["http_reqs{" + variant.tagName + ":" + variant.tagValue + "}"] = ["count>=0"];
+  scenarioThresholds["errors{" + variant.tagName + ":" + variant.tagValue + "}"] = ["rate<=0"];
+  scenarioThresholds["http_req_failed{" + variant.tagName + ":" + variant.tagValue + "}"] = ["rate<=0"];
 });
 
 function buildScenarios() {

@@ -17,7 +17,7 @@ def main() -> int:
     try:
         with open(path) as f:
             d = json.load(f)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"ERROR reading {path}: {exc}", file=sys.stderr)
         return 1
 

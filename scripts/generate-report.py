@@ -14,6 +14,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from benchmark_config import supports_test
+from k6_results import file_failures, rate_value, validation_failures
 
 SERVERS = ("honua", "geoserver", "qgis")
 CONCURRENT_LEVELS = ("1", "10", "50", "100")
@@ -327,8 +329,9 @@ def metrics_from_summary(duration_metric, request_metric, scenario_duration_seco
         "p95": round_metric(duration_metric.get("p(95)")),
         "p99": round_metric(duration_metric.get("p(99)")),
     }
-    if error_metric and error_metric.get("value") is not None:
-        parsed["error_rate_pct"] = round_metric(float(error_metric.get("value")) * 100)
+    error_rate = rate_value(error_metric)
+    if error_rate is not None:
+        parsed["error_rate_pct"] = round_metric(error_rate * 100)
     return parsed
 
 
@@ -460,7 +463,7 @@ def measured_overall_from_summary(metrics):
                     p_sums[pkey] += float(pv) * weight
             duration_weight += weight
         elif base in ("errors", "http_req_failed"):
-            ev = value.get("value")
+            ev = rate_value(value)
             if ev is not None:
                 # Weight error rate by request count where available.
                 count = value.get("count")
@@ -484,6 +487,8 @@ def measured_overall_from_summary(metrics):
 def parse_k6_summary(data, test, run_metadata=None):
     """Parse a k6 summary-export JSON object into scenario and overall metrics."""
     metrics = data.get("metrics", {})
+    if validation_failures(data):
+        return {}, None
     definitions = TEST_DEFINITIONS.get(test, {}).get("scenarios", [])
     scenario_duration_seconds = scenario_duration_for_test(run_metadata or {}, test)
 
@@ -497,6 +502,7 @@ def parse_k6_summary(data, test, run_metadata=None):
         error_metric = (
             metric_for_tags(metrics, "errors", {tag_key: tag_value})
             or metric_for_tags(metrics, "http_req_failed", {tag_key: tag_value})
+            or metrics.get("errors")  # Validated zero globally, therefore zero per scenario.
         )
         parsed = metrics_from_summary(
             duration_metric,
@@ -516,6 +522,7 @@ def parse_k6_summary(data, test, run_metadata=None):
                 error_metric = (
                     metric_for_tags(metrics, "errors", tags)
                     or metric_for_tags(metrics, "http_req_failed", tags)
+                    or metrics.get("errors")
                 )
                 parsed = metrics_from_summary(
                     duration_metric,
@@ -539,6 +546,8 @@ def parse_k6_summary(data, test, run_metadata=None):
 
 def parse_result_file(filepath, test, run_metadata=None):
     """Parse either summary JSON or point-stream JSON results."""
+    if file_failures(filepath, allow_point_stream=True):
+        return {}, None
     try:
         with open(filepath) as f:
             data = json.load(f)
@@ -607,7 +616,8 @@ def collect_shape_audits(results_dir):
         try:
             with open(filepath) as f:
                 data = json.load(f)
-        except Exception:
+        except (OSError, ValueError) as exc:
+            print(f"WARNING: cannot read shape audit {filepath}: {exc}", file=sys.stderr)
             continue
 
         server = data.get("server")
@@ -1053,6 +1063,34 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
     aggregated, aggregated_overall = collect_results(results_dir, run_metadata)
     shape_audits = collect_shape_audits(results_dir)
     discovered_servers = set(aggregated.keys()) | set(aggregated_overall.keys()) | set(shape_audits.keys())
+    invalid_runs = {}
+    for path in Path(results_dir).glob("*-run*.json"):
+        if selected_servers and path.name.split("-", 1)[0] not in selected_servers:
+            continue
+        reasons = file_failures(path, allow_point_stream=True)
+        if reasons:
+            invalid_runs[path.name] = reasons
+        discovered_servers.add(path.name.split("-", 1)[0])
+    expected_servers = selected_servers or run_metadata.get("servers", [])
+    discovered_servers.update(expected_servers)
+    # Old receipts did not record this flag. Require GSR evidence when unknown;
+    # only an explicitly disabled profile may skip the GeoServer GSR tracks.
+    geoserver_gsr = run_metadata.get("server_tuning", {}).get("geoserver", {}).get("gsr_enabled", True)
+    for server in expected_servers:
+        for test in run_metadata.get("tests", {}):
+            try:
+                supported = supports_test(server, test, geoserver_gsr)
+            except ValueError as exc:
+                invalid_runs[f"{server}-{test}"] = [str(exc)]
+                continue
+            if not supported:
+                continue
+            for run in range(1, runs + 1):
+                name = f"{server}-{test}-run{run}.json"
+                if not (Path(results_dir) / name).exists():
+                    invalid_runs[name] = ["missing expected run"]
+    if not invalid_runs and not aggregated and not aggregated_overall:
+        invalid_runs["campaign"] = ["no valid measurements for supported server/test pairs"]
     if selected_servers:
         servers = [server for server in selected_servers if server in discovered_servers]
     else:
@@ -1074,6 +1112,13 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
     )
     lines.append(f"Dataset: Small (100K points) | Runs: {runs} (median reported)")
     lines.append("")
+    if invalid_runs:
+        lines.append("**INVALID / INCOMPLETE EVIDENCE — failed runs are excluded from performance tables.**")
+        lines.append("Do not publish comparisons or promote a baseline from this campaign.")
+        lines.append("")
+        for name, reasons in sorted(invalid_runs.items()):
+            lines.append(f"- `{name}`: {'; '.join(reasons)}")
+        lines.append("")
     add_benchmark_semantics_section(lines, report_metadata)
 
     for group_name, tests in REPORT_GROUPS:
@@ -1123,6 +1168,8 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "dataset": "small",
                 "runs": runs,
+                "valid": not invalid_runs,
+                "invalid_runs": invalid_runs,
                 "run_metadata": report_metadata,
                 "cache_tiers": {
                     test: entry.get("cache_tier")
@@ -1173,11 +1220,10 @@ def load_run_metadata(results_dir):
         if test not in observed_tests:
             observed_tests.append(test)
 
-    if not observed_tests:
-        observed_tests = ordered_tests(raw_tests)
-
     normalized_tests = {}
-    for test in observed_tests:
+    # Observations may add legacy tracks, but cannot erase configured tracks
+    # that failed before producing their first result file.
+    for test in ordered_tests(set(raw_tests) | set(observed_tests)):
         raw_entry = raw_tests.get(test) if isinstance(raw_tests.get(test), dict) else {}
         cache_tier = raw_entry.get("cache_tier") or ("warm_tile_cache" if test == "wmts" else default_cache_tier)
         entry = dict(raw_entry)
