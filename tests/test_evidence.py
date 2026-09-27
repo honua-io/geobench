@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from benchmark_config import resolve_workflow_image
-from k6_results import validation_failures
+from k6_results import file_failures, validation_failures
 
 
 def load_script(name):
@@ -49,6 +49,28 @@ class EvidenceTests(unittest.TestCase):
         for value in (-85.265, float("nan"), float("inf")):
             self.data["metrics"]["http_req_duration"]["min"] = value
             self.assertTrue(validation_failures(self.data))
+
+    def test_point_stream_reports_validate_samples_and_exclude_failed_runs(self):
+        report = load_script("generate-report")
+        samples = [("http_reqs", 1), ("checks", 1), ("errors", 0),
+                   ("http_req_failed", 0), ("http_req_duration", 2)]
+        records = [{"type": "Point", "metric": name, "data": {
+            "value": value, "tags": {"query_type": "equality"},
+        }} for name, value in samples]
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            path = directory / "honua-attribute-filter-run1.json"
+            for invalid in (False, True):
+                if invalid:
+                    records[2]["data"]["value"] = 1
+                path.write_text("\n".join(json.dumps(record) for record in records))
+                self.assertEqual(invalid, bool(file_failures(path, allow_point_stream=True)))
+                self.assertTrue(file_failures(path))  # Release baselines require summaries.
+                scenarios, _ = report.parse_result_file(path, "attribute-filter")
+                self.assertEqual(not invalid, bool(scenarios))
+                report.generate_report(temp, str(directory / "report.md"), 1, ["honua"])
+                result = json.loads((directory / "report.json").read_text())
+                self.assertEqual(not invalid, result["valid"])
 
     def test_malformed_metric_objects_produce_invalid_reports(self):
         report = load_script("generate-report")

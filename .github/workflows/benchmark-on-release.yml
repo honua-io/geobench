@@ -140,6 +140,7 @@ jobs:
         run: python3 scripts/benchmark_config.py workflow
 
       - name: Resolve Honua image reference
+        if: env.HONUA_SELECTED == 'true'
         id: image
         run: |
           set -euo pipefail
@@ -164,6 +165,7 @@ jobs:
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Pull Honua image
+        if: env.HONUA_SELECTED == 'true'
         run: |
           echo "Pulling ${{ steps.image.outputs.image }} ..."
           docker pull "${{ steps.image.outputs.image }}"

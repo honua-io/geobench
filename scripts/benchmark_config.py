@@ -56,6 +56,7 @@ def main():
         image = resolve_workflow_image(os.environ)
         with Path(os.environ["GITHUB_ENV"]).open("a") as output:
             output.write(f"GEOSERVER_IMAGE={image}\n")
+            output.write(f"HONUA_SELECTED={'true' if 'honua' in os.environ.get('SERVERS', 'honua').split() else 'false'}\n")
         print(f"Validated campaign; GeoServer image: {image}")
         return 0
     except ValueError as exc:

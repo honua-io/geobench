@@ -546,6 +546,8 @@ def parse_k6_summary(data, test, run_metadata=None):
 
 def parse_result_file(filepath, test, run_metadata=None):
     """Parse either summary JSON or point-stream JSON results."""
+    if file_failures(filepath, allow_point_stream=True):
+        return {}, None
     try:
         with open(filepath) as f:
             data = json.load(f)
@@ -1065,7 +1067,7 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
     for path in Path(results_dir).glob("*-run*.json"):
         if selected_servers and path.name.split("-", 1)[0] not in selected_servers:
             continue
-        reasons = file_failures(path)
+        reasons = file_failures(path, allow_point_stream=True)
         if reasons:
             invalid_runs[path.name] = reasons
         discovered_servers.add(path.name.split("-", 1)[0])

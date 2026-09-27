@@ -52,9 +52,55 @@ def validation_failures(data):
     return failures
 
 
-def file_failures(path):
+def point_stream_failures(contents):
+    """Validate all point samples, including warmup, without retaining them."""
+    seen = set()
+    requests = 0
+    for line in contents.splitlines():
+        if not line.strip():
+            continue
+        entry = json.loads(line)
+        if not isinstance(entry, dict) or entry.get("type") not in {"Metric", "Point"}:
+            return ["invalid point-stream record"]
+        if entry["type"] == "Metric":
+            continue
+        name = entry.get("metric")
+        data = entry.get("data")
+        if not isinstance(name, str) or not isinstance(data, dict):
+            return ["invalid point-stream metric"]
+        if not isinstance(data.get("tags", {}), dict):
+            return ["invalid point-stream tags"]
+        value = data.get("value")
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            return [f"invalid point value: {name}"]
+        seen.add(name)
+        if name == "http_reqs":
+            if value < 0:
+                return ["invalid request count"]
+            requests += value
+        elif name == "checks" and value != 1:
+            return ["failed response checks"]
+        elif name in {"errors", "http_req_failed"} and value != 0:
+            return [f"{name}: failed requests"]
+        elif name == "http_req_duration" and value < 0:
+            return ["invalid timing http_req_duration"]
+    failures = [f"missing point metric: {name}" for name in
+                ("checks", "errors", "http_req_failed", "http_req_duration") if name not in seen]
+    if requests <= 0:
+        failures.append("no completed requests")
+    return failures
+
+
+def file_failures(path, allow_point_stream=False):
     try:
-        return validation_failures(json.loads(Path(path).read_text()))
+        contents = Path(path).read_text()
+        try:
+            data = json.loads(contents)
+        except json.JSONDecodeError:
+            if allow_point_stream:
+                return point_stream_failures(contents)
+            return ["invalid summary: expected a summary-export JSON object"]
+        return validation_failures(data)
     except (OSError, ValueError, TypeError, AttributeError) as exc:
         return [f"invalid summary: {exc}"]
 
