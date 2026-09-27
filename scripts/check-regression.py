@@ -161,6 +161,7 @@ def save_baseline(
                 cold_start[cs_key] = round(float(v), 1)
 
     baseline = {
+        "valid": True,
         "server": server,
         "release_tag": release_tag,
         "measured_at": datetime.now(timezone.utc).isoformat(),
@@ -325,6 +326,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check benchmark regression against a stored baseline.")
     parser.add_argument("--results-dir", required=True, type=Path, help="Directory containing k6 result JSON files.")
     parser.add_argument("--baseline", type=Path, default=None, help="Path to baseline JSON file.")
+    parser.add_argument(
+        "--allow-invalid-baseline",
+        action="store_true",
+        help="Validate new evidence without comparison if the old baseline is invalid; use only to re-establish it.",
+    )
     parser.add_argument("--server", default="honua", help="Server name (default: honua).")
     parser.add_argument(
         "--tests",
@@ -410,6 +416,10 @@ def main() -> int:
         for values in baseline.get("metrics", {}).values()
         for key in ("errors.rate", "http_req_failed.rate")
     ):
+        if args.allow_invalid_baseline:
+            print("NOTICE: stored baseline is invalid; new evidence passed validation. "
+                  "Explicit baseline replacement requested, so no relative comparison was made.")
+            return 0
         print("FAILED — stored baseline contains failed requests; establish a valid baseline.")
         return 1
 

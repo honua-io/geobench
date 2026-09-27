@@ -41,7 +41,7 @@ on:
         required: false
         default: '3'
       save_baseline:
-        description: 'Commit the results as the new baseline (true/false). Only set true on clean stable releases.'
+        description: 'Commit a clean baseline (true/false); permits replacing an invalid old baseline after validating new evidence.'
         required: false
         default: 'false'
       evidence_only:
@@ -193,9 +193,14 @@ jobs:
           # steps (artifact upload, summary) still run.  The "Fail on regression"
           # step below will surface the failure with a clear message.
           set +e
+          baseline_options=()
+          if [ "${SAVE_BASELINE}" = "true" ]; then
+            baseline_options+=(--allow-invalid-baseline)
+          fi
           python3 scripts/check-regression.py \
             --results-dir "results/${RESULT_TIMESTAMP}" \
             --baseline "results/baselines/honua-baseline.json" \
+            "${baseline_options[@]}" \
             --server honua \
             --tests attribute-filter spatial-bbox concurrent \
             --expected-runs "${RUNS}" \

@@ -1218,11 +1218,10 @@ def load_run_metadata(results_dir):
         if test not in observed_tests:
             observed_tests.append(test)
 
-    if not observed_tests:
-        observed_tests = ordered_tests(raw_tests)
-
     normalized_tests = {}
-    for test in observed_tests:
+    # Observations may add legacy tracks, but cannot erase configured tracks
+    # that failed before producing their first result file.
+    for test in ordered_tests(set(raw_tests) | set(observed_tests)):
         raw_entry = raw_tests.get(test) if isinstance(raw_tests.get(test), dict) else {}
         cache_tier = raw_entry.get("cache_tier") or ("warm_tile_cache" if test == "wmts" else default_cache_tier)
         entry = dict(raw_entry)

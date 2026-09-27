@@ -136,6 +136,53 @@ class EvidenceTests(unittest.TestCase):
             "EVIDENCE_ONLY": "true", "SERVERS": "geoserver", "TESTS": "wms-getmap",
         }))
 
+    def test_report_preserves_missing_track_when_another_track_succeeds(self):
+        report = load_script("generate-report")
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory / "benchmark-metadata.json").write_text(json.dumps({
+                "servers": ["honua"], "tests": {"attribute-filter": {}, "wms-getmap": {}},
+            }))
+            (directory / "honua-attribute-filter-run1.json").write_text(json.dumps(self.data))
+            report.generate_report(temp, str(directory / "report.md"), 1, ["honua"])
+            data = json.loads((directory / "report.json").read_text())
+            self.assertFalse(data["valid"])
+            self.assertIn("honua-wms-getmap-run1.json", data["invalid_runs"])
+
+    def test_rebaseline_requires_valid_new_evidence_and_explicit_opt_in(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            result_file = directory / "honua-attribute-filter-run1.json"
+            result_file.write_text(json.dumps(self.data))
+            baseline = directory / "baseline.json"
+            baseline.write_text(json.dumps({"valid": False, "metrics": {}}))
+            command = [sys.executable, str(ROOT / "scripts/check-regression.py"),
+                       "--results-dir", temp, "--tests", "attribute-filter", "--expected-runs", "1"]
+
+            def run(*arguments):
+                return subprocess.run([*command, *arguments], capture_output=True, text=True, check=False)
+
+            self.assertNotEqual(0, run("--baseline", str(baseline)).returncode)
+            opted_in = run("--baseline", str(baseline), "--allow-invalid-baseline")
+            self.assertEqual(0, opted_in.returncode, opted_in.stdout + opted_in.stderr)
+            self.assertFalse(json.loads(baseline.read_text())["valid"])
+            saved = run("--save-baseline", str(baseline))
+            self.assertEqual(0, saved.returncode, saved.stdout + saved.stderr)
+            self.assertTrue(json.loads(baseline.read_text())["valid"])
+
+            # Opt-in does not suppress regressions against a valid baseline.
+            self.data["metrics"]["http_req_duration"]["med"] = 100
+            result_file.write_text(json.dumps(self.data))
+            self.assertNotEqual(0, run("--baseline", str(baseline), "--allow-invalid-baseline").returncode)
+
+            baseline.write_text(json.dumps({"valid": False, "metrics": {}}))
+            original = baseline.read_text()
+            self.data["metrics"]["errors"]["value"] = 0.5
+            result_file.write_text(json.dumps(self.data))
+            self.assertNotEqual(0, run("--baseline", str(baseline), "--allow-invalid-baseline").returncode)
+            self.assertNotEqual(0, run("--save-baseline", str(baseline)).returncode)
+            self.assertEqual(original, baseline.read_text())
+
     def test_workflow_resolves_matching_gsr_image_and_rejects_stable(self):
         config = {"EVIDENCE_ONLY": "true", "SERVERS": "geoserver",
                   "TESTS": "geoservices-query", "GEOSERVER_GSR_ENABLED": "1"}
