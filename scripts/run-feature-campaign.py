@@ -68,6 +68,13 @@ def verify_snapshot(directory, manifest):
         raise ValueError("Archived harness snapshot is missing or has changed")
 
 
+def host_identity():
+    cpu = Path('/proc/cpuinfo').read_text().split("\n\n", 1)[0]
+    stable_cpu = [line for line in cpu.splitlines() if line.startswith(("vendor_id", "model name", "cpu family", "model\t", "stepping"))]
+    return {"node": platform.node(), "platform": platform.platform(), "logical_cpus": os.cpu_count(),
+            "cpu": stable_cpu, "memory_total": Path('/proc/meminfo').read_text().splitlines()[0]}
+
+
 def resolve_images(args):
     images = {}
     for key in (*args.servers, "postgis", "k6"):
@@ -75,7 +82,7 @@ def resolve_images(args):
         if not immutable_image(value):
             raise ValueError(f"{key} image must be pinned by digest (registry@sha256 or local sha256 ID)")
         image = json.loads(command("docker", "image", "inspect", value))[0]
-        images[key] = {"reference": value, "id": image["Id"], "digests": image.get("RepoDigests", []),
+        images[key] = {"reference": value, "id": image["Id"], "digests": image.get("RepoDigests", []), "architecture": image["Architecture"], "os": image["Os"],
                        "labels": image.get("Config", {}).get("Labels", {}) or {}}
     if args.mode == "comparison":
         labels = images["honua"]["labels"]
@@ -396,6 +403,7 @@ def main():
                 "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
                 **MODES[args.mode], "scenarios": scenarios, "servers": args.servers,
                 "budget": BUDGET, "seed": args.seed, "images": images, "corpus": corpus,
+                "host_identity": host_identity(),
                 "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
                 "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
                 "honua_compilation": images.get("honua", {}).get("labels", {}).get("honua.runtime.compilation", "unverified-diagnostic"),
@@ -411,6 +419,11 @@ def main():
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / ".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        existing_manifest = directory / "campaign.json"
+        if existing_manifest.exists():
+            existing = json.loads(existing_manifest.read_text())
+            if not args.resume or existing["binding"] != manifest["binding"]:
+                raise ValueError("Resume refused before writing artifacts: configuration/harness fingerprint differs, or --resume missing")
         if args.calibration:
             calibration = json.loads(args.calibration.read_text())
             archive = directory / "calibration"

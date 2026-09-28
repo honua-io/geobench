@@ -34,7 +34,8 @@ const expected = {features:[{id:1, category:'park', priority:1, geometry}, {id:2
 const payload = {type:'FeatureCollection',features:expected.features.map(r => ({type:'Feature',id:r.id,properties:{category:r.category,priority:r.priority},geometry})),numberMatched:2,numberReturned:2};
 const check = p => validate(p, expected, 'ogc', ['category','priority']);
 assert.equal(check(payload), null);
-for (const p of [null, {}, [], {features:[]}, {type:'FeatureCollection',features:[]}, {...payload,features:payload.features.slice(0,1)}]) assert.ok(check(p));
+assert.ok(check({...payload, numberMatched:undefined}));
+for (const p of [null, 'malformed JSON', {}, [], {features:[]}, {type:'FeatureCollection',features:[]}, {...payload,features:payload.features.slice(0,1)}]) assert.ok(check(p));
 for (const change of [p => p.features.reverse(), p => p.features[1] = p.features[0], p => p.features[0].properties.category='road', p => p.features[0].properties.priority='1', p => p.features[0].geometry.coordinates=[2,1], p => p.numberMatched=1]) {
  const p=structuredClone(payload); change(p); assert.ok(check(p));
 }
@@ -198,6 +199,8 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
         for key in ('observer_off','observer_on','isolated_generator'):
             evidence[key] = [{'throughput':100,'p95':10,'sha256':str(i)} for i in range(3)]
         with patch('feature_evidence.calibration_sample_failures', return_value=[]):
+            self.assertEqual([], calibration_failures(evidence, 'x'))
+            evidence['observer_on'] = [{'throughput':95,'p95':10,'sha256':str(i)} for i in range(3)]
             self.assertEqual([], calibration_failures(evidence, 'x'))
             evidence['observer_on'] = [{'throughput':94,'p95':10,'sha256':str(i)} for i in range(3)]
             self.assertTrue(calibration_failures(evidence, 'x'))

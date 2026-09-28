@@ -111,11 +111,11 @@ def calibration_failures(evidence, binding):
         baseline = statistics.median(row[metric] for row in evidence["isolated_generator"])
         for key in ("observer_off", "observer_on"):
             actual = statistics.median(row[metric] for row in evidence[key])
-            if abs(actual / baseline - 1) > .05:
+            if abs(actual / baseline - 1) > .05 + 1e-9:
                 reasons.append(f"local setup unsuitable: {key} {metric} varies by more than 5%")
         off = statistics.median(row[metric] for row in evidence["observer_off"])
         on = statistics.median(row[metric] for row in evidence["observer_on"])
-        if abs(on / off - 1) > .05:
+        if abs(on / off - 1) > .05 + 1e-9:
             reasons.append(f"observer overhead exceeds 5%: {metric}")
     return reasons
 

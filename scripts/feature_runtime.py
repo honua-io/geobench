@@ -58,7 +58,7 @@ SELECT json_build_object(
  'sessions',count(*) FILTER (WHERE backend_type='client backend'),
  'active',count(*) FILTER (WHERE state='active'),
  'source_sessions',count(*) FILTER (WHERE backend_type='client backend' AND query ILIKE '%bench_points%'),
- 'source_active',count(*) FILTER (WHERE state='active' AND query ILIKE '%bench_points%'),
+ 'source_active',count(*) FILTER (WHERE backend_type='client backend' AND state='active' AND query ILIKE '%bench_points%'),
  'parallel_workers',count(*) FILTER (WHERE backend_type='parallel worker'),
  'background',count(*) FILTER (WHERE backend_type NOT IN ('client backend','parallel worker')),
  'applications',COALESCE(json_agg(json_build_object('application',application_name,'state',state,'backend_type',backend_type)), '[]'::json))

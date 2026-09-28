@@ -15,8 +15,8 @@ The source SQL pass creates full expected ID sequences, values and geometries.
 No oracle SQL runs during timed traffic. The same pure JavaScript validator
 runs before traffic and on **every** response, including empty responses.
 Missing/malformed payloads, ignored filters, duplicates, wrong order, incomplete
-pages and wrong geometries fail. Count metadata is checked when present and its
-presence is compared across servers before accepting comparison rows.
+pages and wrong geometries fail. The OGC profile requires exact `numberMatched`; returned counts must agree with
+the oracle. Count-metadata presence is also compared across products.
 
 ## Prepare immutable images
 
@@ -87,7 +87,8 @@ completions before the measurement deadline count toward throughput and latency.
 The custom latency includes receipt and validation of the response. Measurement
 boundaries and latency use monotonic executor progress; progress is capped at
 the deadline, so late requests contribute counts, never truncated latencies.
-Negative wall-clock timings in k6's auxiliary HTTP metrics are disclosed as clock
+[k6 executor progress](https://github.com/grafana/k6/blob/v0.54.0/lib/executor/constant_vus.go)
+uses monotonic elapsed time. Negative wall-clock timings in k6's auxiliary HTTP metrics are disclosed as clock
 anomalies and block publication. Warmup,
 late completions, invalid responses, cancellations and dropped iterations are
 retained separately. See [k6 graceful stop](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/).
@@ -107,7 +108,7 @@ A campaign owns unique labels and records exact resource IDs. Cleanup checks
 each label before deleting an ID. It never kills unrelated k6 processes or
 runs project-wide/global Docker pruning. Interrupted attempts remain visible.
 `--output results/<name> --resume` requires the same workload, images, dataset,
-effective configuration and harness content. It continues unscheduled attempts;
+effective configuration, host identity and harness content. It continues unscheduled attempts;
 it does not replace failed attempts. Artifact hashes detect altered/missing
 evidence. A retry needs a new campaign directory. Diagnostics may opt into `--reuse-fixture`: passed fixtures are stopped between
 server turns, then their exact owned resource identities, configuration and

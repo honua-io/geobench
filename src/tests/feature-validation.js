@@ -2,6 +2,7 @@
 export function validateFeatureResponse(payload, expected, protocol, fields) {
   if (!payload || !Array.isArray(payload.features) || payload.error ||
       (protocol === 'ogc' && payload.type !== 'FeatureCollection')) return 'missing feature collection';
+  if (protocol === 'ogc' && typeof payload.numberMatched !== 'number') return 'missing exact count metadata';
   if (payload.features.length !== expected.features.length) return 'wrong feature count';
   if (payload.numberReturned !== undefined && payload.numberReturned !== expected.features.length) return 'wrong numberReturned';
   if (payload.numberMatched !== undefined && payload.numberMatched !== expected.matched) return 'wrong numberMatched';
