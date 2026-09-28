@@ -1065,6 +1065,8 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
     discovered_servers = set(aggregated.keys()) | set(aggregated_overall.keys()) | set(shape_audits.keys())
     invalid_runs = {}
     for path in Path(results_dir).glob("*-run*.json"):
+        if not parse_result_filename(path.name):
+            continue
         if selected_servers and path.name.split("-", 1)[0] not in selected_servers:
             continue
         reasons = file_failures(path, allow_point_stream=True)
