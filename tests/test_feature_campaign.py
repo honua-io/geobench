@@ -247,7 +247,7 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
             def run(ids, path, config, name):
                 events.append(name)
                 return raw, []
-            summary = {'failures':[], 'throughput':100, 'latency_ms':{'p95':10}, 'counts':{}}
+            summary = {'failures':[], 'throughput':100, 'latency_ms':{'p95':10}, 'counts':{}, 'requests':{'equality':100}}
             attempt = {'id':'test','repetition':1}
             with patch.object(module, 'Observer', FakeObserver), patch.object(module, 'summarize', return_value=summary):
                 result = module.collect_observer_samples(SimpleNamespace(run_k6=run),
@@ -269,6 +269,29 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
         self.assertFalse(result['publishable'])
         self.assertFalse(result['within_five_percent'])
         self.assertTrue(any('interrupted' in reason for reason in result['failures']))
+
+    def test_interrupted_calibration_cleanup_preserves_failed_attempts_and_ownership(self):
+        module = load('run-observer-calibration')
+        runner = load('run-feature-campaign')
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            ledger = directory / 'observer-test-attempts.json'
+            ledger.write_text(json.dumps([{'id':'observer-test-pair1-honua','owner':'mine-observer-test-pair1-honua',
+                                          'status':'running'}]))
+            with patch.object(runner, 'record_resources', return_value={'container':['stopped-owned-id']}) as discovery, \
+                 patch.object(runner, 'cleanup') as cleanup_mock:
+                module.recover_interrupted(runner, directory, {'owner':'mine'})
+            discovery.assert_called_once_with('mine-observer-test-pair1-honua')
+            cleanup_mock.assert_called_once_with('mine-observer-test-pair1-honua', {'container':['stopped-owned-id']})
+            attempt = json.loads(ledger.read_text())[0]
+            self.assertEqual('interrupted', attempt['status'])
+            self.assertTrue(attempt['cleaned'])
+            attempt.update({'owner':'someone-else', 'cleaned':False})
+            ledger.write_text(json.dumps([attempt]))
+            with patch.object(runner, 'cleanup') as cleanup_mock:
+                with self.assertRaises(ValueError):
+                    module.recover_interrupted(runner, directory, {'owner':'mine'})
+            cleanup_mock.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import random
 import signal
@@ -41,6 +42,31 @@ def combine_observations(summaries):
     }
 
 
+def recover_interrupted(runner, directory, manifest):
+    """The caller owns the host lock; only this campaign's exact owned IDs qualify."""
+    for ledger in directory.glob("observer-*-attempts.json"):
+        attempts = json.loads(ledger.read_text())
+        changed = False
+        for attempt in attempts:
+            if attempt.get("cleaned"):
+                continue
+            expected_owner = manifest["owner"] + "-" + attempt["id"]
+            if not attempt["id"].startswith("observer-") or attempt.get("owner", expected_owner) != expected_owner:
+                raise ValueError("Refusing cleanup of a calibration ledger with unrelated ownership")
+            if attempt["status"] in {"scheduled", "running"}:
+                attempt.update({"status": "interrupted", "error": "interrupted calibration retained; rerun creates new evidence"})
+            # Discovery includes stopped containers. cleanup verifies labels again for every ID.
+            identities = runner.record_resources(expected_owner)
+            attempt.setdefault("resources", identities)
+            attempt["cleanup_resources"] = identities
+            runner.write(ledger, attempts)
+            runner.cleanup(expected_owner, identities)
+            attempt["cleaned"] = True
+            changed = True
+        if changed:
+            runner.write(ledger, attempts)
+
+
 def local_report(directory, manifest, attempts, scenarios):
     """Retain failures and raw evidence; show observer deltas only for complete pairs."""
     failures = []
@@ -65,7 +91,11 @@ def local_report(directory, manifest, attempts, scenarios):
             if any(len(samples) != 3 for samples in groups.values()):
                 failures.append(f"{server}/{scenario}: missing three observer pairs")
                 continue
-            if any(calibration_sample_failures(sample) for samples in groups.values() for sample in samples):
+            # Preserve diagnostic deltas even when clock evidence disqualifies calibration.
+            # No delta based on invalid evidence can pass the overall validity gate below.
+            if any(not isinstance(sample.get(metric), (int, float)) or not math.isfinite(sample[metric]) or sample[metric] <= 0
+                   for samples in groups.values() for sample in samples for metric in ("throughput", "p95")):
+                failures.append(f"{server}/{scenario}: invalid calibration statistics")
                 continue
             summaries = {key: {metric: statistics.median(s[metric] for s in samples)
                                for metric in ("throughput", "p95")} for key, samples in groups.items()}
@@ -82,9 +112,14 @@ def local_report(directory, manifest, attempts, scenarios):
             path = (directory / relative).resolve()
             if not path.is_relative_to(directory) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
                 failures.append(f"{attempt['id']}: missing or changed artifact {relative}")
+    publication_failures = ["isolated generator calibration is still required", *sorted(set(failures))]
+    publication_failures.extend(f"{row['server']}/{row['scenario']}: observer variation exceeds 5%"
+                                for row in rows if not row["within_five_percent"])
+    if manifest["mode"] != "comparison":
+        publication_failures.append("diagnostic phase durations are not comparison calibration")
     return {"binding": manifest["binding"], "valid": not failures,
             "within_five_percent": not failures and all(row["within_five_percent"] for row in rows),
-            "publishable": False, "publication_failures": ["isolated generator calibration is still required"],
+            "publishable": False, "publication_failures": publication_failures,
             "local_generator_identity": manifest["host_identity"], "mode": manifest["mode"],
             "warmup_seconds": manifest["warmup"], "measurement_seconds": manifest["measurement"],
             "scenarios": rows, "failures": sorted(set(failures)), "attempts": attempts}
@@ -119,8 +154,14 @@ def collect_observer_samples(runner, manifest, scenarios, path, ids, db, config,
                 result = summarize(raw, manifest["measurement"])
                 if result["failures"]:
                     raise ValueError(f"Calibration measurement failed: {result['failures']}")
+                required = set(manifest["corpus"]["mixed"]) if parts[0] == "mixed" else {parts[0]}
+                if not required <= set(result["requests"]):
+                    raise ValueError("Calibration measurement omitted required corpus requests")
             if observer:
-                observations.append(observer.summary())
+                observation = observer.summary()
+                observations.append(observation)
+                if observation["failures"] or not observation["samples"]:
+                    raise ValueError("Calibration observer failed or did not drain")
             sample = {"throughput": result["throughput"], "p95": result["latency_ms"]["p95"],
                       "raw_points": str(raw), "sha256": hashlib.sha256(raw.read_bytes()).hexdigest(),
                       "measurement_seconds": manifest["measurement"], "repetition": attempt["repetition"],
@@ -134,12 +175,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign", type=Path, required=True, help="Prepared campaign directory")
     parser.add_argument("--scenarios", help="Comma-separated subset; defaults to every prepared scenario")
+    parser.add_argument("--cleanup-only", action="store_true", help="Clean interrupted owned fixtures without rerunning traffic; allowed after harness drift")
     args = parser.parse_args()
     runner = load_runner()
     directory = args.campaign.resolve()
     manifest = json.loads((directory / "campaign.json").read_text())
     if not directory.is_relative_to(runner.ROOT / "results"):
         parser.error("Campaign must be under results/")
+    if args.cleanup_only:
+        recover_interrupted(runner, directory, manifest)
+        print("Interrupted calibration attempts retained; owned resources cleaned")
+        return 0
     runner.verify_snapshot(directory, manifest)
     if runner.source_fingerprint() != manifest["harness"]["content"] or runner.host_identity() != manifest["host_identity"]:
         parser.error("Prepared harness or host identity changed; prepare a new campaign")
@@ -148,6 +194,7 @@ def main():
     scenarios = args.scenarios.split(",") if args.scenarios else manifest["scenarios"]
     if not scenarios or len(scenarios) != len(set(scenarios)) or not set(scenarios) <= set(manifest["scenarios"]):
         parser.error("Calibration scenarios must be unique prepared scenarios")
+    recover_interrupted(runner, directory, manifest)
     run_id = "observer-" + uuid.uuid4().hex[:10]
     attempts = []
     ledger = directory / (run_id + "-attempts.json")

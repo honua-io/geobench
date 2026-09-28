@@ -144,6 +144,10 @@ throughput/p95 changes, with an explicit 5% check for each selected product/scen
 `--scenarios` may restrict calibration to a subset of the prepared scenarios;
 the report records that scope. Re-running creates a new ledger, never overwrites
 an old attempt. Changed harness/host fingerprints require new preparation.
+After an interrupted collector, the next run marks the prior attempt interrupted
+and cleans only its labelled resource IDs before provisioning. To clean without
+new traffic, including after a harness change, use
+`python3 scripts/run-observer-calibration.py --campaign results/observer-local --cleanup-only`.
 
 Diagnostic preparation uses 30s warmup/30s measurement and remains diagnostic.
 Prepare with `--mode comparison` to collect the 180s/120s phases bound to a
