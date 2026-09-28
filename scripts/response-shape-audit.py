@@ -858,6 +858,7 @@ def geoservices_diagnostic_requests(server: ServerConfig) -> list[dict[str, str]
     else:
         return []
 
+    id_field = env("GEOSERVICES_DIAG_ID_FIELD", "") or ("id" if server.name == "honua" else "objectid")
     variants = [
         {
             "request": "medium-full",
@@ -892,7 +893,7 @@ def geoservices_diagnostic_requests(server: ServerConfig) -> list[dict[str, str]
             "params": {
                 "f": "json",
                 "where": "1=1",
-                "outFields": "objectid",
+                "outFields": id_field,
                 "returnGeometry": "true",
                 "outSR": "4326",
                 "geometry": "139.4400,35.4400,139.9400,35.9400",
@@ -934,7 +935,7 @@ def geoservices_diagnostic_requests(server: ServerConfig) -> list[dict[str, str]
             "params": {
                 "f": "json",
                 "where": "1=1",
-                "outFields": "objectid",
+                "outFields": id_field,
                 "returnGeometry": "true",
                 "outSR": "4326",
                 "geometry": "139.1900,35.1900,140.1900,36.1900",

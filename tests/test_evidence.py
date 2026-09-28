@@ -1,10 +1,14 @@
 import copy
 import importlib.util
 import json
+import os
+import runpy
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +36,31 @@ class EvidenceTests(unittest.TestCase):
         metrics = self.data["metrics"]
         metrics["http_reqs{query_type:equality}"] = metrics["http_reqs"]
         metrics["http_req_duration{query_type:equality}"] = metrics["http_req_duration"]
+
+    def test_runtime_receipt_is_not_a_failed_benchmark_run(self):
+        report = load_script("generate-report")
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory / "honua-attribute-filter-run1.json").write_text(json.dumps(self.data))
+            (directory / "honua-runtime.json").write_text(json.dumps({"services": {}}))
+            report.generate_report(temp, str(directory / "report.md"), 1, ["honua"])
+            self.assertNotIn("INVALID / INCOMPLETE", (directory / "report.md").read_text())
+
+    def test_diagnostic_projection_uses_configured_public_id_field(self):
+        audit = runpy.run_path(str(ROOT / "scripts" / "response-shape-audit.py"))
+        for server, override, expected in (("honua", None, "id"),
+                                           ("honua", "", "id"),
+                                           ("geoserver", None, "objectid"),
+                                           ("honua", "asset_id", "asset_id")):
+            with self.subTest(server=server, override=override), patch.dict(os.environ, {}, clear=True):
+                if override is not None:
+                    os.environ["GEOSERVICES_DIAG_ID_FIELD"] = override
+                config = audit["ServerConfig"](server, "http://localhost")
+                requests = audit["geoservices_diagnostic_requests"](config)
+                projected = [r for r in requests if r["request"].endswith("geom-oid")]
+                self.assertEqual(2, len(projected))
+                for request in projected:
+                    self.assertEqual([expected], parse_qs(urlparse(request["url"]).query)["outFields"])
 
     def test_warmup_only_run_cannot_hide_beside_successful_run(self):
         report = load_script("generate-report")

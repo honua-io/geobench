@@ -311,6 +311,10 @@ result directory (see command above).
 
 </details>
 
+GeoServices query diagnostics use the published ID field `id` for Honua and
+`objectid` for GeoServer. Set `GEOSERVICES_DIAG_ID_FIELD` to override it for a
+different schema; the selected field is recorded in the run metadata.
+
 ## Optional GeoServer GSR
 
 GeoServer's GeoServices REST support is not part of the stock image. To

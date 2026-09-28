@@ -29,6 +29,9 @@ var selectedVariantIds = (__ENV.GEOSERVICES_DIAG_VARIANTS || "")
     return value.length > 0;
   });
 
+var idField = __ENV.GEOSERVICES_DIAG_ID_FIELD ||
+  ((__ENV.SERVER || "honua").toLowerCase() === "honua" ? "id" : "objectid");
+
 var VARIANTS = [
   {
     id: "medium-full-1vu",
@@ -62,7 +65,7 @@ var VARIANTS = [
     bboxSize: GEOSERVICES_QUERY_SIZES.medium,
     salt: 0xA04,
     vus: 10,
-    outFields: "objectid",
+    outFields: idField,
     returnGeometry: true,
     nameSuffix: "medium-geom-oid-10vu",
   },
@@ -98,7 +101,7 @@ var VARIANTS = [
     bboxSize: GEOSERVICES_QUERY_SIZES.large,
     salt: 0xB04,
     vus: 10,
-    outFields: "objectid",
+    outFields: idField,
     returnGeometry: true,
     nameSuffix: "large-geom-oid-10vu",
   },
