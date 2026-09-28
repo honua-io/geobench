@@ -5,6 +5,11 @@ OGC API Features, production Honua Native AOT versus stable GeoServer. This
 work produced harness validation evidence and concrete blockers, **no publishable
 Honua–GeoServer performance comparison**.
 
+The [follow-up campaign](feature-followup-20260928.md) verifies the merged source-pool
+fix in a newer published AOT image, completes all 40 smoke rows, and records
+three local observer pairs per product. Clock and calibration gates still prevent
+publication.
+
 Implementation is in three increments: oracle validation/reporting, immutable
 paired orchestration, then diagnostics/calibration/regression coverage. See the
 [operating guide](../feature-campaigns.md) for commands and the evidence contract.
