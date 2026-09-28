@@ -360,3 +360,21 @@ docker compose up -d
 
 Results directory contains all JSON metrics, copied system cards, run metadata, and the generated
 report.
+
+
+## Source-backed feature campaign contract (v1)
+
+The [feature campaign guide](docs/feature-campaigns.md) specifies the current
+publication contract for the initial 100K-point dataset. Diagnostic campaigns
+use three repetitions with 30-second warmup and measurement. Comparisons use
+five paired repetitions with 180-second warmup and 120-second measurement,
+plus explicit drain, and alternate server order from a recorded seed. This
+contract supersedes earlier feature timing and shape-only validity rules in
+this document. WFS, maps, tiles, larger datasets and line/polygon workloads
+remain separate follow-on work. JIT and memory-leak investigations remain
+separate diagnostic profiles.
+
+No overall percentile may be derived from marginal k6 summaries. Use actual,
+nonduplicated samples for a combined distribution, or report per-scenario
+percentiles only. Report medians and ranges of repetition statistics explicitly
+as repetition summaries, never as the percentile of a merged distribution.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Oracle-validated, paired source-backed 100K-point campaigns."""
 import argparse
+import base64
 import contextlib
 import fcntl
 import hashlib
@@ -16,6 +17,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 from feature_contract import (
     ARRIVAL_RATES,
@@ -68,7 +70,7 @@ def verify_snapshot(directory, manifest):
 
 def resolve_images(args):
     images = {}
-    for key in ("honua", "geoserver", "postgis", "k6"):
+    for key in (*args.servers, "postgis", "k6"):
         value = getattr(args, key + "_image")
         if not immutable_image(value):
             raise ValueError(f"{key} image must be pinned by digest (registry@sha256 or local sha256 ID)")
@@ -127,9 +129,26 @@ def runtime_receipt(ids, images):
                         "memory": info["HostConfig"]["Memory"],
                         "environment": [e for e in info["Config"].get("Env", [])
                                         if e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT="))]}
+        if name == "honua":
+            maps = command("docker", "exec", identity, "cat", "/proc/1/maps")
+            result[name]["coreclr_mapped"] = "libcoreclr" in maps or "libclrjit" in maps
+            result[name]["command"] = command("docker", "exec", identity, "cat", "/proc/1/cmdline").replace("\x00", " ").strip()
+            if images[role]["labels"].get("honua.runtime.compilation") == "native-aot" and result[name]["coreclr_mapped"]:
+                raise ValueError("Honua runtime contradicts its Native AOT image label")
         if info["Image"] != images[role]["id"] or result[name]["cpus"] != BUDGET["cpus"] or result[name]["memory"] != BUDGET["memory_bytes"]:
             raise ValueError(f"Runtime image/resource drift: {name}")
     return result
+
+
+def geoserver_store(base, password):
+    request = Request(base + "/geoserver/rest/workspaces/geobench/datastores/postgis.json",
+                      headers={"Authorization": "Basic " + base64.b64encode(("admin:" + password).encode()).decode()})
+    with urlopen(request, timeout=30) as response:
+        entries = json.load(response)["dataStore"]["connectionParameters"]["entry"]
+    params = {entry["@key"]: entry["$"] for entry in entries}
+    if int(params.get("max connections", 0)) != BUDGET["source_connections"] or int(params.get("min connections", -1)) != 3:
+        raise ValueError("GeoServer effective source pool differs from bounded profile")
+    return {key: value for key, value in params.items() if key not in {"passwd", "password", "user"}}
 
 
 def preflight_results(log):
@@ -173,7 +192,10 @@ def wait_ready(compose, server, log):
 def execute_attempt(directory, manifest, attempt, save):
     verify_snapshot(directory, manifest)
     server = attempt["server"]
-    owner = manifest["owner"] + "-" + attempt["id"]
+    fixture = manifest.setdefault("fixtures", {}).get(server) if manifest.get("reuse_fixture") else None
+    owner = manifest["owner"] + ("-fixture-" + server if manifest.get("reuse_fixture") else "-" + attempt["id"])
+    if fixture and (fixture["binding"] != manifest["binding"] or record_resources(owner) != fixture["resources"]):
+        raise ValueError("Owned fixture identity or fingerprint has changed")
     path = directory / attempt["id"]
     path.mkdir()
     compose_file = path / "compose.json"
@@ -204,14 +226,22 @@ def execute_attempt(directory, manifest, attempt, save):
                 versions = validate_plugin_jars(jars, manifest["protocol"] == "gsr")
                 write(path / "plugins.json", {"versions": versions, "sha256": sorted(jars),
                       "java": command("docker", "exec", ids[server], "java", "-version", stderr=subprocess.STDOUT)})
+            if fixture and (runtime != fixture["runtime"] or fingerprint(sql(ids["postgis-" + server], DB_FINGERPRINT_SQL)) != fixture["database_fingerprint"]):
+                raise ValueError("Reused fixture runtime/database fingerprint changed")
             port = inspect(ids[server])["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
             base = f"http://localhost:{port}"
             env = {**os.environ, "COMPOSE_PROJECT_NAME": owner, "COMPOSE_FILE": str(compose_file),
                    "HONUA_URL": base, "GS_URL": base, "HONUA_STORAGE_PROFILE": "source",
+                   "HONUA_API_KEY": composition["services"][server]["environment"].get("HONUA_ADMIN_PASSWORD", "GeoBench-Admin-Key-2026!"),
+                   "GS_PASS": composition["services"][server]["environment"].get("GEOSERVER_ADMIN_PASSWORD", "geoserver"),
                    "HONUA_RESTART_ON_VERIFY_FAIL": "0", "GEOBENCH_TESTS": "attribute-filter",
                    "GEOSERVER_MAX_CONNECTIONS": "6", "GEOSERVER_MIN_CONNECTIONS": "3"}
-            subprocess.run(["bash", str(directory / "harness" / "adapters" / server / "setup.sh")], env=env, cwd=ROOT,
-                           stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+            if not fixture:
+                subprocess.run(["bash", str(directory / "harness" / "adapters" / server / "setup.sh")], env=env, cwd=ROOT,
+                               stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+        store = geoserver_store(base, env["GS_PASS"]) if server == "geoserver" else None
+        if store:
+            write(path / "effective-store.json", store)
         db = ids["postgis-" + server]
         command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", "ANALYZE public.bench_points")
         database = sql(db, DB_FINGERPRINT_SQL)
@@ -260,15 +290,17 @@ def execute_attempt(directory, manifest, attempt, save):
                 config.update({"scenario": parts[0], "vus": int(parts[2]) if len(parts) == 3 and parts[1] == "vus" else 10,
                                "rate": int(parts[2]) if len(parts) == 3 and parts[1] == "rate" else None})
                 print(f"{attempt['id']} {scenario}: warmup, measurement, drain", flush=True)
+                observer.activity = scenario + ":warmup-and-drain"
                 config.update({"phase": "warmup", "duration": manifest["warmup"]})
                 warm_path, _ = run_k6(ids, path, config, scenario + "-warmup")
                 warm = summarize(warm_path, manifest["warmup"], "warmup")
                 if warm["failures"]:
                     raise ValueError(f"Warmup failed: {warm['failures']}")
+                observer.activity = scenario + ":measurement-and-drain"
                 config.update({"phase": "measurement", "duration": manifest["measurement"]})
                 measured_path, _ = run_k6(ids, path, config, scenario + "-measurement")
                 row = summarize(measured_path, manifest["measurement"])
-                row.update({"warmup": warm, "offered_rate": config["rate"], "vus": config["vus"]})
+                row.update({"warmup": warm, "offered_rate": config["rate"], "offered_iterations": config["rate"] * manifest["measurement"] if config["rate"] else None, "vus": config["vus"]})
                 required = set(manifest["corpus"]["mixed"]) if parts[0] == "mixed" else {parts[0]}
                 if not required <= set(row["requests"]):
                     row["failures"].append("missing measured corpus requests")
@@ -286,6 +318,11 @@ def execute_attempt(directory, manifest, attempt, save):
         # Verify effective settings and image/resource identity again after traffic.
         if runtime_receipt(ids, manifest["images"]) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
             attempt["fairness_failures"].append("runtime/database configuration drift")
+        if server == "geoserver":
+            current_jars = command("docker", "exec", ids[server], "sh", "-c",
+                "find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} +").splitlines()
+            if sorted(jars) != sorted(current_jars) or geoserver_store(base, env["GS_PASS"]) != store:
+                attempt["fairness_failures"].append("GeoServer plugin or datastore configuration drift")
         attempt["status"] = "passed" if not attempt["fairness_failures"] else "failed"
     except (OSError, ValueError, subprocess.SubprocessError, KeyError) as exc:
         attempt.update({"status": "failed", "error": str(exc)})
@@ -304,8 +341,16 @@ def execute_attempt(directory, manifest, attempt, save):
         identities = record_resources(owner)
         attempt["resources"] = identities
         save()
-        cleanup(owner, identities)
-        attempt["cleaned"] = True
+        if manifest.get("reuse_fixture") and attempt["status"] == "passed":
+            command("docker", "stop", *identities["container"])
+            manifest["fixtures"][server] = {"owner": owner, "resources": identities, "runtime": runtime,
+                "binding": manifest["binding"], "database_fingerprint": attempt["database_fingerprint"]}
+            write(directory / "campaign.json", manifest)
+            attempt["cleaned"] = False
+        else:
+            cleanup(owner, identities)
+            manifest.get("fixtures", {}).pop(server, None)
+            attempt["cleaned"] = True
         attempt["artifact_sha256"] = {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
                                       for p in path.rglob("*") if p.is_file()}
         save()
@@ -314,6 +359,7 @@ def execute_attempt(directory, manifest, attempt, save):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=MODES, default="diagnostic")
+    parser.add_argument("--servers", nargs="+", choices=("honua", "geoserver"), default=["honua", "geoserver"])
     parser.add_argument("--protocol", choices=("ogc", "gsr"), default="ogc")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true")
@@ -321,11 +367,16 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--scenarios", help="Comma-separated corpus IDs or mixed:vus:N / mixed:rate:N")
     parser.add_argument("--arrival-rates", action="store_true")
+    parser.add_argument("--reuse-fixture", action="store_true", help="Diagnostic only: reuse owned fingerprint-verified fixtures between repetitions")
     parser.add_argument("--smoke", action="store_true", help="Diagnostic only: one repetition, 2s warmup, 3s measurement")
     parser.add_argument("--calibration", type=Path)
     for key in ("honua", "geoserver", "postgis", "k6"):
         parser.add_argument("--" + key + "-image", default=os.environ.get(key.upper() + "_IMAGE", ""))
     args = parser.parse_args()
+    if len(set(args.servers)) != len(args.servers) or (args.mode == "comparison" and set(args.servers) != {"honua", "geoserver"}):
+        parser.error("Comparison requires both servers; duplicate servers are invalid")
+    if args.reuse_fixture and args.mode != "diagnostic":
+        parser.error("Fixture reuse is diagnostic only")
     if args.smoke and args.mode != "diagnostic":
         parser.error("Smoke overrides are diagnostic only")
     os.chdir(ROOT)
@@ -341,26 +392,42 @@ def main():
     if not dataset.exists():
         subprocess.run([sys.executable, "data/small/generate.py"], check=True)
     manifest = {"schema": 1, "mode": args.mode, "protocol": args.protocol,
+                "reuse_fixture": args.reuse_fixture,
                 "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
-                **MODES[args.mode], "scenarios": scenarios, "servers": ["honua", "geoserver"],
+                **MODES[args.mode], "scenarios": scenarios, "servers": args.servers,
                 "budget": BUDGET, "seed": args.seed, "images": images, "corpus": corpus,
                 "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
                 "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
-                "honua_compilation": images["honua"]["labels"].get("honua.runtime.compilation", "unverified-diagnostic"),
-                "effective_compose": {s: make_compose("fingerprint", s, images) for s in ("honua", "geoserver")}}
-    if manifest["honua_compilation"] != "native-aot":
+                "honua_compilation": images.get("honua", {}).get("labels", {}).get("honua.runtime.compilation", "unverified-diagnostic"),
+                "effective_compose": {s: make_compose("fingerprint", s, images) for s in args.servers}}
+    if "honua" in args.servers and manifest["honua_compilation"] != "native-aot":
         manifest["profile"] += "-honua-jit-or-unverified-diagnostic"
     if args.smoke:
         manifest.update({"repetitions": 1, "warmup": 2, "measurement": 3, "smoke": True})
     manifest["binding"] = fingerprint(manifest)
-    if args.calibration:
-        manifest["calibration"] = json.loads(args.calibration.read_text())
     directory = (args.output or ROOT / "results" / ("features-" + time.strftime("%Y%m%dT%H%M%S"))).resolve()
     if not directory.is_relative_to(ROOT / "results"):
         parser.error("Output must be under results/ for the read-only input/output mount")
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / ".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if args.calibration:
+            calibration = json.loads(args.calibration.read_text())
+            archive = directory / "calibration"
+            archive.mkdir(exist_ok=True)
+            for key in ("observer_off", "observer_on", "isolated_generator"):
+                for index, row in enumerate(calibration.get(key, [])):
+                    source = args.calibration.resolve().parent / row["raw_points"]
+                    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+                    if digest != row["sha256"]:
+                        raise ValueError("Calibration source artifact hash mismatch")
+                    target = archive / f"{key}-{index}-{digest}.jsonl"
+                    if target.exists() and target.read_bytes() != source.read_bytes():
+                        raise ValueError("Calibration archive cannot overwrite different evidence")
+                    if not target.exists():
+                        shutil.copyfile(source, target)
+                    row["raw_points"] = str(target)
+            manifest["calibration"] = calibration
         manifest_file = directory / "campaign.json"
         attempts_file = directory / "attempts.json"
         if manifest_file.exists():
@@ -378,16 +445,18 @@ def main():
                 if not attempt.get("cleaned") and attempt.get("owner"):
                     cleanup(attempt["owner"], record_resources(attempt["owner"]))
                     attempt["cleaned"] = True
+            manifest["fixtures"] = {}
         else:
             manifest["owner"] = "gb-" + uuid.uuid4().hex[:12]
             manifest["host"] = {"platform": platform.platform(), "cpu_count": os.cpu_count(), "load": os.getloadavg(),
                                 "cpuinfo": Path('/proc/cpuinfo').read_text(), "memory": Path('/proc/meminfo').read_text()}
-            first = random.Random(args.seed).randrange(2)
-            manifest["order"] = [manifest["servers"][(first + i) % 2:] + manifest["servers"][:(first + i) % 2]
+            first = random.Random(args.seed).randrange(len(args.servers))
+            manifest["order"] = [manifest["servers"][(first + i) % len(args.servers):] + manifest["servers"][:(first + i) % len(args.servers)]
                                  for i in range(manifest["repetitions"])]
             attempts = []
-            for folder in ("src/tests", "adapters"):
-                shutil.copytree(ROOT / folder, directory / "harness" / folder)
+            for folder in ("src/tests", "adapters", "scripts", "config"):
+                shutil.copytree(ROOT / folder, directory / "harness" / folder, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copyfile(ROOT / "docker-compose.yml", directory / "harness" / "docker-compose.yml")
             manifest["snapshot_sha256"] = tree_hashes(directory / "harness")
             write(manifest_file, manifest)
         verify_snapshot(directory, manifest)
@@ -417,6 +486,14 @@ def main():
                     save()
                     break
         finally:
+            for fixture in manifest.get("fixtures", {}).values():
+                cleanup(fixture["owner"], fixture["resources"])
+                for attempt in attempts:
+                    if attempt.get("owner") == fixture["owner"]:
+                        attempt["cleaned"] = True
+            manifest["fixtures"] = {}
+            write(manifest_file, manifest)
+            save()
             result = report(directory, manifest, attempts)
             print(f"Evidence: {directory}/report.md; valid={result['valid']}, publishable={result['publishable']}", flush=True)
         return 0 if (result["publishable"] if args.mode == "comparison" else result["valid"]) else 1

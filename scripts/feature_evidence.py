@@ -6,6 +6,8 @@ import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from feature_contract import MODES
+
 
 def distribution(values):
     values = sorted(values)
@@ -16,18 +18,28 @@ def distribution(values):
             for name, quantile in (("p50", .50), ("p95", .95), ("p99", .99))}
 
 
+def point_records(path):
+    with Path(path).open() as stream:
+        for line in stream:
+            if line.strip():
+                yield json.loads(line)
+
+
 def summarize(path, duration, phase="measurement"):
     counts = Counter()
     latencies = []
     requests = Counter()
     seen = set()
-    for line in Path(path).read_text().splitlines():
-        entry = json.loads(line)
+    for entry in point_records(path):
         if entry.get("type") != "Point":
             continue
         metric, data = entry["metric"], entry["data"]
         value, tags = data["value"], data.get("tags", {})
         seen.add(metric)
+        if not metric.startswith("feature_") and metric != "dropped_iterations":
+            if metric.startswith("http_req_") and isinstance(value, (int, float)) and value < 0:
+                counts["clock_anomalies"] += 1
+            continue
         if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError("Invalid sample")
         if metric == "dropped_iterations":
@@ -59,17 +71,40 @@ def summarize(path, duration, phase="measurement"):
             "latency_ms": distribution(latencies), "failures": failures}
 
 
+def calibration_sample_failures(row):
+    try:
+        path = Path(row["raw_points"])
+        if hashlib.sha256(path.read_bytes()).hexdigest() != row["sha256"]:
+            return ["calibration artifact hash mismatch"]
+        seconds = row["measurement_seconds"]
+        if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+            return ["invalid calibration measurement window"]
+        actual = summarize(path, seconds)
+        if actual["failures"] or not math.isclose(actual["throughput"], row["throughput"], rel_tol=1e-6) or not math.isclose(actual["latency_ms"]["p95"], row["p95"], rel_tol=1e-6):
+            return ["calibration values do not match valid raw samples"]
+    except (KeyError, OSError, ValueError, TypeError):
+        return ["missing or malformed calibration raw evidence"]
+    return []
+
+
 def calibration_failures(evidence, binding):
     if not isinstance(evidence, dict) or evidence.get("binding") != binding:
         return ["missing calibration bound to this configuration, images, workload, dataset and harness"]
     reasons = []
-    if not evidence.get("isolated_generator_identity") or evidence.get("isolated_generator_identity") == evidence.get("local_generator_identity"):
+    if not evidence.get("local_generator_identity") or not evidence.get("isolated_generator_identity") or evidence.get("isolated_generator_identity") == evidence.get("local_generator_identity"):
         reasons.append("missing separate isolated load-generator identity")
     for key in ("observer_off", "observer_on", "isolated_generator"):
         rows = evidence.get(key, [])
         if len(rows) < 3 or any(not all(isinstance(r.get(k), (int, float)) and
                 math.isfinite(r[k]) and r[k] > 0 for k in ("throughput", "p95")) for r in rows):
             reasons.append(f"missing/invalid calibration samples: {key}")
+    if reasons:
+        return reasons
+    for key in ("observer_off", "observer_on", "isolated_generator"):
+        for row in evidence[key]:
+            reasons.extend(calibration_sample_failures(row))
+        if len({row.get("sha256") for row in evidence[key]}) != len(evidence[key]):
+            reasons.append(f"duplicate calibration artifacts: {key}")
     if reasons:
         return reasons
     for metric in ("throughput", "p95"):
@@ -103,6 +138,23 @@ def report(directory, manifest, attempts):
             path = (Path(directory) / relative).resolve()
             if not path.is_relative_to(Path(directory).resolve()) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected_hash:
                 failures.append(f"attempt {attempt['id']}: missing or modified evidence {relative}")
+        if attempt.get("status") == "passed":
+            required = {"runtime.json", "database.json", "oracle.json", "source-query.log", "pressure-probe.json", "telemetry.jsonl", "bottlenecks.json"}
+            if attempt["server"] == "geoserver":
+                required.update({"plugins.json", "effective-store.json"})
+            for scenario in manifest["scenarios"]:
+                for phase in ("warmup", "measurement"):
+                    required.update({f"{scenario}-{phase}.jsonl", f"{scenario}-{phase}-input.json", f"{scenario}-{phase}-preflight.json"})
+            recorded = {Path(name).name for name in hashes}
+            if not required <= recorded:
+                failures.append(f"attempt {attempt['id']}: missing required runtime/semantic/measurement artifacts")
+            for scenario, row in attempt.get("rows", {}).items():
+                try:
+                    raw = summarize(Path(directory) / attempt["id"] / f"{scenario}-measurement.jsonl", manifest["measurement"])
+                    if raw["failures"] or any(raw[key] != row[key] for key in ("counts", "requests", "throughput", "latency_ms")):
+                        failures.append(f"attempt {attempt['id']}: invalid or mismatched raw scenario {scenario}")
+                except (OSError, ValueError, KeyError, TypeError):
+                    failures.append(f"attempt {attempt['id']}: malformed raw scenario {scenario}")
         if attempt.get("status") != "passed":
             failures.append(f"attempt {attempt['id']}: {attempt.get('error', attempt.get('status'))}")
         failures.extend(attempt.get("fairness_failures", []))
@@ -127,7 +179,8 @@ def report(directory, manifest, attempts):
                 h, g = rows["honua"], rows["geoserver"]
                 pairs.append({"scenario": scenario, "repetition": rep,
                               "honua_over_geoserver_throughput": h["throughput"] / g["throughput"],
-                              "honua_over_geoserver_p95": h["latency_ms"]["p95"] / max(g["latency_ms"]["p95"], .001)})
+                              **{f"honua_over_geoserver_{p}": h["latency_ms"][p] / g["latency_ms"][p] if g["latency_ms"][p] else None
+                                 for p in ("p50", "p95", "p99")}})
     # Require matching DB content/index/settings fingerprints and count contracts across products.
     evidence = [a for a in attempts if a.get("status") == "passed"]
     for key in ("database_fingerprint", "response_contract"):
@@ -135,6 +188,10 @@ def report(directory, manifest, attempts):
         if len(values) != 1 or not evidence or any(not a.get(key) for a in evidence):
             failures.append(f"missing or incompatible {key}")
     publication_failures = list(failures)
+    if any(row.get("counts", {}).get("clock_anomalies", 0) for a in attempts for row in a.get("rows", {}).values()):
+        publication_failures.append("negative wall-clock HTTP timings observed; local clock is unsuitable for publication")
+    if manifest["mode"] == "comparison" and any(manifest.get(k) != v for k, v in MODES["comparison"].items()):
+        publication_failures.append("comparison timing/repetition contract was changed")
     if manifest["mode"] != "comparison":
         publication_failures.append("diagnostic mode is not publication evidence")
     publication_failures.extend(calibration_failures(manifest.get("calibration"), manifest["binding"]))
@@ -146,12 +203,12 @@ def report(directory, manifest, attempts):
     lines = [f"GeoBench {manifest['mode']}: 100K points, {manifest['profile']}", "",
              f"Valid: {result['valid']}. Publishable: {result['publishable']}.", ""]
     lines.extend(f"- {reason}" for reason in dict.fromkeys(publication_failures))
-    lines += ["", "| Scenario | Server | Repetition | Valid req/s | p50 ms | p95 ms | p99 ms | Late | Dropped |", "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+    lines += ["", "| Scenario | Server | Repetition | Offered req/s | Valid req/s | p50 ms | p95 ms | p99 ms | Late | Dropped |", "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for scenario, servers in by_scenario.items():
         for server, data in servers.items():
             for row in data["repetitions"]:
                 latency = row["latency_ms"]
-                lines.append(f"| {scenario} | {server} | {row['repetition']} | {row['throughput']:.2f} | {latency['p50']:.2f} | {latency['p95']:.2f} | {latency['p99']:.2f} | {row['counts'].get('drain', 0)} | {row['counts'].get('dropped', 0)} |")
+                lines.append(f"| {scenario} | {server} | {row['repetition']} | {row.get('offered_rate') or 'closed loop'} | {row['throughput']:.2f} | {latency['p50']:.2f} | {latency['p95']:.2f} | {latency['p99']:.2f} | {row['counts'].get('drain', 0)} | {row['counts'].get('dropped', 0)} |")
     lines += ["", "Per-repetition medians, ranges, paired ratios, failures and warmup/drain accounting are in report.json. No combined percentile or cross-protocol winner is computed."]
     (directory / "report.md").write_text("\n".join(lines) + "\n")
     return result

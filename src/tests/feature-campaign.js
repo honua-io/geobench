@@ -36,6 +36,7 @@ export function setup() {
   const results = config.requests.map(request => {
     const result = query(request);
     return {id: request.id, failure: result.failure,
+      failureBody: result.failure ? String(result.response.body).slice(0, 500) : undefined,
       countMetadata: result.payload && typeof result.payload.numberMatched,
       encoding: result.response.headers['Content-Encoding'] || 'identity'};
   });
@@ -45,14 +46,16 @@ export function setup() {
 
 export default function () {
   const request = requests[selected[exec.scenario.iterationInTest % selected.length]];
-  const begin = Date.now();
+  // Executor progress uses Go time.Since (monotonic), unlike JS wall time.
+  const begin = exec.scenario.progress;
   started.add(1, {phase: config.phase, request: request.id});
   const result = query(request);
-  const finish = Date.now();
-  const phase = finish < exec.scenario.startTime + config.duration * 1000 ? config.phase : 'drain';
+  const finish = exec.scenario.progress;
+  const phase = finish < 1 ? config.phase : 'drain';
   const tags = {phase, request: request.id, valid: String(!result.failure)};
   completed.add(1, tags);
   invalid.add(result.failure ? 1 : 0, tags);
-  latency.add(finish - begin, tags);
+  // Progress is capped at 1 during drain: record late counts, never a truncated latency.
+  if (phase !== 'drain') latency.add((finish - begin) * config.duration * 1000, tags);
   if (result.failure && exec.scenario.iterationInTest < 3) console.error(result.failure);
 }

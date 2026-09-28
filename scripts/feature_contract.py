@@ -78,6 +78,8 @@ def validate_plugin_jars(jars, gsr=False):
     for line in jars:
         match = re.search(r"/(gs-(?:main|ogcapi-features|gsr))-(.+)\.jar$", line)
         if match:
+            if match[1] in versions:
+                raise ValueError(f"Duplicate GeoServer core/plugin JAR: {match[1]}")
             versions[match[1]] = match[2]
     required = {"gs-main", "gs-ogcapi-features"} | ({"gs-gsr"} if gsr else set())
     if not required <= versions.keys() or len({versions[k] for k in required}) != 1:

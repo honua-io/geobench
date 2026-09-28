@@ -479,7 +479,7 @@ write_run_metadata() {
   GEOBENCH_GEOSERVER_GSR_ENABLED="${GEOSERVER_GSR_ENABLED:-0}" \
   GEOBENCH_GEOSERVER_MAX_CONNECTIONS="${GEOSERVER_MAX_CONNECTIONS:-6}" \
   GEOBENCH_GEOSERVER_MIN_CONNECTIONS="${GEOSERVER_MIN_CONNECTIONS:-3}" \
-  GEOBENCH_HONUA_IMAGE="${HONUA_IMAGE:-honuaio/honua-server:latest}" \
+  GEOBENCH_HONUA_IMAGE="${HONUA_IMAGE:-ghcr.io/honua-io/honua-server:nightly-aot}" \
   GEOBENCH_GEOSERVER_IMAGE="${GEOSERVER_IMAGE:-docker.osgeo.org/geoserver:3.0.1}" \
   GEOBENCH_QGIS_IMAGE="${QGIS_IMAGE:-qgis/qgis-server:3.38}" \
   GEOBENCH_POSTGIS_IMAGE="${POSTGIS_IMAGE:-postgis/postgis:17-3.5}" \
@@ -594,7 +594,7 @@ metadata = {
         "concurrent_mix": default_concurrent_mix,
     },
     "server_images": {
-        "honua": os.environ.get("GEOBENCH_HONUA_IMAGE", "honuaio/honua-server:latest"),
+        "honua": os.environ.get("GEOBENCH_HONUA_IMAGE", "ghcr.io/honua-io/honua-server:nightly-aot"),
         "geoserver": os.environ.get("GEOBENCH_GEOSERVER_IMAGE", "docker.osgeo.org/geoserver:3.0.1"),
         "qgis": os.environ.get("GEOBENCH_QGIS_IMAGE", "qgis/qgis-server:3.38"),
         "postgis": os.environ.get("GEOBENCH_POSTGIS_IMAGE", "postgis/postgis:17-3.5"),

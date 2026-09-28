@@ -85,8 +85,9 @@ python3 scripts/audit-fairness.py \
   --strict-equal-db-budget
 ```
 
-No formal lint/build/test runner or CI workflow is configured (no
-`.github/workflows`, no `package.json`, no `Makefile`).
+Automated tests run with `python3 -m unittest discover -s tests -p 'test_*.py'`.
+CI in `.github/workflows/ci.yml` runs Ruff, Python compilation and tests,
+JavaScript syntax checks, and ShellCheck. Feature-campaign tests also use Node.
 
 ## Architecture
 
@@ -154,8 +155,9 @@ geobench/
 - Cache tier and DB admission are benchmark dimensions, not toggles to maximize.
   Baseline rows use no exact response cache and bounded fixed DB admission; keep
   cache-assisted and adaptive-admission results in separately named profiles.
-- No automated tests, linters, or CI exist. Validate changes manually via
-  `tests/smoke-test.sh` and short `RUNS=1` benchmark runs.
+- Run the Python tests, Ruff, JavaScript syntax checks and ShellCheck before
+  completing harness changes. Use `scripts/run-feature-campaign.py --smoke`
+  for oracle-validated end-to-end checks; see `docs/feature-campaigns.md`.
 - License: Apache 2.0.
 
 ## Shared dev-environment rules (multi-agent WSL)

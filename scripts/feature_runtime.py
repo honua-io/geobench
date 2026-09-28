@@ -18,7 +18,7 @@ def inspect(container):
 
 
 def owned_ids(owner, kind="container"):
-    return command("docker", kind, "ls", "-q", *(["-a"] if kind == "container" else []), "--filter", f"label={LABEL}={owner}").split()
+    return sorted(command("docker", kind, "ls", "-q", *(["-a"] if kind == "container" else []), "--filter", f"label={LABEL}={owner}").split())
 
 
 def cleanup(owner, identities):
@@ -76,6 +76,8 @@ class Observer:
         self.failures = []
         self.max_pressure = {"source_sessions": 0, "source_active": 0, "parallel_workers": 0}
         self.samples = 0
+        self.container_peaks = {}
+        self.activity = "pressure-diagnostic"
 
     def run(self):
         deadline = time.monotonic()
@@ -85,11 +87,16 @@ class Observer:
                 try:
                     pressure = sql(self.database, PRESSURE_SQL)
                     stats = command("docker", "stats", "--no-stream", "--format", "{{json .}}", *self.containers)
-                    row = {"time": time.time(), "database": pressure,
+                    row = {"time": time.time(), "monotonic_seconds": time.monotonic(), "activity": self.activity, "database": pressure,
                            "containers": [json.loads(line) for line in stats.splitlines()],
                            "host": {"load": os.getloadavg(), "memory": Path('/proc/meminfo').read_text(),
                                     "cpu": Path('/proc/stat').read_text().splitlines()[0]},
                            "observer_seconds": time.monotonic() - start}
+                    for container in row["containers"]:
+                        name = container.get("Name", container.get("ID", "unknown"))
+                        peaks = self.container_peaks.setdefault(name, {"cpu_percent": 0, "memory_percent": 0})
+                        peaks["cpu_percent"] = max(peaks["cpu_percent"], float(container["CPUPerc"].rstrip("%")))
+                        peaks["memory_percent"] = max(peaks["memory_percent"], float(container["MemPerc"].rstrip("%")))
                     for key in self.max_pressure:
                         self.max_pressure[key] = max(self.max_pressure[key], pressure[key])
                     self.samples += 1
@@ -112,6 +119,11 @@ class Observer:
             self.failures.append("observer did not drain")
 
     def summary(self):
+        signals = [f"{name}: sampled CPU reached 90% of four-core budget" for name, peak in self.container_peaks.items() if peak["cpu_percent"] >= 360]
+        signals += [f"{name}: sampled memory reached 90% of limit" for name, peak in self.container_peaks.items() if peak["memory_percent"] >= 90]
+        if self.max_pressure["source_active"] >= 6:
+            signals.append("source-query budget reached or exceeded in samples")
         return {"samples": self.samples, "max_database_pressure": self.max_pressure,
+                "container_peaks": self.container_peaks, "signals": signals,
                 "failures": self.failures,
                 "interpretation": "Sampled pressure, not an exact session peak; SQL tracing runs separately. CPU, memory and throttling need correlation with raw five-second samples."}

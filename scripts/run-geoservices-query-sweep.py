@@ -187,7 +187,7 @@ def main() -> int:
     parser.add_argument("--duration", default="120s", help="Per-scenario k6 duration")
     parser.add_argument("--warmup", default="60s", help="Warmup duration")
     parser.add_argument("--servers", default="honua geoserver", help="Servers to benchmark")
-    parser.add_argument("--geoserver-image", default="docker.osgeo.org/geoserver:2.28.x")
+    parser.add_argument("--geoserver-image", default="docker.osgeo.org/geoserver:3.0.x")
     parser.add_argument("--geoserver-extensions", default="gsr")
     parser.add_argument("--salts", help="Comma-separated salt list to execute")
     parser.add_argument(
