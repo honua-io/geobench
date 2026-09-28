@@ -104,6 +104,16 @@ measurement. Database pressure reports active queries, last-query source
 sessions, background connections and parallel workers; sampling does not prove
 an exact peak. Interpret these alongside server, DB, generator and host samples.
 
+`source-query.json` summarizes executed geometry-encoding SELECTs and source
+counts from the SQL trace. For these pinned profiles, every observed feature
+projection must read only the qualified `public.bench_points` relation, including
+inside pagination subqueries. Counts alone, parse/bind messages, SQL literals,
+unqualified names, other schemas and additional feature-data joins cannot prove
+source-backed feature reads. The recognizer targets the SQL shapes of the pinned
+profiles; an unrecognized shape needs a separate diagnostic review. Reporting
+revalidates the raw trace against its receipt. Older artifacts without this
+receipt do not satisfy the new evidence gate.
+
 The manifest fingerprints both the controller and Docker engine (engine ID,
 kernel, CPU/memory capacity, version and cgroup settings). Engine identity and
 capacity are checked again before and after traffic. Five-second `host` samples

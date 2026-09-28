@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from feature_contract import MODES
+from feature_sql_evidence import validate_source_trace
 
 
 def distribution(values):
@@ -144,7 +145,7 @@ def report(directory, manifest, attempts):
             if not path.is_relative_to(Path(directory).resolve()) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected_hash:
                 failures.append(f"attempt {attempt['id']}: missing or modified evidence {relative}")
         if attempt.get("status") == "passed":
-            required = {"runtime.json", "database.json", "oracle.json", "source-query.log", "pressure-probe.json", "telemetry.jsonl", "bottlenecks.json"}
+            required = {"runtime.json", "database.json", "oracle.json", "source-query.log", "source-query.json", "pressure-probe.json", "telemetry.jsonl", "bottlenecks.json"}
             if attempt["server"] == "geoserver":
                 required.update({"plugins.json", "effective-store.json"})
             for scenario in manifest["scenarios"]:
@@ -153,6 +154,12 @@ def report(directory, manifest, attempts):
             recorded = {Path(name).name for name in hashes}
             if not required <= recorded:
                 failures.append(f"attempt {attempt['id']}: missing required runtime/semantic/measurement artifacts")
+            try:
+                source_receipt = json.loads((Path(directory) / attempt["id"] / "source-query.json").read_text())
+                if validate_source_trace((Path(directory) / attempt["id"] / "source-query.log").read_text()) != source_receipt:
+                    failures.append(f"attempt {attempt['id']}: source-query evidence mismatch")
+            except (OSError, ValueError, KeyError, TypeError):
+                failures.append(f"attempt {attempt['id']}: missing or invalid executed source-query evidence")
             for scenario, row in attempt.get("rows", {}).items():
                 try:
                     raw = summarize(Path(directory) / attempt["id"] / f"{scenario}-measurement.jsonl", manifest["measurement"])
