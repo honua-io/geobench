@@ -138,9 +138,62 @@ passed with no skips. The smaller regression fixture verifies that a ten-row
 page and its one-row has-more probe encode at most 11 rows instead of 911.
 Baseline and candidate TRX receipts are retained with the SQL artifacts.
 
-The production Native AOT image build is pending. This candidate is based on
+The production Native AOT image build was intentionally cancelled after an hour
+when the user deferred official comparisons and prioritized targeted optimization
+on the shared host. The compiler was still active; this was not a compilation
+failure. No candidate AOT image or new HTTP comparison measurements were produced.
+The dependent smoke test and long diagnostic sweep were cancelled before creating
+campaigns. Cancellation receipts and the original build log are retained under
+`results/source-query-plans-20260928`.
+
+This candidate is based on
 trunk `e9ef3d292787834ac3f943044788da5ccd7e9427`, which also includes newer
 authorization optimizations than the previously benchmarked published image.
 Future comparisons must retain these runtime identities; an improvement over
 the older image cannot be attributed solely to pagination. The mixed-workload
 results and strict-publication limitations above remain unchanged.
+
+## Spatial-count optimization diagnostics on the shared host
+
+`results/spatial-predicate-diagnostic-20260928` records a separate SQL experiment
+using the same immutable PostGIS image and deterministic 100K-point artifact.
+It uses one shared build slot, an owned four-CPU/four-GiB database, no product
+servers, and no published comparison campaign. Other development work was active.
+The private database and volume were removed after completion.
+
+Five alternatives were evaluated: the original exact intersection predicate,
+an explicit bbox check plus exact intersection (also observed in GeoServer's
+captured SQL), guarded point-coordinate comparisons with an exact fallback,
+the original predicate with PostgreSQL JIT disabled, and that predicate with
+both JIT and parallel workers disabled. Settings were transaction-local.
+One warmup repetition is excluded from these seven-repetition summaries; order
+was shuffled with recorded seed 20260928.
+
+Complete ordered ID sequences matched for all predicate forms across small, medium,
+large, world and empty bboxes. Additional cases checked exact corners, immediately
+adjacent double-precision coordinates inside and outside each boundary, null and
+empty geometries, 3D points, and non-point fallback behavior. This validates the
+SQL experiments' selected predicates, not an implemented server fast path.
+
+| Bbox | Original exact count ms, median [min–max] | Exact, JIT off | Exact, JIT off and serial |
+|---|---:|---:|---:|
+| Small | 1.19 [0.69–10.90] | 1.04 [0.66–2.76] | 2.50 [0.86–13.96] |
+| Medium | 55.30 [32.47–104.74] | 40.18 [31.60–209.39] | 26.53 [18.81–98.01] |
+| Large | 179.03 [144.42–502.51] | 43.32 [28.86–122.16] | 36.10 [28.03–140.03] |
+| World | 634.76 [431.37–1269.21] | 126.99 [71.44–243.19] | 123.72 [94.29–249.77] |
+| Empty | 0.35 [0.23–0.63] | 0.36 [0.25–1.63] | 0.39 [0.31–0.74] |
+
+The wide ranges preclude precise speedup claims. The executed plans nevertheless
+identify avoidable JIT work in broad spatial counts. JIT here means PostgreSQL's
+SQL compilation, independent of whether the Honua process uses Native AOT.
+The next candidate is scoped JIT suppression while retaining the exact predicate;
+serial execution needs separate assessment because it did not help every case.
+No production setting or query behavior was changed by this experiment.
+
+The alternative predicates are not being adopted: the explicit bbox-plus-exact
+form helped the large case but its world-bbox median rose to 1575.03 ms. The
+coordinate form had a large-bbox median of 257.23 ms and a world-bbox median of
+1195.71 ms. This broader check rules out using their occasional wins as a reason
+to replace the original predicate. The script, database fingerprint, complete
+expected ID sequences, boundary checks, all SQL/plans, raw samples, and summaries
+are retained with the diagnostic artifacts.
