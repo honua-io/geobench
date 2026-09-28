@@ -5,8 +5,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -197,15 +198,77 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
         self.assertTrue(calibration_failures(None, 'x'))
         evidence = {'binding':'x','local_generator_identity':'local','isolated_generator_identity':'remote'}
         for key in ('observer_off','observer_on','isolated_generator'):
-            evidence[key] = [{'throughput':100,'p95':10,'sha256':str(i)} for i in range(3)]
+            evidence[key] = [{'throughput':100,'p95':10,'sha256':key+str(i)} for i in range(3)]
         with patch('feature_evidence.calibration_sample_failures', return_value=[]):
             self.assertEqual([], calibration_failures(evidence, 'x'))
-            evidence['observer_on'] = [{'throughput':95,'p95':10,'sha256':str(i)} for i in range(3)]
+            evidence['observer_on'] = [{'throughput':95,'p95':10,'sha256':'observer_on'+str(i)} for i in range(3)]
             self.assertEqual([], calibration_failures(evidence, 'x'))
-            evidence['observer_on'] = [{'throughput':94,'p95':10,'sha256':str(i)} for i in range(3)]
+            evidence['observer_on'] = [{'throughput':94,'p95':10,'sha256':'observer_on'+str(i)} for i in range(3)]
             self.assertTrue(calibration_failures(evidence, 'x'))
         self.assertTrue(calibration_sample_failures({'throughput':100,'p95':10}))
         self.assertTrue(calibration_failures(evidence, 'drifted'))
+
+    def test_calibration_rejects_reused_treatments_and_clock_anomalies(self):
+        evidence = {'binding':'x','local_generator_identity':'local','isolated_generator_identity':'remote'}
+        for key in ('observer_off','observer_on','isolated_generator'):
+            evidence[key] = [{'throughput':100,'p95':10,'sha256':key+str(i)} for i in range(3)]
+        evidence['isolated_generator'][0]['sha256'] = evidence['observer_on'][0]['sha256']
+        with patch('feature_evidence.calibration_sample_failures', return_value=[]):
+            self.assertIn('calibration treatments reuse the same raw artifacts', calibration_failures(evidence, 'x'))
+        with tempfile.TemporaryDirectory() as temp:
+            raw = Path(temp) / 'raw.jsonl'
+            raw.write_text('raw')
+            import hashlib
+            sample = {'raw_points':str(raw),'sha256':hashlib.sha256(raw.read_bytes()).hexdigest(),
+                      'measurement_seconds':120, 'throughput':100,'p95':10}
+            with patch('feature_evidence.summarize', return_value={'counts':{'clock_anomalies':1}}):
+                self.assertEqual(['clock anomalies in calibration raw samples'], calibration_sample_failures(sample))
+
+    def test_observer_calibration_alternates_and_drains_without_sampling_off_runs(self):
+        module = load('run-observer-calibration')
+        first = module.observer_order(42, 1)
+        self.assertEqual(first[::-1], module.observer_order(42, 2))
+        self.assertEqual(first, module.observer_order(42, 3))
+        events = []
+        class FakeObserver:
+            def __init__(self, *args):
+                pass
+            def __enter__(self):
+                events.append('observer-start')
+                return self
+            def __exit__(self, *args):
+                events.append('observer-drained')
+            def summary(self):
+                return {'samples':2,'failures':[], 'max_database_pressure':{
+                    'source_sessions':6, 'source_active':3, 'parallel_workers':0}}
+        with tempfile.TemporaryDirectory() as temp:
+            raw = Path(temp) / 'raw'
+            raw.write_text('raw')
+            def run(ids, path, config, name):
+                events.append(name)
+                return raw, []
+            summary = {'failures':[], 'throughput':100, 'latency_ms':{'p95':10}, 'counts':{}}
+            attempt = {'id':'test','repetition':1}
+            with patch.object(module, 'Observer', FakeObserver), patch.object(module, 'summarize', return_value=summary):
+                result = module.collect_observer_samples(SimpleNamespace(run_k6=run),
+                    {'seed':42,'warmup':30,'measurement':30}, ['equality'], Path(temp), {'k6':'k6'}, 'db', {}, attempt, Mock())
+        self.assertEqual(['equality-observer_off-warmup', 'equality-observer_off-measurement',
+                          'observer-start', 'equality-observer_on-warmup',
+                          'equality-observer_on-measurement', 'observer-drained'], events)
+        self.assertEqual(2, result['samples'])
+        self.assertEqual({'observer_on','observer_off'}, set(attempt['calibration_rows']['equality']))
+
+    def test_observer_report_retains_interruption_and_cannot_approve_publication(self):
+        module = load('run-observer-calibration')
+        manifest = {'servers':['honua'],'binding':'x','host_identity':{'node':'wsl'},
+                    'mode':'diagnostic','warmup':30,'measurement':30}
+        attempts = [{'id':'failed', 'server':'honua', 'repetition':1, 'status':'interrupted'}]
+        with tempfile.TemporaryDirectory() as temp:
+            result = module.local_report(Path(temp), manifest, attempts, ['equality'])
+        self.assertFalse(result['valid'])
+        self.assertFalse(result['publishable'])
+        self.assertFalse(result['within_five_percent'])
+        self.assertTrue(any('interrupted' in reason for reason in result['failures']))
 
 
 if __name__ == '__main__':

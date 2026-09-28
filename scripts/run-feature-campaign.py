@@ -196,7 +196,7 @@ def wait_ready(compose, server, log):
                    stdout=log, stderr=subprocess.STDOUT, timeout=360)
 
 
-def execute_attempt(directory, manifest, attempt, save):
+def execute_attempt(directory, manifest, attempt, save, calibration_workload=None):
     verify_snapshot(directory, manifest)
     server = attempt["server"]
     fixture = manifest.setdefault("fixtures", {}).get(server) if manifest.get("reuse_fixture") else None
@@ -287,35 +287,39 @@ def execute_attempt(directory, manifest, attempt, save):
         if pressure["source_sessions"] > BUDGET["source_connections"] or pressure["source_active"] > BUDGET["source_connections"]:
             raise ValueError("Fairness preflight: observed source-query pressure exceeds six connections")
 
-        if manifest["mode"] == "comparison":
-            reasons = calibration_failures(manifest.get("calibration"), manifest["binding"])
-            if reasons:
-                raise ValueError("Comparison calibration prerequisite: " + "; ".join(reasons))
-        with Observer(path, list(ids.values()), db) as observer:
-            for scenario in manifest["scenarios"]:
-                parts = scenario.split(":")
-                config.update({"scenario": parts[0], "vus": int(parts[2]) if len(parts) == 3 and parts[1] == "vus" else 10,
-                               "rate": int(parts[2]) if len(parts) == 3 and parts[1] == "rate" else None})
-                print(f"{attempt['id']} {scenario}: warmup, measurement, drain", flush=True)
-                observer.activity = scenario + ":warmup-and-drain"
-                config.update({"phase": "warmup", "duration": manifest["warmup"]})
-                warm_path, _ = run_k6(ids, path, config, scenario + "-warmup")
-                warm = summarize(warm_path, manifest["warmup"], "warmup")
-                if warm["failures"]:
-                    raise ValueError(f"Warmup failed: {warm['failures']}")
-                observer.activity = scenario + ":measurement-and-drain"
-                config.update({"phase": "measurement", "duration": manifest["measurement"]})
-                measured_path, _ = run_k6(ids, path, config, scenario + "-measurement")
-                row = summarize(measured_path, manifest["measurement"])
-                row.update({"warmup": warm, "offered_rate": config["rate"], "offered_iterations": config["rate"] * manifest["measurement"] if config["rate"] else None, "vus": config["vus"]})
-                required = set(manifest["corpus"]["mixed"]) if parts[0] == "mixed" else {parts[0]}
-                if not required <= set(row["requests"]):
-                    row["failures"].append("missing measured corpus requests")
-                attempt["rows"][scenario] = row
-                save()
-                if row["failures"]:
-                    raise ValueError(f"Measured scenario failed: {row['failures']}")
-        summary = observer.summary()
+        if calibration_workload is not None:
+            # Separate calibration ledger: this never creates comparison measurement rows.
+            summary = calibration_workload(path, ids, db, config, attempt, save)
+        else:
+            if manifest["mode"] == "comparison":
+                reasons = calibration_failures(manifest.get("calibration"), manifest["binding"])
+                if reasons:
+                    raise ValueError("Comparison calibration prerequisite: " + "; ".join(reasons))
+            with Observer(path, list(ids.values()), db) as observer:
+                for scenario in manifest["scenarios"]:
+                    parts = scenario.split(":")
+                    config.update({"scenario": parts[0], "vus": int(parts[2]) if len(parts) == 3 and parts[1] == "vus" else 10,
+                                   "rate": int(parts[2]) if len(parts) == 3 and parts[1] == "rate" else None})
+                    print(f"{attempt['id']} {scenario}: warmup, measurement, drain", flush=True)
+                    observer.activity = scenario + ":warmup-and-drain"
+                    config.update({"phase": "warmup", "duration": manifest["warmup"]})
+                    warm_path, _ = run_k6(ids, path, config, scenario + "-warmup")
+                    warm = summarize(warm_path, manifest["warmup"], "warmup")
+                    if warm["failures"]:
+                        raise ValueError(f"Warmup failed: {warm['failures']}")
+                    observer.activity = scenario + ":measurement-and-drain"
+                    config.update({"phase": "measurement", "duration": manifest["measurement"]})
+                    measured_path, _ = run_k6(ids, path, config, scenario + "-measurement")
+                    row = summarize(measured_path, manifest["measurement"])
+                    row.update({"warmup": warm, "offered_rate": config["rate"], "offered_iterations": config["rate"] * manifest["measurement"] if config["rate"] else None, "vus": config["vus"]})
+                    required = set(manifest["corpus"]["mixed"]) if parts[0] == "mixed" else {parts[0]}
+                    if not required <= set(row["requests"]):
+                        row["failures"].append("missing measured corpus requests")
+                    attempt["rows"][scenario] = row
+                    save()
+                    if row["failures"]:
+                        raise ValueError(f"Measured scenario failed: {row['failures']}")
+            summary = observer.summary()
         write(path / "bottlenecks.json", summary)
         if summary["failures"] or not summary["samples"]:
             attempt["fairness_failures"].append("missing/failed five-second telemetry")

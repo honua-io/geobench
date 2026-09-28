@@ -80,6 +80,8 @@ def calibration_sample_failures(row):
         if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
             return ["invalid calibration measurement window"]
         actual = summarize(path, seconds)
+        if actual["counts"].get("clock_anomalies", 0):
+            return ["clock anomalies in calibration raw samples"]
         if actual["failures"] or not math.isclose(actual["throughput"], row["throughput"], rel_tol=1e-6) or not math.isclose(actual["latency_ms"]["p95"], row["p95"], rel_tol=1e-6):
             return ["calibration values do not match valid raw samples"]
     except (KeyError, OSError, ValueError, TypeError):
@@ -105,6 +107,9 @@ def calibration_failures(evidence, binding):
             reasons.extend(calibration_sample_failures(row))
         if len({row.get("sha256") for row in evidence[key]}) != len(evidence[key]):
             reasons.append(f"duplicate calibration artifacts: {key}")
+    all_hashes = [row.get("sha256") for key in ("observer_off", "observer_on", "isolated_generator") for row in evidence[key]]
+    if len(all_hashes) != len(set(all_hashes)):
+        reasons.append("calibration treatments reuse the same raw artifacts")
     if reasons:
         return reasons
     for metric in ("throughput", "p95"):

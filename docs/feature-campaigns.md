@@ -124,6 +124,34 @@ A selected-scenario campaign only supports claims about those selected rows.
 
 ## Calibration
 
+Collect the local observer half automatically from a prepared campaign:
+
+```bash
+python3 scripts/run-feature-campaign.py --mode diagnostic \
+  --scenarios mixed:vus:10 --prepare-only --output results/observer-local
+python3 scripts/run-observer-calibration.py --campaign results/observer-local
+```
+
+The image environment variables above are required for preparation. The collector
+uses three paired repetitions per product, fresh owned fixtures, the complete
+oracle and pressure preflights, and separate warmup/measurement/drain processes.
+Observer-off traffic has no five-second observer; observer-on traffic uses the
+normal observer. Their order alternates from the recorded seed. Raw samples,
+runtime receipts, failed/interrupted attempts and cleanup receipts are retained
+in a separate ledger under the prepared campaign. It does not populate or replace
+comparison attempts. The JSON report shows each sample, medians and relative
+throughput/p95 changes, with an explicit 5% check for each selected product/scenario.
+`--scenarios` may restrict calibration to a subset of the prepared scenarios;
+the report records that scope. Re-running creates a new ledger, never overwrites
+an old attempt. Changed harness/host fingerprints require new preparation.
+
+Diagnostic preparation uses 30s warmup/30s measurement and remains diagnostic.
+Prepare with `--mode comparison` to collect the 180s/120s phases bound to a
+strict campaign. Local observer evidence alone **cannot approve publication**:
+an isolated-generator run is still required, and a failed 5% check requires
+changing the setup and collecting new evidence. Do not copy one raw sample
+between treatments or use a diagnostic receipt for a comparison binding.
+
 The local machine is a shared development host. Publication requires an actual
 separate load-generator host, plus observer-off/on measurements. Run `--prepare-only --output results/<campaign>` to create the immutable inputs
 and calibration binding without starting stacks. Supply a JSON receipt bound to
