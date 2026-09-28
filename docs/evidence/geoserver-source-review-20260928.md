@@ -116,10 +116,9 @@ ratios. PostgreSQL JIT is independent of Honua's Native AOT compilation.
 
 No explicit JIT setting was found in the reviewed GeoTools JDBC/PostGIS production
 source directories. That does not prove every runtime connection setting or query
-plan. The next test should isolate query-scoped JIT suppression for exact counts,
-including prepared-plan reuse, rollback/cancellation, pooled connection reuse,
-and borrowed transactions. The existing Honua opt-in serial-spatial helper only
-wraps eligible feature reads; it does not currently cover `CountAsync`.
+plan. The reviewed trunk snapshot only scoped its serial-spatial helper to feature
+reads. The count candidate described below adds separate opt-in JIT suppression;
+it does not force serial counts or change the exact spatial predicate.
 
 ### Fetch size and prepared statements are secondary hypotheses
 
@@ -153,13 +152,12 @@ establish general literal-prefix correctness.
 
 ## Implementation priority
 
-1. Finish verification of resolving read security once per operation. Nested
-   public reader calls currently repeat an absent-policy lookup and can give the
-   count and rows different policy snapshots. Preserve fresh resolution on the
-   next public read; do not cache authorization across requests.
+1. Review the verified [read-security candidate][security-pr], which resolves
+   policy once per operation while preserving fresh resolution on the next public
+   read. Measure its removal of repeated absent-policy lookups in the application.
 2. Retain the pagination candidate and validate it in a future AOT build when
    shared-host capacity allows.
-3. Test query-scoped PostgreSQL JIT suppression for exact counts, separately from
+3. Measure the verified count-JIT candidate in the application, separately from
    forced serial execution and from benchmark baseline defaults.
 4. Measure page-first exact-count reuse and typed source-row decoding separately,
    with correctness and allocation evidence before combining them.
@@ -170,9 +168,25 @@ Honua-versus-GeoServer speed ratio. Rendering, WFS, tiles, GSR and non-point
 workloads remain outside this review.
 
 The focused security candidate reproduced seven failures and four passes before
-the fix, then passed all 149 mapped-reader/security integration cases without
+the fix, then passed all 149 targeted mapped-reader/security tests without
 skips. This verifies policy consistency and fewer resolver calls, not an HTTP
-throughput improvement. See [issue #5301](https://github.com/honua-io/honua-server/issues/5301).
+throughput improvement. See [draft PR #5302][security-pr].
+
+The count-JIT candidate adds `Database__DisableJitForSourceSpatialCounts`, default
+`false`, for source-backed point counts with simple intersects/envelope bboxes.
+It preserves the original predicate and security parameters, uses a separate
+prepared-query identity, and restores the original session settings after
+success, SQL errors, and cancellation. Ambient and borrowed transactions retain
+ordinary planning. All 156 targeted reader/registration tests passed, including
+17 new integration cases; pool reset was disabled to expose setting leaks on the
+same physical connection. The baseline reproduced four expected failures and
+eight passes. A subsequent test compile failed on local-variable shadowing, was
+corrected, and remains in the local attempt log. See
+[draft PR #5307](https://github.com/honua-io/honua-server/pull/5307) and the local
+receipt `results/source-spatial-count-jit-20260928/verification.json`. No candidate
+AOT HTTP measurement has been run.
+
+[security-pr]: https://github.com/honua-io/honua-server/pull/5302
 
 [feature-service]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeatureService.java#L396
 [get-feature]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/wfs-core/src/main/java/org/geoserver/wfs/GetFeature.java#L518
