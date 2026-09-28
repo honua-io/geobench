@@ -49,10 +49,11 @@ class EvidenceTests(unittest.TestCase):
     def test_diagnostic_projection_uses_configured_public_id_field(self):
         audit = runpy.run_path(str(ROOT / "scripts" / "response-shape-audit.py"))
         for server, override, expected in (("honua", None, "id"),
+                                           ("honua", "", "id"),
                                            ("geoserver", None, "objectid"),
                                            ("honua", "asset_id", "asset_id")):
             with self.subTest(server=server, override=override), patch.dict(os.environ, {}, clear=True):
-                if override:
+                if override is not None:
                     os.environ["GEOSERVICES_DIAG_ID_FIELD"] = override
                 config = audit["ServerConfig"](server, "http://localhost")
                 requests = audit["geoservices_diagnostic_requests"](config)

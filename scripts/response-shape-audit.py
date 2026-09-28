@@ -858,7 +858,7 @@ def geoservices_diagnostic_requests(server: ServerConfig) -> list[dict[str, str]
     else:
         return []
 
-    id_field = env("GEOSERVICES_DIAG_ID_FIELD", "id" if server.name == "honua" else "objectid")
+    id_field = env("GEOSERVICES_DIAG_ID_FIELD", "") or ("id" if server.name == "honua" else "objectid")
     variants = [
         {
             "request": "medium-full",
