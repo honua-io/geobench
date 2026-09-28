@@ -169,6 +169,11 @@ throughput. This source review explains work worth removing; it supplies no new
 Honua-versus-GeoServer speed ratio. Rendering, WFS, tiles, GSR and non-point
 workloads remain outside this review.
 
+The focused security candidate reproduced seven failures and four passes before
+the fix, then passed all 149 mapped-reader/security integration cases without
+skips. This verifies policy consistency and fewer resolver calls, not an HTTP
+throughput improvement. See [issue #5301](https://github.com/honua-io/honua-server/issues/5301).
+
 [feature-service]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeatureService.java#L396
 [get-feature]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/wfs-core/src/main/java/org/geoserver/wfs/GetFeature.java#L518
 [count]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/wfs-core/src/main/java/org/geoserver/wfs/CountExecutor.java#L38
