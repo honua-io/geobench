@@ -109,3 +109,38 @@ Cleanup-only was also exercised against the completed collector ledger. Final
 inspection found no campaign-labelled containers, volumes or networks. All five
 unrelated containers present at the start remained running. Failed attempts and
 both original and verified reports remain retained under their campaign paths.
+
+## Paging optimization candidate — no new product measurements yet
+
+The next investigation used a separate, owned PostGIS fixture containing the
+same deterministic 100K points. `results/source-query-plans-20260928` retains
+SQL, executed plans, database/image fingerprints, artifact hashes and cleanup
+receipts. This was an isolated SQL diagnostic, outside measured HTTP traffic.
+
+The original deep-page query encoded geometry and JSON for **50,100 rows** to
+return 100 features after offset 50,000. Moving encoding after pagination
+reduced that work to 100 rows. Single diagnostic executions took approximately
+706 ms and 56 ms respectively; these are query-plan observations, not repeated
+HTTP throughput measurements or a Honua–GeoServer comparison.
+
+[Honua draft PR #5299](https://github.com/honua-io/honua-server/pull/5299), commit
+`3ea992756692d8189339374ab8b0dd62a826694b`, implements explicit raw-column
+projection followed by encoding after pagination. It preserves column-level
+permissions and carries typed sort values through aliases. The aliases also
+fix an existing ordering error when a physical source field is named
+`attributes`.
+
+Seven new integration tests cover execution work, ordering/nulls, field masks,
+restricted database permissions, JSON types, alias collisions, streaming,
+nearest-neighbor distance and output reprojection. Three failed against the
+baseline and four passed. After implementation, all **145 mapped-reader tests**
+passed with no skips. The smaller regression fixture verifies that a ten-row
+page and its one-row has-more probe encode at most 11 rows instead of 911.
+Baseline and candidate TRX receipts are retained with the SQL artifacts.
+
+The production Native AOT image build is pending. This candidate is based on
+trunk `e9ef3d292787834ac3f943044788da5ccd7e9427`, which also includes newer
+authorization optimizations than the previously benchmarked published image.
+Future comparisons must retain these runtime identities; an improvement over
+the older image cannot be attributed solely to pagination. The mixed-workload
+results and strict-publication limitations above remain unchanged.
