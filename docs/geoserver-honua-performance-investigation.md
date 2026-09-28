@@ -1,5 +1,12 @@
 # GeoServer vs Honua Performance Investigation
 
+> Historical investigation from March 2026. Storage layouts, source paths and
+> performance conclusions below describe that earlier snapshot. For the current
+> source-backed 100K-point investigation, read the
+> [September 28 release-source review](evidence/geoserver-source-review-20260928.md)
+> and its linked diagnostics. In particular, both current products query typed
+> `public.bench_points`; the imported-storage explanation below does not apply.
+
 ## Purpose
 
 Capture the current explanation for benchmark variation between GeoServer and Honua, with emphasis on:

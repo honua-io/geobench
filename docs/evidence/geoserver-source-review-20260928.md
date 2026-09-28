@@ -1,0 +1,188 @@
+# GeoServer source review — 2026-09-28
+
+This review identifies optimization candidates for Honua's source-backed feature
+reads. It is diagnostic work on the shared development host, not a new product
+comparison. The scope is the deterministic 100K-point dataset, 100-feature pages,
+exact counts, and the OGC API Features corpus.
+
+## Versions and runtime evidence
+
+The reviewed upstream tags match the versioned JARs recorded by
+`results/feature-aot-followup-smoke-20260928/pair1-geoserver/plugins.json`:
+
+| Component | Release | Source commit |
+|---|---|---|
+| GeoServer, including OGC API Features and WFS core | 3.0.1 | `804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a` |
+| GeoTools JDBC and PostGIS | 35.1 | `820904c219b584f817dbf7341ba2c480fc1a3e06` |
+| Honua source baseline reviewed | trunk snapshot | `e9ef3d292787834ac3f943044788da5ccd7e9427` |
+
+The GeoServer image is
+`sha256:a395701a5eea4884c855f136be84363d0ce05e06da1ea6c7e3b84e146279927b`.
+The receipt records SHA-256 hashes of the installed JARs, including:
+
+- `gs-ogcapi-features-3.0.1.jar`: `1d83a80015691f10b779fa373fd3bf2ec1db2fb09bd6e59efc98a5d45bebacbc`
+- `gs-wfs-core-3.0.1.jar`: `333147436f230f278a18e0f44c4756be38c259f80e0e9fb2511eed2e73fd13dc`
+- `gt-jdbc-35.1.jar`: `bf8a81d6d87cb89a62f324d1629bad49bf0db7977e6016685a4e874f3777c470`
+- `gt-jdbc-postgis-35.1.jar`: `53f782b411ec5415cd799c94fb7e1a2f20e984414c2426fb10471b9db29e60a9`
+
+This is a release-source review supported by runtime version/hash receipts and
+executed SQL, not a byte-for-byte reproducible-build attestation. The reviewed
+Honua source is newer than the published AOT image used in the HTTP diagnostics;
+those identities must not be conflated.
+
+## Findings and implications
+
+### Native query execution is shared with WFS
+
+The [OGC items handler][feature-service] creates a WFS GetFeature request, sets
+sort, start index and limit, and calls `FeaturesGetFeature.run`. GeoTools
+[JDBCFeatureSource][jdbc-source] splits database filters from application filters.
+It pushes pagination into SQL when no application filter remains; otherwise it
+removes SQL pagination and applies the remaining filter before paging. The
+[PostGIS dialect][dialect] implements SQL `LIMIT` and `OFFSET`.
+
+Honua already pushes these operations into SQL. The relevant defect was the
+placement of expensive output expressions: the observed deep-page plan encoded
+50,100 rows to return 100. [PR #5299][paging-pr] moves encoding after the raw page
+and preserves explicit ordering and column permissions. Its single SQL diagnostic
+fell from about 706 ms to 56 ms; 145 mapped-reader tests passed. There is no new
+candidate AOT HTTP result. PostgreSQL still has to scan/skip offset rows; this
+change reduces encoding work, not the inherent cost of offset pagination.
+
+### GeoServer does exact counts, with a bounded probe and a reuse opportunity
+
+[GetFeature][get-feature] obtains the page size, reuses it as the total when it
+proves the first page is complete, and otherwise creates an unbounded count query.
+The total is lazily evaluated and cached within the response. [CountExecutor][count]
+uses a supplied count or `source.getFeatures(query).size()`; the JDBC collection
+can satisfy that through an SQL aggregate. [JDBCDataStore][jdbc-store] wraps
+limited aggregate queries in `gt_limited_`.
+
+The captured `source-query.log` contains this sequence for equality:
+
+1. Count matching rows up to `LIMIT 100`.
+2. Count all matching rows without the limit.
+3. Select the ordered page of native columns and encoded geometry.
+
+For the small bbox it contains the bounded count and feature SELECT, consistent
+with reusing a complete first-page count. The [GeoJSON response][json-response]
+resolves the total before invoking the writer; the OGC writer emits
+`numberMatched` when that total is available. Lazy calculation therefore does not
+mean the exact count disappears from response latency.
+
+Honua's [mapped reader][honua-reader] currently performs the full count before
+fetching features in `QueryAsync`. A page-first exact-count strategy could save
+the separate count when offset is zero and fewer than the requested rows return.
+It must still count full pages and nonzero offsets, preserve security, and define
+the existing concurrent-update behavior. Do not copy GeoServer's extra bounded
+count round trip without measuring whether the fetched page itself can prove the
+same result. This remains a candidate, not an implemented improvement.
+
+### Typed attributes avoid a database JSON round trip
+
+The trace selects native fields and `encode(ST_AsEWKB(geom), 'base64')`.
+[JDBCFeatureReader][jdbc-reader] reads ordinary values from the result set and
+uses the geometry decoder for geometry columns. [GeoJSONFeatureWriter][json-writer]
+iterates features and writes properties to the response writer. It still creates
+feature/geometry objects and converts values; this is not a zero-allocation path.
+
+Honua's source-backed reader uses `jsonb_build_object(...)::text`, reads that
+string, parses it with `FeatureAttributeJsonReader`, and creates the canonical
+attribute dictionary. The [OGC handler][honua-ogc] takes its buffered path at the
+100-feature corpus limit (streaming requires a limit above 200 and other guards),
+then constructs response features. Both products now read the same typed source
+table: the older explanation that Honua reads imported `public.features` is
+inapplicable to this campaign.
+
+A typed source-row decoder could remove the database JSON encoding and parsing
+while preserving Honua's shared feature model. Profile allocations and CPU before
+choosing this larger change. Tests must cover nulls, decimals and large integers,
+timestamps, booleans, JSON fields, projected/masked columns, aliases, and geometry
+dimensions. Streaming alone would not remove PostgreSQL count/planning costs.
+
+### Spatial SQL differs, but copying it is not a general win
+
+[FilterToSqlHelper][spatial-helper] emits an explicit bbox operator followed by
+exact intersection for this geometry/BBOX path when loose bbox is disabled.
+The saved effective store sets `Loose bbox=false`, and executed SQL confirms
+`geom && envelope AND ST_Intersects(geom, envelope)`.
+
+Our [seven-repetition spatial SQL diagnostic][followup] tested that form directly.
+It improved the large bbox but worsened the world bbox. Keeping the original
+exact predicate and disabling PostgreSQL JIT locally was the more promising
+experiment: large-count median 179 to 43 ms and world-count median 635 to 127 ms,
+with wide shared-host ranges. These are SQL-only observations, not product speedup
+ratios. PostgreSQL JIT is independent of Honua's Native AOT compilation.
+
+No explicit JIT setting was found in the reviewed GeoTools JDBC/PostGIS production
+source directories. That does not prove every runtime connection setting or query
+plan. The next test should isolate query-scoped JIT suppression for exact counts,
+including prepared-plan reuse, rollback/cancellation, pooled connection reuse,
+and borrowed transactions. The existing Honua opt-in serial-spatial helper only
+wraps eligible feature reads; it does not currently cover `CountAsync`.
+
+### Fetch size and prepared statements are secondary hypotheses
+
+[JDBCDataStoreFactory][jdbc-factory] defaults fetch size to 1,000;
+[JDBCFeatureReader][jdbc-reader] applies it to a forward-only, read-only statement.
+[PostgisNGDataStoreFactory][postgis-factory] defaults the prepared-statement
+dialect option to false. Neither override appears in the saved store. This is
+the source-default interpretation, not an independent live getter measurement.
+The SQL trace's literal predicates and base64 EWKB are consistent with that path.
+PostgreSQL protocol parse/bind messages alone do not establish that the GeoTools
+prepared-statement option is enabled.
+
+With 100 requested rows, increasing fetch size is a lower-priority Honua experiment
+than count plans and redundant encoding. Prepared versus custom/generic plans
+deserves a targeted test because selectivity varies sharply across bbox sizes.
+
+## Additional correctness follow-up discovered in the trace
+
+The saved prefix request contains `feature_name LIKE 'feature\_1%'`, but
+GeoServer's executed SQL contains `LIKE 'feature_1%'`. On the generated names
+these produce the same IDs, so the current oracle corpus cannot prove preservation
+of the literal underscore. The JDBC LIKE encoder calls
+[`LikeFilterImpl.convertToSQL92`][like-conversion], whose escape branch emits the
+next character without the original escape. That provides a source-level
+explanation consistent with the trace, although the CQL2 parser's intermediate
+filter and alternative request spellings still need an isolated test.
+Before treating escaped-prefix support as proven, add an adversarial semantic
+case whose result differs when the escape is lost, then trace both parsers. Keep
+any unsupported contract visible as a coverage gap. Existing timings do not
+establish general literal-prefix correctness.
+
+## Implementation priority
+
+1. Finish verification of resolving read security once per operation. Nested
+   public reader calls currently repeat an absent-policy lookup and can give the
+   count and rows different policy snapshots. Preserve fresh resolution on the
+   next public read; do not cache authorization across requests.
+2. Retain the pagination candidate and validate it in a future AOT build when
+   shared-host capacity allows.
+3. Test query-scoped PostgreSQL JIT suppression for exact counts, separately from
+   forced serial execution and from benchmark baseline defaults.
+4. Measure page-first exact-count reuse and typed source-row decoding separately,
+   with correctness and allocation evidence before combining them.
+
+The last sustained local mixed diagnostic favored GeoServer by roughly 2× in
+throughput. This source review explains work worth removing; it supplies no new
+Honua-versus-GeoServer speed ratio. Rendering, WFS, tiles, GSR and non-point
+workloads remain outside this review.
+
+[feature-service]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeatureService.java#L396
+[get-feature]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/wfs-core/src/main/java/org/geoserver/wfs/GetFeature.java#L518
+[count]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/wfs-core/src/main/java/org/geoserver/wfs/CountExecutor.java#L38
+[json-response]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/wfs-core/src/main/java/org/geoserver/wfs/json/GeoJSONGetFeatureResponse.java#L85
+[json-writer]: https://github.com/geoserver/geoserver/blob/804fe178e4ff3fb4d0a2d0a0751930b31bf43a2a/src/main/src/main/java/org/geoserver/json/GeoJSONFeatureWriter.java#L387
+[jdbc-source]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java#L580
+[jdbc-store]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCDataStore.java#L4025
+[jdbc-reader]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureReader.java#L130
+[jdbc-factory]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCDataStoreFactory.java#L96
+[dialect]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/plugin/jdbc/jdbc-postgis/src/main/java/org/geotools/data/postgis/PostGISDialect.java#L1353
+[spatial-helper]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/plugin/jdbc/jdbc-postgis/src/main/java/org/geotools/data/postgis/FilterToSqlHelper.java#L333
+[postgis-factory]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/plugin/jdbc/jdbc-postgis/src/main/java/org/geotools/data/postgis/PostgisNGDataStoreFactory.java#L86
+[like-conversion]: https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/main/src/main/java/org/geotools/filter/LikeFilterImpl.java#L108
+[honua-reader]: https://github.com/honua-io/honua-server/blob/e9ef3d292787834ac3f943044788da5ccd7e9427/src/Honua.Db/Postgres/Features/FeatureStore/Services/PostgresStorageMappedFeatureReader.cs#L119
+[honua-ogc]: https://github.com/honua-io/honua-server/blob/e9ef3d292787834ac3f943044788da5ccd7e9427/src/Honua.Protocols.OgcApi/Features/OgcFeaturesQueryHandler.cs#L193
+[paging-pr]: https://github.com/honua-io/honua-server/pull/5299
+[followup]: feature-followup-20260928.md#spatial-count-optimization-diagnostics-on-the-shared-host
