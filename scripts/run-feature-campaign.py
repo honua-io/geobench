@@ -68,11 +68,22 @@ def verify_snapshot(directory, manifest):
         raise ValueError("Archived harness snapshot is missing or has changed")
 
 
+def docker_engine_identity():
+    engine = json.loads(command("docker", "info", "--format", "{{json .}}"))
+    keys = ("ID", "Name", "OperatingSystem", "OSType", "Architecture", "KernelVersion",
+            "NCPU", "MemTotal", "ServerVersion", "CgroupDriver", "CgroupVersion")
+    if any(not engine.get(key) for key in keys) or any(type(engine[key]) is not int or engine[key] <= 0 for key in ("NCPU", "MemTotal")):
+        raise ValueError("Missing Docker engine identity/resource evidence")
+    # Select explicitly: docker info can also contain proxy URLs with credentials.
+    return {key: engine[key] for key in keys}
+
+
 def host_identity():
     cpu = Path('/proc/cpuinfo').read_text().split("\n\n", 1)[0]
     stable_cpu = [line for line in cpu.splitlines() if line.startswith(("vendor_id", "model name", "cpu family", "model\t", "stepping"))]
     return {"node": platform.node(), "platform": platform.platform(), "logical_cpus": os.cpu_count(),
-            "cpu": stable_cpu, "memory_total": Path('/proc/meminfo').read_text().splitlines()[0]}
+            "cpu": stable_cpu, "memory_total": Path('/proc/meminfo').read_text().splitlines()[0],
+            "docker_engine": docker_engine_identity()}
 
 
 def resolve_images(args):
@@ -127,7 +138,7 @@ def record_resources(owner):
 
 
 def runtime_receipt(ids, images):
-    result = {}
+    result = {"docker_engine": docker_engine_identity()}
     for name, identity in ids.items():
         info = inspect(identity)
         role = "postgis" if name.startswith("postgis-") else name
@@ -227,6 +238,8 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
             ids = {name: command(*compose, "ps", "-q", name) for name in (server, "postgis-" + server, "k6")}
             runtime = runtime_receipt(ids, manifest["images"])
             write(path / "runtime.json", runtime)
+            if runtime["docker_engine"] != manifest["host_identity"]["docker_engine"]:
+                raise ValueError("Docker engine identity/resource drift from prepared campaign")
             if server == "geoserver":
                 jars = command("docker", "exec", ids[server], "sh", "-c",
                                "find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} +").splitlines()

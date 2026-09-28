@@ -104,6 +104,17 @@ measurement. Database pressure reports active queries, last-query source
 sessions, background connections and parallel workers; sampling does not prove
 an exact peak. Interpret these alongside server, DB, generator and host samples.
 
+The manifest fingerprints both the controller and Docker engine (engine ID,
+kernel, CPU/memory capacity, version and cgroup settings). Engine identity and
+capacity are checked again before and after traffic. Five-second `host` samples
+read the engine kernel's `/proc` view through the owned database container;
+`controller` samples describe the machine running Python. These can differ with
+remote Docker or Docker Desktop. Container CPU/memory limits remain separate
+from kernel totals. No privileged container or host mount is needed. On Docker
+Desktop these samples describe its Linux kernel, not the physical Windows/macOS
+host. This additional observation work must be included in calibration; older
+campaigns' controller-only `host` samples cannot prove engine-host pressure.
+
 A campaign owns unique labels and records exact resource IDs. Cleanup checks
 each label before deleting an ID. It never kills unrelated k6 processes or
 runs project-wide/global Docker pruning. Interrupted attempts remain visible.

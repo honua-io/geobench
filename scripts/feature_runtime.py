@@ -1,9 +1,11 @@
 """Owned Docker resources and lightweight five-second observations."""
 import json
+import math
 import os
 import subprocess
 import threading
 import time
+import uuid
 from pathlib import Path
 
 LABEL = "io.geobench.campaign"
@@ -40,6 +42,28 @@ def sql(container, statement):
     output = command("docker", "exec", "-e", "PGAPPNAME=geobench-observer", container,
                      "psql", "-X", "-U", "geobench", "-d", "geobench", "-At", "-v", "ON_ERROR_STOP=1", "-c", statement)
     return json.loads(output) if output else None
+
+
+def engine_host_sample(container):
+    """Read the container host's kernel view through an owned container, without privileges."""
+    raw = command("docker", "exec", container, "cat", "/proc/loadavg", "/proc/stat", "/proc/meminfo",
+                  "/proc/sys/kernel/random/boot_id")
+    lines = raw.splitlines()
+    try:
+        load = [float(value) for value in lines[0].split()[:3]]
+        cpu = next(line for line in lines if line.startswith("cpu "))
+        memory_index = next(index for index, line in enumerate(lines) if line.startswith("MemTotal:"))
+        boot_id = str(uuid.UUID(lines[-1]))
+        if len(load) != 3 or any(not math.isfinite(value) or value < 0 for value in load):
+            raise ValueError("invalid load averages")
+        if len(cpu.split()) < 5 or any(int(value) < 0 for value in cpu.split()[1:]):
+            raise ValueError("invalid CPU counters")
+        if int(lines[memory_index].split()[1]) <= 0:
+            raise ValueError("invalid memory total")
+    except (IndexError, StopIteration, ValueError) as exc:
+        raise ValueError("Missing or malformed Docker engine kernel sample") from exc
+    return {"scope": "docker-engine-kernel", "via_container": container, "boot_id": boot_id,
+            "load": load, "cpu": cpu, "memory": "\n".join(lines[memory_index:-1]) + "\n"}
 
 
 DB_FINGERPRINT_SQL = """
@@ -89,8 +113,10 @@ class Observer:
                     stats = command("docker", "stats", "--no-stream", "--format", "{{json .}}", *self.containers)
                     row = {"time": time.time(), "monotonic_seconds": time.monotonic(), "activity": self.activity, "database": pressure,
                            "containers": [json.loads(line) for line in stats.splitlines()],
-                           "host": {"load": os.getloadavg(), "memory": Path('/proc/meminfo').read_text(),
-                                    "cpu": Path('/proc/stat').read_text().splitlines()[0]},
+                           "host": engine_host_sample(self.database),
+                           "controller": {"scope": "controller-kernel", "load": os.getloadavg(),
+                                          "memory": Path('/proc/meminfo').read_text(),
+                                          "cpu": Path('/proc/stat').read_text().splitlines()[0]},
                            "observer_seconds": time.monotonic() - start}
                     for container in row["containers"]:
                         name = container.get("Name", container.get("ID", "unknown"))
