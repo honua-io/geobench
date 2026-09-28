@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GeoBench: Honua Server adapter for honuaio/honua-server:latest.
+# GeoBench: Honua Server adapter (source and imported storage profiles).
 # Creates a managed PostGIS connection, publishes the benchmark layer,
 # imports source rows into Honua's feature store, adds benchmark-aligned indexes,
 # and enables anonymous OGC access.
@@ -14,6 +14,10 @@ SERVICE_NAME="${HONUA_SERVICE_NAME:-default}"
 COLLECTION_ID="${HONUA_COLLECTION_ID:-1}"
 POINT_STYLE_COLOR="${HONUA_POINT_STYLE_COLOR:-#2D69A5}"
 POINT_STYLE_RADIUS="${HONUA_POINT_STYLE_RADIUS:-3}"
+case "${HONUA_STORAGE_PROFILE:-imported}" in
+  source|imported) ;;
+  *) echo "ERROR: unknown HONUA_STORAGE_PROFILE" >&2; exit 1 ;;
+esac
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -215,6 +219,8 @@ STYLE_PAYLOAD="$(
 api PUT "/api/v1/admin/metadata/layers/${LAYER_ID}/style" "${STYLE_PAYLOAD}" >/dev/null
 echo "  Applied explicit default style: color=${POINT_STYLE_COLOR}, radius=${POINT_STYLE_RADIUS}"
 
+# Imported storage is a separate profile. Source-backed campaigns never copy rows.
+if [ "${HONUA_STORAGE_PROFILE:-imported}" = "imported" ]; then
 # Step 5: Populate features table
 echo "[5/8] Populating features table from bench_points..."
 psql "${PGURL}" -v ON_ERROR_STOP=1 -c "
@@ -271,6 +277,8 @@ psql "${PGURL}" -v ON_ERROR_STOP=1 -c "
   ANALYZE public.features;
 " >/dev/null
 echo "  Indexed hot filter and spatial fields to match Honua's real OGC query shape"
+
+fi
 
 # Step 7: Enable anonymous access
 echo "[7/8] Enabling anonymous access..."

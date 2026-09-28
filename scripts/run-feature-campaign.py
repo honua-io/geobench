@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+"""Oracle-validated, paired source-backed 100K-point campaigns."""
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import platform
+import random
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+from feature_contract import (
+    ARRIVAL_RATES,
+    BUDGET,
+    CONCURRENCY,
+    DRAIN_SECONDS,
+    MODES,
+    fingerprint,
+    immutable_image,
+    oracle,
+    request_url,
+    validate_plugin_jars,
+)
+from feature_evidence import calibration_failures, report, summarize
+from feature_runtime import (
+    DB_FINGERPRINT_SQL,
+    LABEL,
+    Observer,
+    cleanup,
+    command,
+    inspect,
+    owned_ids,
+    sql,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def write(path, data):
+    temp = Path(str(path) + ".tmp")
+    temp.write_text(json.dumps(data, indent=2, allow_nan=False) + "\n")
+    temp.replace(path)
+
+
+def source_fingerprint():
+    paths = command("git", "ls-files", "--cached", "--others", "--exclude-standard", cwd=ROOT).splitlines()
+    return fingerprint({path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+                        for path in paths if (ROOT / path).is_file()})
+
+
+def tree_hashes(directory):
+    return {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in directory.rglob("*") if p.is_file()}
+
+
+def verify_snapshot(directory, manifest):
+    if tree_hashes(directory / "harness") != manifest.get("snapshot_sha256"):
+        raise ValueError("Archived harness snapshot is missing or has changed")
+
+
+def resolve_images(args):
+    images = {}
+    for key in ("honua", "geoserver", "postgis", "k6"):
+        value = getattr(args, key + "_image")
+        if not immutable_image(value):
+            raise ValueError(f"{key} image must be pinned by digest (registry@sha256 or local sha256 ID)")
+        image = json.loads(command("docker", "image", "inspect", value))[0]
+        images[key] = {"reference": value, "id": image["Id"], "digests": image.get("RepoDigests", []),
+                       "labels": image.get("Config", {}).get("Labels", {}) or {}}
+    if args.mode == "comparison":
+        labels = images["honua"]["labels"]
+        if labels.get("honua.runtime.compilation") != "native-aot" or not labels.get("org.opencontainers.image.revision"):
+            raise ValueError("Comparison requires a revision-labelled production Honua Native AOT image")
+    return images
+
+
+def make_compose(owner, server, images):
+    env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
+           "HONUA_ADAPTIVE_ADMISSION_ENABLED": "false", "HONUA_MAX_CONCURRENT_QUERIES": "6",
+           "HONUA_MAX_CONNECTION_POOL_SIZE": "6", "HONUA_MIN_CONNECTION_POOL_SIZE": "3",
+           "GEOSERVER_INSTALL_EXTENSIONS": "false", "GEOSERVER_STABLE_EXTENSIONS": "",
+           "GEOSERVER_COMMUNITY_EXTENSIONS": "", "POSTGIS_LOG_MIN_DURATION_STATEMENT": "-1"}
+    original = json.loads(command("docker", "compose", "-f", str(ROOT / "docker-compose.yml"),
+                                  "--profile", server, "config", "--format", "json", env=env, cwd=ROOT))
+    services = {key: original["services"][key] for key in (server, "postgis-" + server, "k6")}
+    labels = {LABEL: owner}
+    for name, service in services.items():
+        service.pop("profiles", None)
+        service.pop("ports", None)
+        service["labels"] = labels
+        service["networks"] = {"default": {"aliases": [name]}}
+        service["pull_policy"] = "never"
+        service["deploy"] = {"resources": {"limits": {"cpus": str(BUDGET["cpus"]), "memory": str(BUDGET["memory_bytes"])}}}
+        if name == server:
+            service["ports"] = [{"target": 8080, "host_ip": "127.0.0.1", "published": "0", "protocol": "tcp"}]
+        if name.startswith("postgis-"):
+            service["command"] = ["postgres", "-c", "max_connections=200"]
+        if name == "k6":
+            service["user"] = f"{os.getuid()}:{os.getgid()}"
+    # Compare the same exact count-metadata policy. Oracle preflight verifies the result.
+    if server == "honua":
+        services[server]["environment"]["OgcFeatures__NumberMatchedPolicy"] = "Exact"
+    return {"services": services,
+            "volumes": {f"pgdata-{server}": {"labels": labels}},
+            "networks": {"default": {"labels": labels}}}
+
+
+def record_resources(owner):
+    return {kind: owned_ids(owner, kind) for kind in ("container", "volume", "network")}
+
+
+def runtime_receipt(ids, images):
+    result = {}
+    for name, identity in ids.items():
+        info = inspect(identity)
+        role = "postgis" if name.startswith("postgis-") else name
+        result[name] = {"container": identity, "image": info["Image"],
+                        "cpus": info["HostConfig"]["NanoCpus"] / 1e9,
+                        "memory": info["HostConfig"]["Memory"],
+                        "environment": [e for e in info["Config"].get("Env", [])
+                                        if e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT="))]}
+        if info["Image"] != images[role]["id"] or result[name]["cpus"] != BUDGET["cpus"] or result[name]["memory"] != BUDGET["memory_bytes"]:
+            raise ValueError(f"Runtime image/resource drift: {name}")
+    return result
+
+
+def preflight_results(log):
+    for line in log.splitlines():
+        # k6 JSON console output keeps messages machine-readable.
+        try:
+            message = json.loads(line).get("msg", "")
+        except (ValueError, AttributeError):
+            continue
+        if message.startswith("PREFLIGHT "):
+            return json.loads(message[len("PREFLIGHT "):])
+    raise ValueError("Missing semantic preflight receipt")
+
+
+def run_k6(ids, directory, config, name):
+    config_file = directory / (name + "-input.json")
+    output = directory / (name + ".jsonl")
+    write(config_file, config)
+    relative = directory.relative_to(ROOT / "results")
+    args = ["docker", "exec", ids["k6"], "k6", "run", "--quiet", "--log-format", "json",
+            "--out", f"json=/results/{relative}/{output.name}",
+            "--env", f"CAMPAIGN_INPUT=/results/{relative}/{config_file.name}",
+            "/tests/feature-campaign.js"]
+    with (directory / (name + ".log")).open("w") as log:
+        process = subprocess.run(args, check=False, stdout=log, stderr=subprocess.STDOUT, timeout=config["duration"] + DRAIN_SECONDS + 180)
+    checks = preflight_results((directory / (name + ".log")).read_text())
+    write(directory / (name + "-preflight.json"), checks)
+    if process.returncode or any(row["failure"] for row in checks):
+        if config["protocol"] == "gsr":
+            write(directory / "coverage-gaps.json", [{"request": r["id"], "reason": r["failure"]}
+                  for r in checks if r["failure"]])
+        raise ValueError(f"{name}: semantic preflight/load failed; see retained log")
+    return output, checks
+
+
+def wait_ready(compose, server, log):
+    subprocess.run([*compose, "up", "-d", "--wait", "--wait-timeout", "300"], check=True,
+                   stdout=log, stderr=subprocess.STDOUT, timeout=360)
+
+
+def execute_attempt(directory, manifest, attempt, save):
+    verify_snapshot(directory, manifest)
+    server = attempt["server"]
+    owner = manifest["owner"] + "-" + attempt["id"]
+    path = directory / attempt["id"]
+    path.mkdir()
+    compose_file = path / "compose.json"
+    composition = make_compose(owner, server, manifest["images"])
+    for volume in composition["services"]["k6"]["volumes"]:
+        if volume.get("target") == "/tests":
+            volume["source"] = str(directory / "harness" / "src/tests")
+    write(compose_file, composition)
+    compose = ["docker", "compose", "-p", owner, "-f", str(compose_file)]
+    identities = {}
+    ids = {}
+    attempt.update({"status": "running", "owner": owner, "rows": {}, "fairness_failures": []})
+    save()
+    try:
+        with (path / "provision.log").open("w") as log:
+            try:
+                wait_ready(compose, server, log)
+            finally:
+                identities = record_resources(owner)
+                attempt["resources"] = identities
+                save()
+            ids = {name: command(*compose, "ps", "-q", name) for name in (server, "postgis-" + server, "k6")}
+            runtime = runtime_receipt(ids, manifest["images"])
+            write(path / "runtime.json", runtime)
+            if server == "geoserver":
+                jars = command("docker", "exec", ids[server], "sh", "-c",
+                               "find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} +").splitlines()
+                versions = validate_plugin_jars(jars, manifest["protocol"] == "gsr")
+                write(path / "plugins.json", {"versions": versions, "sha256": sorted(jars),
+                      "java": command("docker", "exec", ids[server], "java", "-version", stderr=subprocess.STDOUT)})
+            port = inspect(ids[server])["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
+            base = f"http://localhost:{port}"
+            env = {**os.environ, "COMPOSE_PROJECT_NAME": owner, "COMPOSE_FILE": str(compose_file),
+                   "HONUA_URL": base, "GS_URL": base, "HONUA_STORAGE_PROFILE": "source",
+                   "HONUA_RESTART_ON_VERIFY_FAIL": "0", "GEOBENCH_TESTS": "attribute-filter",
+                   "GEOSERVER_MAX_CONNECTIONS": "6", "GEOSERVER_MIN_CONNECTIONS": "3"}
+            subprocess.run(["bash", str(directory / "harness" / "adapters" / server / "setup.sh")], env=env, cwd=ROOT,
+                           stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+        db = ids["postgis-" + server]
+        command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", "ANALYZE public.bench_points")
+        database = sql(db, DB_FINGERPRINT_SQL)
+        write(path / "database.json", database)
+        if database["rows"] != 100000 or not database["analyzed"]:
+            raise ValueError("Dataset must contain 100K analyzed points")
+        attempt["database_fingerprint"] = fingerprint(database)
+        expected = oracle(manifest["corpus"], lambda statement: sql(db, statement))
+        for request in expected["requests"]:
+            request["url"] = request_url(server, manifest["protocol"], request, f"http://{server}:8080", expected["limit"])
+        write(path / "oracle.json", expected)
+        config = {**expected, "protocol": manifest["protocol"], "duration": 1, "drain": DRAIN_SECONDS,
+                  "phase": "warmup", "scenario": "equality", "vus": 1}
+        # Separate SQL diagnostic pass: inspect actual reads, then disable tracing before warmup.
+        for statement in ("ALTER SYSTEM SET log_min_duration_statement=0", "SELECT pg_reload_conf()"):
+            command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
+        since = datetime.now(timezone.utc).isoformat()
+        _, checks = run_k6(ids, path, config, "preflight")
+        trace = command("docker", "logs", "--since", since, db, stderr=subprocess.STDOUT)
+        (path / "source-query.log").write_text(trace)
+        for statement in ("ALTER SYSTEM SET log_min_duration_statement=-1", "SELECT pg_reload_conf()"):
+            command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
+        import re
+        if not re.search(r'FROM\s+(?:"?public"?\.)?"?bench_points"?', trace, re.IGNORECASE) or re.search(r'FROM\s+(?:"?public"?\.)?"?features"?\b', trace, re.IGNORECASE):
+            raise ValueError("SQL trace does not prove exclusively source-backed feature reads")
+        attempt["response_contract"] = [{k: v for k, v in row.items() if k != "failure"} for row in checks]
+        # Pressure probe is diagnostic traffic before any timed comparison.
+        config.update({"duration": 6, "vus": 10, "phase": "warmup"})
+        with Observer(path, list(ids.values()), db) as pressure_observer:
+            run_k6(ids, path, config, "pressure-probe")
+        pressure_receipt = pressure_observer.summary()
+        write(path / "pressure-probe.json", pressure_receipt)
+        pressure = pressure_receipt["max_database_pressure"]
+        if pressure_receipt["failures"] or not pressure_receipt["samples"]:
+            raise ValueError("Pressure diagnostic has missing observations")
+        if pressure["source_sessions"] > BUDGET["source_connections"] or pressure["source_active"] > BUDGET["source_connections"]:
+            raise ValueError("Fairness preflight: observed source-query pressure exceeds six connections")
+
+        if manifest["mode"] == "comparison":
+            reasons = calibration_failures(manifest.get("calibration"), manifest["binding"])
+            if reasons:
+                raise ValueError("Comparison calibration prerequisite: " + "; ".join(reasons))
+        with Observer(path, list(ids.values()), db) as observer:
+            for scenario in manifest["scenarios"]:
+                parts = scenario.split(":")
+                config.update({"scenario": parts[0], "vus": int(parts[2]) if len(parts) == 3 and parts[1] == "vus" else 10,
+                               "rate": int(parts[2]) if len(parts) == 3 and parts[1] == "rate" else None})
+                print(f"{attempt['id']} {scenario}: warmup, measurement, drain", flush=True)
+                config.update({"phase": "warmup", "duration": manifest["warmup"]})
+                warm_path, _ = run_k6(ids, path, config, scenario + "-warmup")
+                warm = summarize(warm_path, manifest["warmup"], "warmup")
+                if warm["failures"]:
+                    raise ValueError(f"Warmup failed: {warm['failures']}")
+                config.update({"phase": "measurement", "duration": manifest["measurement"]})
+                measured_path, _ = run_k6(ids, path, config, scenario + "-measurement")
+                row = summarize(measured_path, manifest["measurement"])
+                row.update({"warmup": warm, "offered_rate": config["rate"], "vus": config["vus"]})
+                required = set(manifest["corpus"]["mixed"]) if parts[0] == "mixed" else {parts[0]}
+                if not required <= set(row["requests"]):
+                    row["failures"].append("missing measured corpus requests")
+                attempt["rows"][scenario] = row
+                save()
+                if row["failures"]:
+                    raise ValueError(f"Measured scenario failed: {row['failures']}")
+        summary = observer.summary()
+        write(path / "bottlenecks.json", summary)
+        if summary["failures"] or not summary["samples"]:
+            attempt["fairness_failures"].append("missing/failed five-second telemetry")
+        pressure = summary["max_database_pressure"]
+        if pressure["source_sessions"] > BUDGET["source_connections"] or pressure["source_active"] > BUDGET["source_connections"]:
+            attempt["fairness_failures"].append("observed source-query pressure exceeds six connections")
+        # Verify effective settings and image/resource identity again after traffic.
+        if runtime_receipt(ids, manifest["images"]) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
+            attempt["fairness_failures"].append("runtime/database configuration drift")
+        attempt["status"] = "passed" if not attempt["fairness_failures"] else "failed"
+    except (OSError, ValueError, subprocess.SubprocessError, KeyError) as exc:
+        attempt.update({"status": "failed", "error": str(exc)})
+        if (path / "coverage-gaps.json").exists():
+            attempt["coverage_gaps"] = json.loads((path / "coverage-gaps.json").read_text())
+        print(f"{attempt['id']}: {exc}", flush=True)
+    except KeyboardInterrupt:
+        attempt.update({"status": "interrupted", "error": "interrupted; retained as failed evidence"})
+        raise
+    finally:
+        for name, identity in ids.items():
+            if name != "k6":
+                with contextlib.suppress(subprocess.SubprocessError):
+                    (path / (name + "-container.log")).write_text(command("docker", "logs", identity, stderr=subprocess.STDOUT))
+        # Recover IDs even when provisioning was interrupted. Never remove other projects.
+        identities = record_resources(owner)
+        attempt["resources"] = identities
+        save()
+        cleanup(owner, identities)
+        attempt["cleaned"] = True
+        attempt["artifact_sha256"] = {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
+                                      for p in path.rglob("*") if p.is_file()}
+        save()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mode", choices=MODES, default="diagnostic")
+    parser.add_argument("--protocol", choices=("ogc", "gsr"), default="ogc")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--prepare-only", action="store_true", help="Write immutable inputs and calibration binding without starting stacks")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--scenarios", help="Comma-separated corpus IDs or mixed:vus:N / mixed:rate:N")
+    parser.add_argument("--arrival-rates", action="store_true")
+    parser.add_argument("--smoke", action="store_true", help="Diagnostic only: one repetition, 2s warmup, 3s measurement")
+    parser.add_argument("--calibration", type=Path)
+    for key in ("honua", "geoserver", "postgis", "k6"):
+        parser.add_argument("--" + key + "-image", default=os.environ.get(key.upper() + "_IMAGE", ""))
+    args = parser.parse_args()
+    if args.smoke and args.mode != "diagnostic":
+        parser.error("Smoke overrides are diagnostic only")
+    os.chdir(ROOT)
+    corpus = json.loads((ROOT / "config/feature-corpus-v1.json").read_text())
+    scenarios = args.scenarios.split(",") if args.scenarios else [r["id"] for r in corpus["requests"]] + [f"mixed:vus:{v}" for v in CONCURRENCY]
+    if args.arrival_rates:
+        scenarios += [f"mixed:rate:{rate}" for rate in ARRIVAL_RATES]
+    valid = {r["id"] for r in corpus["requests"]} | {f"mixed:vus:{v}" for v in CONCURRENCY} | {f"mixed:rate:{v}" for v in ARRIVAL_RATES}
+    if not scenarios or len(set(scenarios)) != len(scenarios) or not set(scenarios) <= valid:
+        parser.error("Unknown or duplicate scenarios")
+    images = resolve_images(args)
+    dataset = ROOT / "data/small/init.sql"
+    if not dataset.exists():
+        subprocess.run([sys.executable, "data/small/generate.py"], check=True)
+    manifest = {"schema": 1, "mode": args.mode, "protocol": args.protocol,
+                "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
+                **MODES[args.mode], "scenarios": scenarios, "servers": ["honua", "geoserver"],
+                "budget": BUDGET, "seed": args.seed, "images": images, "corpus": corpus,
+                "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
+                "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
+                "honua_compilation": images["honua"]["labels"].get("honua.runtime.compilation", "unverified-diagnostic"),
+                "effective_compose": {s: make_compose("fingerprint", s, images) for s in ("honua", "geoserver")}}
+    if manifest["honua_compilation"] != "native-aot":
+        manifest["profile"] += "-honua-jit-or-unverified-diagnostic"
+    if args.smoke:
+        manifest.update({"repetitions": 1, "warmup": 2, "measurement": 3, "smoke": True})
+    manifest["binding"] = fingerprint(manifest)
+    if args.calibration:
+        manifest["calibration"] = json.loads(args.calibration.read_text())
+    directory = (args.output or ROOT / "results" / ("features-" + time.strftime("%Y%m%dT%H%M%S"))).resolve()
+    if not directory.is_relative_to(ROOT / "results"):
+        parser.error("Output must be under results/ for the read-only input/output mount")
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        manifest_file = directory / "campaign.json"
+        attempts_file = directory / "attempts.json"
+        if manifest_file.exists():
+            previous = json.loads(manifest_file.read_text())
+            if not args.resume or previous["binding"] != manifest["binding"]:
+                raise ValueError("Resume refused: workload/image/dataset/configuration/harness fingerprint differs, or --resume missing")
+            if args.calibration:
+                previous["calibration"] = manifest["calibration"]
+                write(manifest_file, previous)
+            manifest = previous
+            attempts = json.loads(attempts_file.read_text())
+            for attempt in attempts:
+                if attempt["status"] in {"running", "scheduled"}:
+                    attempt.update({"status": "interrupted", "error": "interrupted attempt retained; new campaign required for publication"})
+                if not attempt.get("cleaned") and attempt.get("owner"):
+                    cleanup(attempt["owner"], record_resources(attempt["owner"]))
+                    attempt["cleaned"] = True
+        else:
+            manifest["owner"] = "gb-" + uuid.uuid4().hex[:12]
+            manifest["host"] = {"platform": platform.platform(), "cpu_count": os.cpu_count(), "load": os.getloadavg(),
+                                "cpuinfo": Path('/proc/cpuinfo').read_text(), "memory": Path('/proc/meminfo').read_text()}
+            first = random.Random(args.seed).randrange(2)
+            manifest["order"] = [manifest["servers"][(first + i) % 2:] + manifest["servers"][:(first + i) % 2]
+                                 for i in range(manifest["repetitions"])]
+            attempts = []
+            for folder in ("src/tests", "adapters"):
+                shutil.copytree(ROOT / folder, directory / "harness" / folder)
+            manifest["snapshot_sha256"] = tree_hashes(directory / "harness")
+            write(manifest_file, manifest)
+        verify_snapshot(directory, manifest)
+        def save():
+            write(attempts_file, attempts)
+        save()
+        if args.prepare_only:
+            print(f"Prepared {directory}; calibration binding: {manifest['binding']}")
+            return 0
+        try:
+            for rep, order in enumerate(manifest["order"], 1):
+                for server in order:
+                    if any(a["repetition"] == rep and a["server"] == server for a in attempts):
+                        continue  # Never silently replace a failed attempt.
+                    attempt = {"id": f"pair{rep}-{server}", "server": server, "repetition": rep, "status": "scheduled"}
+                    attempts.append(attempt)
+                    save()
+                    execute_attempt(directory, manifest, attempt, save)
+                if args.mode == "comparison" and any(a["repetition"] == rep and a["status"] != "passed" for a in attempts):
+                    # Avoid hours of load after a reproducibility/correctness prerequisite fails.
+                    for pending_rep in range(rep + 1, manifest["repetitions"] + 1):
+                        for pending_server in manifest["order"][pending_rep - 1]:
+                            if not any(a["repetition"] == pending_rep and a["server"] == pending_server for a in attempts):
+                                attempts.append({"id": f"pair{pending_rep}-{pending_server}", "repetition": pending_rep,
+                                                 "server": pending_server, "status": "not-run", "rows": {},
+                                                 "error": "earlier pair failed prerequisites; scheduled repetition remains missing"})
+                    save()
+                    break
+        finally:
+            result = report(directory, manifest, attempts)
+            print(f"Evidence: {directory}/report.md; valid={result['valid']}, publishable={result['publishable']}", flush=True)
+        return 0 if (result["publishable"] if args.mode == "comparison" else result["valid"]) else 1
+
+
+if __name__ == "__main__":
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt(f"signal {signum}")
+    signal.signal(signal.SIGTERM, interrupt)
+    with contextlib.suppress(BrokenPipeError), open(f"/tmp/geobench-feature-campaign-{os.getuid()}.lock", "a") as host_lock:
+        try:
+            fcntl.flock(host_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            sys.exit("Another feature campaign owns this host's measurement lock")
+        sys.exit(main())

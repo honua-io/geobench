@@ -11,6 +11,7 @@ MODES = {
 ARRIVAL_RATES = (10, 30, 60, 120, 240)
 CONCURRENCY = (1, 10, 50, 100)
 DRAIN_SECONDS = 35
+BUDGET = {"cpus": 4, "memory_bytes": 4 * 1024**3, "source_connections": 6}
 
 
 def fingerprint(value):

@@ -13,6 +13,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# Explicit feature modes use the oracle-backed campaign contract.
+if [ -n "${BENCHMARK_MODE:-}" ]; then
+  exec python3 "${SCRIPT_DIR}/run-feature-campaign.py" --mode "${BENCHMARK_MODE}" "$@"
+fi
 TIMESTAMP="${RESULT_TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}"
 RESULTS_DIR="${PROJECT_DIR}/results/${TIMESTAMP}"
 IFS=' ' read -r -a SERVERS <<< "${SERVERS:-honua geoserver qgis}"
