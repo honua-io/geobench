@@ -1671,14 +1671,30 @@ and CoreCLR is mapped. The smoke report SHA-256 is
 `smoke-retry-receipt.json` records runtime verification. This establishes a working
 development baseline, not a JIT speed improvement.
 
-A separate owned fixture is collecting managed sampled-thread stacks for
+A separate owned fixture collected managed sampled-thread stacks for
 equality and numeric range after 30 seconds of warmup per query. Its pinned
 `dotnet-trace` version is `10.0.745401`; preparation finished outside benchmark
 traffic. The local profiling driver explicitly enables runtime diagnostics and
 records its additional mounts and traffic separately from the frozen harness.
 Instrumented timings are not comparison evidence, and sampled thread time is not
-precise CPU attribution. These traces are intended to choose the next server
-change. Final production gains still require an AOT rebaseline.
+precise CPU attribution. Both captures, semantic validation and owned cleanup
+passed: 2,714 equality and 2,128 range completions, including their separately
+accounted drain traffic, with no invalid or cancelled responses. One auxiliary
+clock anomaly remains recorded in the range traffic. Profile receipt SHA-256:
+`20e773a405d3a823f84c71f45a093183c9578830614d65a5d19382e20ce86194`.
+
+The traces identify `GeoJsonFeatureBaseBuilder.BuildProperties` as a candidate;
+code inspection confirms it constructs four schema field sets per feature, two
+of which are used only when additional attributes are enabled. The ordinary OGC
+path disables that option. This led to
+[server issue #5337](https://github.com/honua-io/honua-server/issues/5337), scoped to
+avoiding unnecessary allocations without adding a schema cache or changing
+visibility, projections or date/ID handling. Semantic and allocation regression
+tests are being run against the unchanged builder before implementation.
+The retained stack review includes background waits and synthetic sample frames;
+its inclusive durations overlap and cannot be summed as CPU cost. No HTTP gain
+is claimed for the proposed change. Final production gains still require an AOT
+rebaseline.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
