@@ -368,7 +368,7 @@ passed all 1,688 tests on PostgreSQL 16, 17 and 18 at this reconciled revision,
 plus the full solution build and formatting verification. Both required gates
 are green at `f4265d5`: [PR Gate run 36529753831](https://github.com/honua-io/honua-server/actions/runs/36529753831)
 and Review Gate. The separate [hosting rollback PR 5317](https://github.com/honua-io/honua-server/pull/5317)
-remains pending. The repair candidate `768c934d5` retains externally supplied mount paths.
+has now merged. The repair candidate `768c934d5` retains externally supplied mount paths.
 Its [PR Gate catalog shard](https://github.com/honua-io/honua-server/actions/runs/36532952643/job/109291815080)
 passed all 266 tests, including all ten new mounted-host cases confirmed from
 the named TRX results. Full solution build and formatting also passed.
@@ -381,7 +381,12 @@ trunk as `8f2c9a68450778e7622eb1aa228d21225b140e34`. A per-path Git comparison
 confirms that all five URL fixes and the mounted-host test file exactly match
 the tested candidate, and the automatic alias middleware remains absent. The
 trailing trunk matrix must clear the failure brake before normal optimization
-landings resume. The wider candidate CI matrix is still running. No whole-workflow pass is claimed. Future AOT images must be checked
+landings resume. The [full candidate CI matrix](https://github.com/honua-io/honua-server/actions/runs/36532839829)
+subsequently passed: 104 successful jobs and two skipped jobs, with no failures.
+Its AOT verification completed on September 29 at 08:07 UTC. That reduced-profile
+compile is not a production serving-image build, and the candidate result does
+not replace the repaired-trunk matrix. `candidate-ci-final.json` and its hash
+are retained with the hosting repair evidence. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
