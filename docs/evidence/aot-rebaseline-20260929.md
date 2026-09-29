@@ -4,8 +4,9 @@ This campaign measures the merged source-query optimizations against GeoServer
 on the shared WSL development host. It is diagnostic evidence for optimization,
 not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
 and local identity checks. Both products passed the 20-scenario baseline smoke
-campaign with no invalid responses. The tuned smoke and sustained diagnostics
-are still in progress; no completed paired sustained results exist yet.
+campaign with no invalid responses. The paired tuned smoke campaign also passed,
+and sustained mixed-workload diagnostics have started. No completed paired
+sustained results exist yet.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
@@ -79,7 +80,8 @@ profile. In the tuned Honua trace, each follows
 distinct `SELECT ALL COUNT(*)` query identity. The baseline trace contains no
 such settings. `count-profile-sql-proof.json` retains the observations and source
 trace hashes. Tuned Honua passed its four selected smoke scenarios with no invalid
-responses; the paired campaign and sustained performance measurements are pending.
+responses, and the matching GeoServer campaign also passed. Sustained performance
+measurements are pending.
 
 | Component | Immutable local image identity |
 |---|---|
@@ -153,6 +155,9 @@ PostgreSQL 17 and 18 each reproduced exactly two failures (later counts of zero
 and one after fetching two rows), with 1,686 other tests passing. The equal and
 increasing-count controls passed. Commit
 `4a2a80544081875659b980977e0dda0983701a02` preserves the fetched page and floors
-the later total at its size. Verification is pending in
-[run 36523993300](https://github.com/honua-io/honua-server/actions/runs/36523993300);
-the review finding remains open until that evidence is available.
+the later total at its size. In
+[run 36523993300](https://github.com/honua-io/honua-server/actions/runs/36523993300),
+PostgreSQL 17 and 18 each passed all 1,688 tests, including all six concurrency
+cases. The [review finding was resolved with that evidence](https://github.com/honua-io/honua-server/pull/5315#discussion_r4129824810),
+and the required Review Gate is green at the fixed revision. PostgreSQL 16,
+full build/format checks, and the remaining merge checks are still pending.
