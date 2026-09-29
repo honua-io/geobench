@@ -14,7 +14,9 @@ a fresh measurement.
 
 ## Changes and source identity
 
-The server changes have landed through the normal PR lander:
+These server changes reached trunk through the normal PR lander and are present
+in the measured image. The count-tuning change was subsequently reverted by
+PR 5318; its restoration is pending as described below.
 
 | Change | PR | Merge revision |
 |---|---|---|
@@ -111,7 +113,10 @@ of warmup and 30 seconds of measurement. All six attempts passed their correctne
 and fairness checks, with no invalid responses, cancellations or dropped
 iterations. Each measurement phase had ten late completions, reported separately
 from measured completions. Warmup has its own drain accounting. The count-tuned
-campaign remains pending.
+campaign is incomplete. Its first completed pair measured Honua at 25.73 requests/s
+and 756.54 ms p95, versus GeoServer at 31.80 requests/s and 564.87 ms p95. That is
+one pair, not a three-pair conclusion or evidence that the option alone caused an
+improvement relative to the earlier campaign on this shared host.
 
 | Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
@@ -198,11 +203,12 @@ verification passed at the same revision. The [review finding was resolved with 
 and both required PR Gate and Review Gate are green. The PR has not merged:
 trunk's failure brake is active after
 [run 36520583030](https://github.com/honua-io/honua-server/actions/runs/36520583030).
-[Repair PR 5318](https://github.com/honua-io/honua-server/pull/5318) proposes
-reverting the scoped count-JIT change because its tests exposed the pooled-session
+[Repair PR 5318](https://github.com/honua-io/honua-server/pull/5318) merged at
+`37972ef26` on September 29 at 05:55 UTC, reverting the scoped count-JIT change
+because its tests exposed the pooled-session
 smallint fixture assumption. The isolated 12-line fixture correction is already
 in this verified candidate at commit `64eaf870caba390f8cd46d262f13147b2245b067`.
-If the rollback lands first, the first-page PR needs explicit reconciliation and
+The first-page PR now has a merge conflict and needs explicit reconciliation and
 verified restoration of the tuning dependency. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
@@ -213,4 +219,12 @@ original tuning patch produced a recovery tree whose ten optimization paths
 match the verified candidate exactly. `rollback-recovery-rehearsal.json` records
 the tree identities and both patch-application attempts. This changed neither
 branch and is not new CI evidence; actual trunk must be reconciled and verified
-after any rollback lands.
+against the landed rollback.
+
+[GeoBench PR 25](https://github.com/honua-io/geobench/pull/25) adds separately
+fingerprinted serial spatial-read and combined count/read planner profiles. It
+requires the selected transaction-local settings to execute before their matching
+source queries on the same backend, and revalidates the raw SQL at report time.
+CI and end-to-end checks are pending. A sequential driver queues both profile
+smokes and three-pair mixed diagnostics after the existing campaigns, using the
+same immutable AOT image. These are additional diagnostics, not measured wins.
