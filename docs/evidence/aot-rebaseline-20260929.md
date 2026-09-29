@@ -7,7 +7,8 @@ image. Median paired Honua/GeoServer throughput is **0.946** (range
 one pair and loses two on both metrics. This is near parity in this local tuned
 mixed-workload diagnostic, not evidence of parity across all individual requests.
 All semantic checks passed. Generator headroom and shared-host variability limit
-interpretation. The newer serial-count AOT image is still building and has no
+interpretation. The newer serial-count AOT image has passed its production build
+and image checks; its diagnostic campaign queue has started, with no completed
 HTTP result yet.
 
 These are optimization diagnostics on the shared WSL development host, not
@@ -785,20 +786,29 @@ the same first-page AOT digest in a separate queue under
 runs and executed-SQL checks. Both mixed campaigns in that queue have completed, as recorded below. These profiles use the earlier
 AOT image and do not include the serial-count change.
 
-The serial-count production AOT build is now running in
-[workflow 36565949830](https://github.com/honua-io/honua-server/actions/runs/36565949830)
-from exact merged revision `2db24e648350927c3dada3eb00638bcec1e5cc3e`. An observer
-tracks that existing workflow without dispatching retries. It requires the amd64
-build, serving boundary, GeoParquet smoke and publication steps to pass, then
-checks the immutable image identity. The deferred campaign queue waits for the
-existing serial-read diagnostics to finish and for exact-head harness CI to pass.
+The serial-count production web AOT
+[amd64 job 109397973600](https://github.com/honua-io/honua-server/actions/runs/36565949830/job/109397973600)
+passed its build, serving-boundary verification, GeoParquet smoke and publication
+steps from exact merged revision `2db24e648350927c3dada3eb00638bcec1e5cc3e`.
+The pulled immutable image is
+`ghcr.io/honua-io/honua-server@sha256:50aacf73ba6139a382e253319b008bcee136558286bd795bd5439839adda5d1c`.
+Its architecture, source labels, web profile, Native AOT mode and entrypoint match
+the recorded build. This claim applies to the web amd64 job: a separate Lambda
+amd64 job in the workflow failed because Public ECR returned HTTP 429 for its
+adapter image. No Lambda artifact or JIT image is substituted.
+
+The supervisor started the diagnostic queue after the prior serial-read queue
+completed. The queue verifies exact-head harness CI, source ancestry, immutable
+images and dataset identity before any traffic.
 Six profiles receive all-corpus smoke and three paired mixed repetitions:
 baseline, count-JIT-off, serial-counts, count-JIT-off-serial-counts,
 serial-reads-counts and count-JIT-off-serial-reads-counts. The baseline and both
 joint page/count candidates then receive all eleven individual request
 comparisons. The count-only mixed rows isolate that policy without repeating the
-entire corpus for every settings combination. No serial-count AOT result exists
-yet.
+entire corpus for every settings combination. No completed serial-count HTTP
+result exists yet. Acquisition evidence is retained in
+`results/serial-count-aot-rebaseline-20260929/build-receipt.json`; the build-log
+SHA-256 is `03c0833c75bde055eae6b4c68f606e6aade8727642f04698b974c33342c49dda`.
 
 ## Completed serial-read-only mixed comparison
 
