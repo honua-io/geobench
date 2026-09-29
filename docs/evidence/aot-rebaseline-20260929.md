@@ -3,9 +3,9 @@
 This campaign measures the merged source-query optimizations against GeoServer
 on the shared WSL development host. It is diagnostic evidence for optimization,
 not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
-and local identity checks. The new campaign has acquired the shared build slot
-and started its semantic smoke checks; no completed paired performance results
-exist yet.
+and local identity checks. Both products passed the 20-scenario baseline smoke
+campaign with no invalid responses. The tuned smoke and sustained diagnostics
+are still in progress; no completed paired sustained results exist yet.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
@@ -72,6 +72,14 @@ The baseline and tuned profiles remain separate. The tuned profile only adds
 feature reads. This setting controls PostgreSQL's query JIT and does not turn the
 Honua Native AOT executable into a .NET JIT build. Executed SQL must confirm the
 scoped setting before attributing a result to it.
+
+The separate SQL preflight now confirms four executed spatial counts in each
+profile. In the tuned Honua trace, each follows
+`SELECT pg_catalog.set_config('jit', 'off', true)` and uses the scoped count's
+distinct `SELECT ALL COUNT(*)` query identity. The baseline trace contains no
+such settings. `count-profile-sql-proof.json` retains the observations and source
+trace hashes. Tuned Honua passed its four selected smoke scenarios with no invalid
+responses; the paired campaign and sustained performance measurements are pending.
 
 | Component | Immutable local image identity |
 |---|---|
