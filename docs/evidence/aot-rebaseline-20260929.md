@@ -839,3 +839,38 @@ Evidence is retained in `results/serial-read-first-page-aot-20260929/`, includin
 `mixed-serial-reads-raw-verification.json` and
 `mixed-serial-reads-request-breakdown.json`. The completed report SHA-256 is
 `8b6fc3ee1cb9aa0bfae5a41b770bd89c84681013883f4d2ca2172d5c70d3acbf`.
+
+## Telemetry scope and generator headroom
+
+A retained phase breakdown separates pressure-probe and warmup telemetry from
+`measurement-and-drain` samples. That label includes drain, so these are sampled
+phase observations, not exact measurement-window utilization or true concurrency
+peaks. Each value below is the range of per-repetition sample medians across the
+completed serial-read-only mixed campaign; 100% denotes one logical core.
+
+| Component | Honua runs, CPU percent | GeoServer runs, CPU percent |
+|---|---:|---:|
+| Server | 165.80–173.66 | 254.80–314.38 |
+| Database | 399.84–405.08 | 387.52–392.25 |
+| k6 generator | 225.58–240.00 | 380.68–389.63 |
+
+Honua still has four to five sampled parallel workers in these phases despite
+serial feature reads; its count policy remains the default in this profile.
+GeoServer has no sampled parallel workers. The database pressure supports the
+pending serial-count experiment. These samples do not attribute worker CPU to a
+specific SQL statement.
+
+The GeoServer generator is close to its four-core budget. This can limit the
+local test's ability to distinguish server capacities when a faster Honua
+candidate approaches parity; an apparent tie would need generator-headroom
+validation. The current source validator also repeats expected-date parsing and,
+when the property ID is absent, feature-ID parsing. Those are candidates for a
+separately tested validator optimization, not changes made to these running
+campaigns. Full attribute, ID, ordering, count and geometry validation must remain.
+
+The standalone `phase-pressure.py` analysis verifies each retained telemetry hash
+and writes `<campaign>-phase-pressure.json` beside the campaigns. The validator
+source findings are retained in `validator-cost-review.json` under
+`results/serial-read-first-page-aot-20260929/`. No microbenchmark or causal
+attribution of generator CPU has been performed. Publication calibration remains
+outstanding.
