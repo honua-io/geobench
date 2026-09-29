@@ -4,9 +4,10 @@ This campaign measures the merged source-query optimizations against GeoServer
 on the shared WSL development host. It is diagnostic evidence for optimization,
 not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
 and local identity checks. Both products passed the 20-scenario baseline smoke
-campaign with no invalid responses. The paired tuned smoke campaign also passed,
-and sustained mixed-workload diagnostics have started. No sustained campaign has
-yet completed all scheduled repetitions.
+campaign with no invalid responses. The paired tuned smoke campaign also passed.
+All three baseline mixed-workload pairs are complete and favor GeoServer: median
+paired Honua/GeoServer throughput is 0.576 and p95 latency is 2.054. The sustained
+count-tuned campaign is running; the baseline has not established parity.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
@@ -105,23 +106,38 @@ all eleven individual baseline corpus requests, and medium/large bbox requests
 with count JIT disabled. Other concurrency and arrival-rate settings receive
 smoke coverage only at this stage.
 
-Two baseline mixed-workload pairs have completed at 10 VUs, with 30 seconds
-of warmup and 30 seconds of measurement. All four attempts passed their correctness
-and fairness checks. One further paired repetition and the count-tuned campaign
-remain pending; these are individual shared-host observations, not a completed
-campaign conclusion.
+All three baseline mixed-workload pairs completed at 10 VUs, with 30 seconds
+of warmup and 30 seconds of measurement. All six attempts passed their correctness
+and fairness checks, with no invalid responses, cancellations or dropped
+iterations. Each attempt had ten late completions, reported separately from
+measurement. The count-tuned campaign remains pending.
 
 | Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
 | 1 | 23.87 | 41.47 | 920.49 | 448.22 |
 | 2 | 23.10 | 47.53 | 1065.23 | 388.61 |
+| 3 | 21.03 | 35.10 | 1009.26 | 499.87 |
+| Median of repetitions | 23.10 | 41.47 | 1009.26 | 448.22 |
+| Range | 21.03–23.87 | 35.10–47.53 | 920.49–1065.23 | 388.61–499.87 |
 
-Both pairs favor GeoServer on both metrics. In the first pair, Honua's sampled database pressure
+The median paired Honua/GeoServer throughput ratio is **0.576**, range
+**0.486–0.599**. The paired p95 ratio is **2.054**, range **2.019–2.741**.
+These are ratios computed within each pair; the table's median p95 values
+summarize repetitions and are not combined latency percentiles. Full p50/p95/p99
+and completion counts are retained in `mixed-baseline/report.json`.
+
+One auxiliary HTTP timing anomaly occurred in GeoServer repetition 2. The
+diagnostic latency uses monotonic executor progress and includes receiving and
+validating the response, as defined in the harness. The report is valid for
+diagnostics and explicitly **not publishable**: the local wall clock is unsuitable,
+this is diagnostic mode, and isolated-generator calibration is missing.
+
+All pairs favor GeoServer on both metrics. In the first pair, Honua's sampled database pressure
 reached six active source queries and five parallel workers; GeoServer reached
 four active source queries and no observed parallel workers. These observations
 support further count-planning investigation, without establishing a causal
-speedup or a reason to force serial execution. The campaign's partial readout
-retains individual completed pairs and explicitly marks the campaign incomplete.
+speedup or a reason to force serial execution. Readouts for still-running campaigns
+retain individual completed pairs and explicitly mark those campaigns incomplete.
 
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
@@ -189,3 +205,11 @@ If the rollback lands first, the first-page PR needs explicit reconciliation and
 verified restoration of the tuning dependency. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
+
+An isolated Git-index rehearsal confirmed the modify/delete conflict in the
+count-tuning tests. Retaining the updated regression file and restoring the
+original tuning patch produced a recovery tree whose ten optimization paths
+match the verified candidate exactly. `rollback-recovery-rehearsal.json` records
+the tree identities and both patch-application attempts. This changed neither
+branch and is not new CI evidence; actual trunk must be reconciled and verified
+after any rollback lands.
