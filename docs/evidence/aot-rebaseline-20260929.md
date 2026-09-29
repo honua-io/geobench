@@ -726,3 +726,52 @@ The new tuned report and raw verification are
 request-level samples are summarized in
 `mixed-count-jit-off-request-breakdown.json`. Report SHA-256:
 `0cb9a97c0da7cdeb3f2ba4b70911c913961f39295ba9fe71c036cedbaaa11403`.
+
+## Attribute projection diagnostic
+
+After all four first-page HTTP campaigns finished, an isolated PostGIS pass
+compared the existing JSONB/text attribute projection with native columns over
+identical ordered pages. All eleven corpus requests returned equivalent IDs,
+attribute values and point geometries against the oracle. Five randomized paired
+repetitions per request produced 110 retained EXPLAIN ANALYZE plans. Both variants
+used PostgreSQL JIT off, one client and the normal two-worker allowance. This is
+SQL-only evidence: it excludes Npgsql decoding, Honua serialization and HTTP, and
+includes EXPLAIN instrumentation overhead.
+
+| Request | JSONB median execution ms | Native columns median execution ms | Median paired native/JSONB ratio |
+|---|---:|---:|---:|
+| equality | 0.856 | 0.197 | 0.247 |
+| range | 0.770 | 0.127 | 0.158 |
+| prefix | 0.795 | 0.138 | 0.184 |
+| bbox-small | 0.357 | 0.155 | 0.385 |
+| bbox-medium | 44.347 | 46.631 | 1.072 |
+| bbox-large | 33.654 | 39.221 | 1.064 |
+| page-shallow | 0.950 | 0.147 | 0.143 |
+| page-medium | 0.822 | 0.316 | 0.327 |
+| page-deep | 10.936 | 8.105 | 0.852 |
+| empty | 0.038 | 0.037 | 0.974 |
+| bbox-boundary | 0.092 | 0.088 | 0.826 |
+
+Removing JSONB construction saves less than a millisecond in the simple-page
+cases. Medium and large bbox plans still launch a parallel worker under a
+Gather Merge, with startup dominating the short page scan. In the first medium
+bbox JSONB plan, Gather Merge starts at 40.858 ms while its underlying index scan
+finishes at 0.422 ms per loop. Native projection retains the same plan shape.
+A native-column decoder remains a possible optimization, but this evidence keeps
+spatial page/count planner overhead ahead of it. These SQL ratios are not
+Honua/GeoServer ratios or predictions of HTTP gains.
+
+All immutable SQL artifacts and row/plan counts were independently verified;
+the exact owned fixture and its anonymous volumes were removed. The diagnostic
+receipt also hashed the supervisor's control file while it was still running;
+`queue-receipt.json` subsequently advanced to `passed`. That control-file hash
+is stale. `verification.json` explicitly records this transition; all SQL, oracle,
+result and plan hashes match. The first attempt that failed to obtain the shared
+lock remains retained separately and produced no fixture or traffic.
+
+Evidence lives in `results/source-projection-20260929-r2/`. The existing
+`serial-reads` and `count-jit-off-serial-reads` profiles are now being tested against
+the same first-page AOT digest in a separate queue under
+`results/serial-read-first-page-aot-20260929/`, with their own paired GeoServer
+runs and executed-SQL checks. No completed performance result exists for that
+queue yet. These profiles do not include the still-unmerged serial-count change.
