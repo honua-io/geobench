@@ -3,8 +3,9 @@
 This campaign measures the merged source-query optimizations against GeoServer
 on the shared WSL development host. It is diagnostic evidence for optimization,
 not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
-and local identity checks. The new campaign is queued for the shared build slot;
-no new HTTP performance results exist yet.
+and local identity checks. The new campaign has acquired the shared build slot
+and started its semantic smoke checks; no completed paired performance results
+exist yet.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
@@ -92,7 +93,11 @@ smoke coverage only at this stage.
 
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
-score. Near parity is an initial engineering milestone; a 10% working margin is
+score. The first milestone can be near parity or mixed wins and losses, assessed
+separately for throughput and tail latency. A first article should describe those
+results and acknowledge GeoServer's strengths; a later article can document further
+improvements when new measurements support them. Neither outcome is predetermined.
+A 10% working margin is
 not a statistical equivalence test, especially on this shared host. The longer
 term objective remains improvement across measured scenarios.
 
