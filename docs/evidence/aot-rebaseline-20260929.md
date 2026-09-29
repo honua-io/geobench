@@ -1617,6 +1617,25 @@ headroom remain unverified; the baseline still loses. Negative wall-clock
 auxiliary HTTP timings and missing isolated-generator calibration still prohibit
 publication.
 
+The retained raw mixed samples also identify the next optimization targets.
+Each row below summarizes three paired request-specific p95 ratios from the
+tuned campaign; lower favors Honua. These are latencies within mixed traffic,
+not standalone-query throughput tests or a pooled percentile.
+
+| Request within tuned mixed traffic | Median p95 H/G | Paired range |
+|---|---:|---:|
+| Medium bbox | 0.615 | 0.446–0.761 |
+| Equality | 0.865 | 0.699–1.212 |
+| Literal prefix | 0.728 | 0.519–0.800 |
+| Numeric range | 0.944 | 0.677–1.118 |
+
+Equality and numeric range each still lose a pair. The overall mixed win does
+not establish a win for every query. The breakdown validates raw artifact hashes
+and sample counts against the independent recount before selecting measured,
+semantically valid samples; warmup and drain are excluded. Full per-repetition
+values are retained in
+`results/decoder-aot-rebaseline-20260929/mixed-baseline-mixed-serial-reads-counts-request-breakdown.json`.
+
 ### Switch to local JIT optimization
 
 The user subsequently authorized local JIT builds to shorten the optimization
@@ -1635,9 +1654,31 @@ artifacts, four build CPUs and an 8GiB build-memory cap. Runtime code is freshly
 published into a pinned existing JIT runtime image after removing its old `/app`.
 The runtime base and source are disclosed in
 `results/local-jit-optimization-20260929/build-receipt.json`; this is a development
-configuration, not a replacement for production AOT evidence. A 12-scenario
-oracle-validated Honua smoke is queued with an eight-core generator. JIT results
-will be labelled separately, and final production gains require an AOT rebaseline.
+configuration, not a replacement for production AOT evidence. Compilation passed.
+The initial packaging attempt failed because BuildKit interpreted a bare local
+image ID in `FROM` as a registry name. The retained `package-retry-receipt.json`
+records the successful packaging-only retry using a dedicated local tag whose
+image ID and inherited layers were verified against the pinned base. No server
+recompilation or source change was needed; both original failure receipts remain.
+
+The resulting local JIT image is
+`sha256:61f5f5383940e8fb2aa98fabdf9728e8341c74e67225b7fd9b645c05e4837d4c`.
+Its 12-scenario oracle-validated smoke passed with an eight-core generator,
+source-backed SQL verification, descending ordering, exact counts, bounded
+configuration and owned cleanup. The live command is `dotnet Honua.Server.dll`
+and CoreCLR is mapped. The smoke report SHA-256 is
+`618cfc58f3252a5e1e2c7a8f910079a48b825b6bbc80812ad8ccec3085d94254`;
+`smoke-retry-receipt.json` records runtime verification. This establishes a working
+development baseline, not a JIT speed improvement.
+
+A separate owned fixture is collecting managed sampled-thread stacks for
+equality and numeric range after 30 seconds of warmup per query. Its pinned
+`dotnet-trace` version is `10.0.745401`; preparation finished outside benchmark
+traffic. The local profiling driver explicitly enables runtime diagnostics and
+records its additional mounts and traffic separately from the frozen harness.
+Instrumented timings are not comparison evidence, and sampled thread time is not
+precise CPU attribution. These traces are intended to choose the next server
+change. Final production gains still require an AOT rebaseline.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
