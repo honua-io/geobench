@@ -1413,8 +1413,9 @@ trunk. The
 [wider security workflow](https://github.com/honua-io/honua-server/actions/runs/36588528189)
 is not fully green: its JIT runtime probe rejects the unchanged fixture's
 placeholder database password, tracked in [issue 5328](https://github.com/honua-io/honua-server/issues/5328).
-The production validation policy remains enabled. Its AOT container lane is
-still running. Failed attempts and logs remain retained.
+The production validation policy remains enabled. The AOT container lane also
+failed at the runtime probe with the same placeholder-password rejection;
+both failures are covered by issue 5328. Failed attempts and logs remain retained.
 
 The decoder's provider foundation aggregate also failed the previously reported
 plugin-metrics listener assertion from issue 3734. Two ordinary listener tests
@@ -1422,11 +1423,18 @@ still wrote concurrent callbacks into non-thread-safe Lists. [PR 5329](https://g
 uses ConcurrentBag for those collectors, preserving exact tag/cardinality
 assertions and the existing 32-listener stress case. Its [provider foundation job](https://github.com/honua-io/honua-server/actions/runs/36590622311/job/109482681905)
 passed all 76 plugin tests and 1,003 tests overall, with five existing Oracle
-skips; formatting also passed. It is ready for normal review/gates. One passing
-run does not prove the cause of the earlier missing event or eliminate every
-possible metrics race; repeated integrated verification remains under issue
-3734. The decoder will be validated with the merged fixes before its next
-production image/rebaseline.
+skips. Its full CI run, formatting, PR Gate and Review Gate passed, and the
+normal lander merged it as `977a1c630ff27c91e214f0023295e81ed4327352`.
+One passing run does not prove the cause of the earlier missing event or
+eliminate every possible metrics race; repeated integrated verification remains
+under issue 3734.
+
+The decoder branch now integrates both merged repairs from trunk at head
+`2e2fff7b14ac73535113722e1743d8cdf5b3f87b`. The merge was conflict-free and the
+diff against trunk remains the intended six decoder/test files. Its
+[full integrated CI run](https://github.com/honua-io/honua-server/actions/runs/36594858604)
+is running. Earlier passing checks establish evidence only for their recorded
+heads; they do not substitute for verification of this integrated revision.
 
 No production image contains this candidate yet, no HTTP gain is claimed, and
 none of the running campaigns have changed.
