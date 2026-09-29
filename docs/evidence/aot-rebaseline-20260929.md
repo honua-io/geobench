@@ -1,5 +1,12 @@
 # AOT feature rebaseline — September 29, 2026
 
+**Decoder build update:** PR 5325 merged normally at 19:03:33 UTC as
+`e2bf1bf5e236566a056d1d078fa98f784e5df36b`. Its production web amd64 Native AOT
+image has passed build, boundary verification, GeoParquet smoke and publication,
+and has been acquired locally by digest. The new-image correctness and
+performance campaigns have started; no decoder HTTP improvement is established
+yet. The completed ratios below describe the preceding image.
+
 **Comparison confound found September 29:** GeoServer sorting conformance was
 not enabled. Its retained log contains 228,000 ignored-`sortby` warnings in the
 first full-baseline repetition. Natural primary-key ordering happened to pass
@@ -17,7 +24,7 @@ is **0.547** (range **0.260–0.730**) and p95 H/G is **2.290** (range
 campaign is also complete and raw-verified. Honua wins two pairs but loses one
 badly: median throughput H/G **1.368** (range **0.383–1.609**), p95 H/G **0.661**
 (range **0.573–2.679**). This is not a consistent win or established parity.
-These results use the existing production image, without the pending decoder
+These results use the existing production image, without the decoder
 change; shared-host variability and negative wall-clock timing observations
 still prohibit publication. Honua's tuned generator reaches its four-core
 budget in sampled telemetry; generator-headroom checks remain required.
@@ -1478,14 +1485,15 @@ The decoder branch now integrates both merged repairs from trunk at head
 diff against trunk remains the intended six decoder/test files. Its
 [full integrated CI run](https://github.com/honua-io/honua-server/actions/runs/36594858604)
 has passed all 5,220 PostgreSQL tests again, provider-foundation tests, and Docker
-integration. Required PR Gate and Review Gate passed at this head; PR 5325 is
-ready and awaiting the normal automatic lander. The integrated full CI matrix
+integration. Required PR Gate and Review Gate passed at this head; PR 5325 subsequently
+merged through the normal automatic lander as recorded below. The integrated full CI matrix
 and Native AOT compilation have now passed (AOT job 109503910896, 269MB
-native binary). Production container/runtime verification remains pending. Earlier passing checks establish
-evidence only for their recorded heads.
+native binary). The production web container subsequently passed its build checks
+as recorded below; campaign runtime verification is separate. Earlier passing
+checks establish evidence only for their recorded heads.
 
-No production image contains this candidate yet and no decoder HTTP gain is
-claimed. The corrected harness smoke and new mixed campaigns use the existing
+No decoder HTTP gain is claimed. The first corrected harness smoke and mixed
+campaigns used the preceding
 production source `2db24e648350927c3dada3eb00638bcec1e5cc3e`.
 
 ## Sorting correction verification and fresh queue
@@ -1514,30 +1522,43 @@ future decoder-image rebaseline and generator-headroom checks.
 
 ## Decoder merge and production-build handoff
 
-PR 5325 remains **open**, at reviewed head
-`2e2fff7b14ac73535113722e1743d8cdf5b3f87b`. Passing required checks does not
-mean it has merged. The fleet's trunk-red brake currently blocks its normal
-landing. The earlier trunk run 36591353617 failed the Docker dependency scan
-(repaired by merged PR 5327) and exhausted the 22-minute FeatureServer Tiles
-and Replica and 18-minute GeoServices Catalog and ImageServer Support shard
-budgets while output was still progressing. Both equivalent shards have passed
-on the integrated decoder candidate, jobs 109497467896 and 109497468042.
-This does not replace a passing trunk verdict. The active newer trunk run
-36592338007 is selective; a full trunk verification remains required to clear
-the brake. No merge bypass, branch rename, timeout relaxation, or fleet-state
-edit was made. The diagnosis and hashed logs are retained under
-`results/decoder-trunk-gate-20260929/`.
+[PR 5325](https://github.com/honua-io/honua-server/pull/5325) merged at
+19:03:33 UTC as `e2bf1bf5e236566a056d1d078fa98f784e5df36b`. Its six changed
+file blobs match reviewed head `2e2fff7b14ac73535113722e1743d8cdf5b3f87b`.
+The [full trunk recovery run](https://github.com/honua-io/honua-server/actions/runs/36606617398)
+passed before the normal landing. No merge bypass, branch rename, timeout
+relaxation, or manual fleet-brake edit was used. Separately, the verification-debt
+polling fix merged as [Flow PR 101](https://github.com/honua-io/honua-flow/pull/101)
+and normal flow-sync deployed its exact reviewed watcher blob.
 
-A live handoff under `results/decoder-aot-rebaseline-20260929/` observes the
-normal merge, checks all six merged file blobs against the reviewed PR, and
-then reuses a suitable active trunk build or dispatches the production nightly
-workflow once. It checks the selected build source still contains those exact
-files. Only the successful web amd64 Native AOT job with boundary verification,
-GeoParquet smoke and image publication qualifies. Acquisition uses its immutable
-digest and waits for the shared build and measurement locks before downloading.
-Failures remain recorded and are not automatically replaced. This handoff is
-pending work, not evidence that a new image has already been built. Runtime
-semantic smoke and the decoder HTTP rebaseline remain subsequent checks.
+The handoff dispatched production [run 36616607508](https://github.com/honua-io/honua-server/actions/runs/36616607508)
+once after checking the merge. Its [web amd64 AOT job](https://github.com/honua-io/honua-server/actions/runs/36616607508/job/109571314372)
+passed build, boundary verification, GeoParquet smoke and image publication.
+The independent Lambda amd64 job failed; success of the selected web job does
+not imply success of the whole workflow. The acquired image is
+`ghcr.io/honua-io/honua-server@sha256:7e76c3fdaf3c4fb9401b3aedddfa2b1c03e963847fd51b4adb71cd229d3fbe1c`.
+Its OCI revision matches the merge and its compilation/profile labels identify
+Native AOT web. Build receipt SHA-256:
+`085d8af18ed2f01ebcb618233d4beae56cce90f274594b3435ce72d49814ad77`.
+
+The fresh queue under `results/decoder-aot-rebaseline-20260929/` freezes the
+corrected harness at `224d4c4fa3d5eebc083036be7bb5d981a3f03f98`. It schedules
+baseline and serial-reads-counts full-corpus smoke pairs, then three paired
+repetitions each of baseline mixed traffic, tuned mixed traffic, matched
+eight-core-generator tuned mixed traffic, all 11 baseline query scenarios,
+and all 11 tuned query scenarios. Ten VUs, seed 42, 30-second warmup and
+measurement apply to sustained diagnostics. Smoke uses one pair and 2/3-second
+phases. Server and database stay at four CPUs/4GiB, source pools at six connections,
+and generator memory at 4GiB. The eight-core generator is a separately labelled
+configuration applied equally to both products.
+
+The driver holds a shared build slot; each campaign takes the host measurement
+lock, recreates isolated stacks, verifies descending ordering and full response
+semantics, checks the live Honua process for CoreCLR/JIT mappings, and retains
+failed attempts. Independent raw recount runs between campaigns. Driver SHA-256:
+`61743a6b3b078b40b52497e932db68bc7306f01fd05cb5b2a750149c735414a7`.
+The queue is running, not complete evidence. Shared-WSL results remain diagnostic;
+there is no isolated-generator calibration or publication claim.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
