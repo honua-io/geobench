@@ -10,8 +10,13 @@ Honua-versus-GeoServer speed claim. [PR 32](https://github.com/honua-io/geobench
 merged as `74743b70d12fbeb4bf2f5102fe47272fcac01e64`. It enables and verifies
 sorting and adds a descending-order oracle preflight. The corrected smoke
 campaign passed all 24 scenario rows across both products, with zero ignored-sort
-warnings. Corrected sustained mixed campaigns are now running; no corrected
-throughput or latency result is available yet.
+warnings. The corrected baseline mixed campaign has now completed all three
+pairs and passed independent raw verification. Its median paired throughput H/G
+is **0.547** (range **0.260–0.730**) and p95 H/G is **2.290** (range
+**1.345–5.503**): GeoServer leads in every baseline pair. The corrected tuned
+campaign is still running. These results use the existing production image,
+without the pending decoder change; shared-host variability and negative
+wall-clock timing observations still prohibit publication.
 
 The production serial-count Native AOT image's completed **serial-reads-counts**
 mixed campaign favors Honua in all three pairs: median paired Honua/GeoServer
@@ -1492,3 +1497,38 @@ retains six connections. Independent raw verification runs between campaigns,
 with no concurrent HTTP load. The queue does not retry or replace failed
 attempts. This remains shared-WSL diagnostic evidence and is separate from the
 future decoder-image rebaseline and generator-headroom checks.
+
+
+## Decoder merge and production-build handoff
+
+PR 5325 remains **open**, at reviewed head
+`2e2fff7b14ac73535113722e1743d8cdf5b3f87b`. Passing required checks does not
+mean it has merged. The fleet's trunk-red brake currently blocks its normal
+landing. The earlier trunk run 36591353617 failed the Docker dependency scan
+(repaired by merged PR 5327) and exhausted the 22-minute FeatureServer Tiles
+and Replica and 18-minute GeoServices Catalog and ImageServer Support shard
+budgets while output was still progressing. Both equivalent shards have passed
+on the integrated decoder candidate, jobs 109497467896 and 109497468042.
+This does not replace a passing trunk verdict. The active newer trunk run
+36592338007 is selective; a full trunk verification remains required to clear
+the brake. No merge bypass, branch rename, timeout relaxation, or fleet-state
+edit was made. The diagnosis and hashed logs are retained under
+`results/decoder-trunk-gate-20260929/`.
+
+A live handoff under `results/decoder-aot-rebaseline-20260929/` observes the
+normal merge, checks all six merged file blobs against the reviewed PR, and
+then reuses a suitable active trunk build or dispatches the production nightly
+workflow once. It checks the selected build source still contains those exact
+files. Only the successful web amd64 Native AOT job with boundary verification,
+GeoParquet smoke and image publication qualifies. Acquisition uses its immutable
+digest and waits for the shared build and measurement locks before downloading.
+Failures remain recorded and are not automatically replaced. This handoff is
+pending work, not evidence that a new image has already been built. Runtime
+semantic smoke and the decoder HTTP rebaseline remain subsequent checks.
+
+Corrected baseline report SHA-256:
+`82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
+Independent raw verification SHA-256:
+`280074b970d8dabca6899d08ae675a599f48ffe0b260d67028957efa75a5152d`.
+All six attempts passed and cleaned their owned resources. The tuned campaign
+continues under the predeclared schedule; no baseline repetition was removed.
