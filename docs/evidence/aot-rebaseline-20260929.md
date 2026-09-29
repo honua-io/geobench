@@ -236,6 +236,17 @@ first-page reuse change is not in this image. Remaining repetitions, the spatial
 count-tuned campaign and the separately queued serial profiles must complete
 before a profile-level conclusion.
 
+Hash-verified telemetry also shows substantial variation. Across samples labelled
+measurement-and-drain, pair 2's median one-minute host load was 21.46 during Honua
+and 14.21 during GeoServer, compared with 16.02 and 15.42 in pair 1. Collector
+passes reached 14.24 seconds during Honua pair 2, so a nominal five-second cadence
+does not guarantee five-second coverage. Host load includes the benchmark itself
+as well as other work; these sparse, non-instantaneous samples cannot assign the
+latency difference to interference. Collector elapsed time is not its CPU usage
+or a measured throughput penalty. `feature-telemetry-analysis.json` and its
+adjacent `analyze-feature-telemetry.py` retain the per-scenario values and hashes.
+Losses remain in the report, and this remains shared-host diagnostic evidence.
+
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
 score. The first milestone can be near parity or mixed wins and losses, assessed
@@ -315,9 +326,13 @@ the named TRX results. Full solution build and formatting also passed.
 The [tests-first baseline](https://github.com/honua-io/honua-server/actions/runs/36532387799/job/109290386798)
 reproduced exactly nine expected mounted-URL assertion failures, with 257 passes
 and no skips. The unconfigured attachment control and all existing cases passed.
-All four review findings are resolved with evidence, and PR Gate passed at the
-same candidate revision. Review Gate is being re-attested through the repository
-recovery workflow; the wider candidate CI matrix is still running. No whole-workflow pass is claimed. Future AOT images must be checked
+All four review findings are resolved with evidence, and both required PR Gate
+and Review Gate passed at the same candidate revision. The repair merged into
+trunk as `8f2c9a68450778e7622eb1aa228d21225b140e34`. A per-path Git comparison
+confirms that all five URL fixes and the mounted-host test file exactly match
+the tested candidate, and the automatic alias middleware remains absent. The
+trailing trunk matrix must clear the failure brake before normal optimization
+landings resume. The wider candidate CI matrix is still running. No whole-workflow pass is claimed. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
