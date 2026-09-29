@@ -523,7 +523,12 @@ this deletion for locked trees, late-acquired locks and arbitrary removal
 failures. [Flow PR 99](https://github.com/honua-io/honua-flow/pull/99) removes that
 fallback, checks protection before archival and deletion, and reports refusals
 without claiming removal. Nine regression cases and the required dashboard
-checks pass. The loss receipt, surviving container logs, exact resource identities,
+checks pass. The fix merged as `7dca2100d81328bdd6c9e8ea362afc788544be82` after
+[hosted CI](https://github.com/honua-io/honua-flow/actions/runs/36550185095) also ran
+and passed the nine regressions at `114597ad272a70a20b5b81fe7e1f69dc7be59160`. All
+three merged paths match that tested revision. Normal fleet sync must pick up
+the repair; the merge alone does not prove the live sweeper changed.
+The loss receipt, surviving container logs, exact resource identities,
 original lock and cleanup-test receipts are retained outside the deleted worktree
 in `results/serial-planner-loss-20260929/`. Only the interrupted attempt's three
 containers and its owned volume/network were removed after evidence capture.
@@ -541,4 +546,53 @@ The motivating saved plans launched one worker in all 14 medium-bbox cases,
 but that worker scanned zero rows in 11 of them; all 14 saved artifact hashes
 were checked. Neither the serial-read flag nor the combined profile forces
 serial count execution, so the interrupted HTTP experiment did not test that
-hypothesis directly. New count results remain pending.
+hypothesis directly. The completed count diagnostic is recorded below.
+
+## Count-only parallel-worker results
+
+All 24 scheduled trials passed. Every returned scalar count matched the oracle,
+and transaction-local settings reverted after every trial. Independent verification
+checked all 67 recorded artifact hashes and recomputed each trial's completions,
+drain accounting and p50/p95/p99 from its raw samples. The measurement windows
+contained 74,340 valid completions; 83 late completions were retained separately.
+The owned fixture was cleaned. These remain SQL-only shared-host diagnostics:
+Honua authentication, feature decoding and HTTP response work are absent.
+
+Both variants disable PostgreSQL JIT. “Default workers” allows two workers per
+gather; “serial” allows zero, scoped to the count transaction. Counts/s below
+are measured valid completions within the ten-second window.
+
+| Bbox | Clients | Repetition | Default counts/s | Serial counts/s | Default p95 ms | Serial p95 ms |
+|---|---:|---:|---:|---:|---:|---:|
+| bbox-small | 1 | 1 | 592.10 | 654.10 | 2.66 | 2.50 |
+| bbox-small | 1 | 2 | 487.90 | 417.10 | 3.65 | 6.22 |
+| bbox-small | 1 | 3 | 474.20 | 524.40 | 4.65 | 3.44 |
+| bbox-small | 6 | 1 | 657.70 | 650.40 | 21.58 | 21.71 |
+| bbox-small | 6 | 2 | 528.10 | 531.30 | 34.33 | 31.56 |
+| bbox-small | 6 | 3 | 636.20 | 628.70 | 23.88 | 25.15 |
+| bbox-medium | 1 | 1 | 18.90 | 34.70 | 101.23 | 58.18 |
+| bbox-medium | 1 | 2 | 19.30 | 45.30 | 92.42 | 41.65 |
+| bbox-medium | 1 | 3 | 28.20 | 54.90 | 53.79 | 29.20 |
+| bbox-medium | 6 | 1 | 36.10 | 111.60 | 298.63 | 100.78 |
+| bbox-medium | 6 | 2 | 32.10 | 113.40 | 319.79 | 100.53 |
+| bbox-medium | 6 | 3 | 40.60 | 116.70 | 286.54 | 98.64 |
+
+Paired ratios are **serial/default**, not Honua/GeoServer ratios.
+
+| Bbox | Clients | Median throughput ratio (range) | Median p95 ratio (range) |
+|---|---:|---:|---:|
+| bbox-small | 1 | 1.105 (0.855–1.106) | 0.938 (0.740–1.701) |
+| bbox-small | 6 | 0.989 (0.988–1.006) | 1.006 (0.919–1.053) |
+| bbox-medium | 1 | 1.947 (1.836–2.347) | 0.543 (0.451–0.575) |
+| bbox-medium | 6 | 3.091 (2.874–3.533) | 0.337 (0.314–0.344) |
+
+Every medium-bbox pair favors serial counts on throughput and p95. Small bbox
+is mixed with one client and near parity with six; this does not justify a
+blanket default change. [Server issue 5322](https://github.com/honua-io/honua-server/issues/5322)
+scopes an opt-in count-planning change with eligibility, transaction restoration,
+prepared-plan isolation, correctness tests and a production AOT HTTP rebaseline.
+The SQL result supplies a reason to implement and measure that candidate; it
+does not establish a Honua-versus-GeoServer speedup.
+
+Summary SHA-256: `11f0b4e12ff4ce6d9c5dd3434911645ba01c43cea272726dc64f9c4cec0c75cd`.
+`verification.json` retains the independent sample-accounting checks.
