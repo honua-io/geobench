@@ -1700,7 +1700,20 @@ measurements, not whole-request memory or throughput gains. The test fixture has
 TRX hashes and results. The first candidate run used a stale transitive assembly;
 the corrected project-graph build and matching assembly hashes establish the
 tested candidate. Driver failures, including a mistaken runtime-specific output
-path check, remain in the evidence history. HTTP smoke validation is pending.
+path check, remain in the evidence history.
+
+[Server PR #5339](https://github.com/honua-io/honua-server/pull/5339) contains the
+fix at `7fc5020de7d25d4dbfd814cd2bc0f9666c9e862c`. Its incremental Release JIT image
+is `sha256:b38a625314e12b72efac0e2b9ac133c03ada0057d6da3e219e75140139e16c2e`.
+All 12 existing oracle smoke scenarios passed, with source SQL, runtime,
+fairness and owned-cleanup checks passing. Report SHA-256:
+`f2b22f2709f7cda6ecff978776088a0b32da0b28a4edce9412f794493a46802b`.
+The image revision identifies the clean candidate source; unchanged assembly
+informational versions retain the baseline compilation stamp, disclosed in
+`geojson-build-receipt.json`. The published shared-builder assembly hash matches
+the tested assembly. Both changed files pass solution-format verification. The
+PR is ready for the normal merge process; this smoke establishes correctness,
+not an HTTP performance gain.
 The retained stack review includes background waits and synthetic sample frames;
 its inclusive durations overlap and cannot be summed as CPU cost. No HTTP gain
 is claimed for the proposed change.
