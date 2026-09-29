@@ -444,6 +444,20 @@ at repaired revision `8f2c9a6`. That run must still pass before the server brake
 can clear; successful dispatch is not a green matrix. The read-only reproduction and
 verification receipt are retained in `results/trunk-ci-discovery-20260929/`.
 
+The repaired-trunk matrix reported one failure in
+[Core and Cloud Contracts](https://github.com/honua-io/honua-server/actions/runs/36544117214/job/109326553516):
+372 tests passed and the migrated client-compatibility seed test failed when its
+first count request returned 500. The correlated exception is an unresolved
+`IMetadataV2GraphProvider` while activating `ResourceValidator`. This matches
+the dependency-resolution failure documented in
+[issue 4640](https://github.com/honua-io/honua-server/issues/4640) and the repository's
+known-flake instructions. Those instructions call for a failed-shard rerun;
+they do not establish that this attempt passed or prove the underlying cause.
+The raw job log is retained as `repaired-trunk-core-cloud.log`, SHA-256
+`972b11e42e6cdc560159563475b3640925dd42363d61cbea0d892053c026f81d`.
+The full matrix is still running, so its final verdict and any subsequent retry
+remain pending. The server failure brake stays in place.
+
 An isolated Git-index rehearsal confirmed the modify/delete conflict in the
 count-tuning tests. Retaining the updated regression file and restoring the
 original tuning patch produced a recovery tree whose ten optimization paths
@@ -464,6 +478,25 @@ The serial-read smoke has now passed on both products for equality, small/medium
 bboxes and deep pagination, with zero invalid responses or cancellations. Its SQL
 proof records four scoped feature queries and zero scoped counts; all recorded
 artifact hashes were verified in `smoke-serial-reads/verification-receipt.json`.
-The combined count/read profile smoke is running. The sequential driver runs
-three-pair mixed diagnostics after both smokes, using the same immutable AOT
-image. Smoke results establish correctness and profile activation, not capacity.
+The combined count/read smoke also passed on both products with zero invalid
+responses or cancellations. Its SQL proof records four scoped counts and four
+scoped feature queries. Both campaigns cleaned their owned resources, and all
+244 recorded artifact hashes were independently checked. The combined report's
+SHA-256 is `53c1f52bb21c12e1f04fee716fd37234e1bc7a331a71161747bbf00541f91a96`.
+PR 25 merged as `25697e8405fd01884c49cc64000b13bfeb4e86ea`; all eight changed
+paths match the tested revision. The running diagnostics retain harness
+`879b9610b0587b45916ab25b67a09403b27f731b` and the same immutable AOT image.
+Smoke results establish correctness and profile activation, not capacity.
+
+The original queue supervisor disappeared while its first sustained campaign
+remained alive. Its interruption is recorded in the original queue receipt,
+with the prior receipt preserved separately. A detached recovery supervisor
+reacquired the shared build slot and observes that exact surviving process,
+checking its process start identity and campaign fingerprint. It does not
+restart or resume the live campaign. Only after all six attempts, artifact
+hashes, cleanup and report validity pass can it start the previously scheduled
+combined-profile campaign. `recovery-receipt.json`, `recovery-driver.py` and
+`recovery-driver-provenance.json` retain this operational evidence under
+`results/serial-planner-diagnostics-20260929/` in the serial-profile worktree.
+The interruption's cause is unknown. Both sustained profiles remain incomplete;
+no capacity conclusion is drawn from partial results.
