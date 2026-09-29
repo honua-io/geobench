@@ -1689,12 +1689,28 @@ of which are used only when additional attributes are enabled. The ordinary OGC
 path disables that option. This led to
 [server issue #5337](https://github.com/honua-io/honua-server/issues/5337), scoped to
 avoiding unnecessary allocations without adding a schema cache or changing
-visibility, projections or date/ID handling. Semantic and allocation regression
-tests are being run against the unchanged builder before implementation.
+visibility, projections or date/ID handling. The unchanged builder failed the
+200,000-byte allocation budget at 284,000 bytes per 100-feature fixture, while
+all four semantic cases passed. The candidate passes all five tests at 132,000
+bytes for the declared-only page (53.5% less allocation in this builder); the
+additional-attribute path remains at 388,800 bytes. These are component allocation
+measurements, not whole-request memory or throughput gains. The test fixture has
+16 declared string fields and warms both paths before thread-local measurement.
+`test-red-verification.json` and `test-green-verification.json` retain the raw
+TRX hashes and results. The first candidate run used a stale transitive assembly;
+the corrected project-graph build and matching assembly hashes establish the
+tested candidate. Driver failures, including a mistaken runtime-specific output
+path check, remain in the evidence history. HTTP smoke validation is pending.
 The retained stack review includes background waits and synthetic sample frames;
 its inclusive durations overlap and cannot be summed as CPU cost. No HTTP gain
-is claimed for the proposed change. Final production gains still require an AOT
-rebaseline.
+is claimed for the proposed change.
+
+The user's updated sequencing is Release JIT throughout optimization, followed
+by production AOT only after all planned optimizations are complete. Final
+GeoBench publication additionally requires validated AOT wins in every existing
+comparison row and all correctness, fairness and publication evidence gates.
+No new benchmarks or datasets are authorized for this optimization effort.
+The current results do not meet that publication condition.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
