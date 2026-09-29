@@ -8,8 +8,8 @@ one pair and loses two on both metrics. This is near parity in this local tuned
 mixed-workload diagnostic, not evidence of parity across all individual requests.
 All semantic checks passed. Generator headroom and shared-host variability limit
 interpretation. The newer serial-count AOT image has passed its production build
-and image checks. Baseline, count-JIT-off and serial-count smoke campaigns have
-passed on both products; sustained new-image comparisons remain pending.
+and image checks. All six scheduled smoke profiles passed on both products;
+sustained new-image comparisons are running, with no completed campaign yet.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -663,8 +663,10 @@ fingerprints. At current harness head `d4a2009dfb11ed6db15ea6097a06b3f740b838ea`
 passed all 59 tests, Ruff, Python compilation, JavaScript syntax and ShellCheck.
 Executed-SQL checks require both count settings before the same eligible count
 and independent evidence for the feature-read setting. Missing flags, substituted
-query targets and swapped backend evidence fail. The PR remains draft pending
-retained smoke campaigns against the new production AOT image.
+query targets and swapped backend evidence fail. All six scheduled production
+AOT smoke pairs subsequently passed, and the PR merged normally as
+`944b88996effc601ec08324a92b94b31072ecf19`. The active campaign keeps its tested
+`d4a2009` fingerprint; integration CI on the merged harness is checked separately.
 
 These implementation checks establish behavior, not a performance gain. The
 serial-count candidate requires its own merged production AOT image and full
@@ -961,18 +963,21 @@ Artifacts are retained in `results/validator-overhead-20260929/`, including
 `verification.json`, and the experimental source. Receipt SHA-256:
 `fc7d79672c8023ecf6bcc30cf202bb0dd85677c0ae4bf37b0b431f9c86a8a196`.
 
-## New serial-count image: initial smoke evidence and capture limitation
+## New serial-count image: completed smoke evidence and capture limitation
 
 The new `50aacf73` Native AOT image has completed the following full-corpus smoke
-pairs. Each product passed all semantic checks with zero invalid responses or
-cancellations. Owned cleanup passed. These three-second measurement windows are
+pairs. All 144 product/scenario rows passed, with zero invalid responses or
+cancellations in warmup and measurement. Owned cleanup passed. These three-second measurement windows are
 correctness checks and do not establish comparative speed.
 
-| Honua profile | Honua scenarios | GeoServer scenarios | Scoped Honua counts in SQL preflight |
-|---|---:|---:|---:|
-| baseline | 12 / 12 | 12 / 12 | 0 |
-| count-jit-off | 12 / 12 | 12 / 12 | 2 |
-| serial-counts | 12 / 12 | 12 / 12 | 2 |
+| Honua profile | Honua scenarios | GeoServer scenarios | Scoped feature reads | Scoped counts |
+|---|---:|---:|---:|---:|
+| baseline | 12 / 12 | 12 / 12 | 0 | 0 |
+| count-jit-off | 12 / 12 | 12 / 12 | 0 | 2 |
+| serial-counts | 12 / 12 | 12 / 12 | 0 | 2 |
+| count-jit-off-serial-counts | 12 / 12 | 12 / 12 | 0 | 2 |
+| serial-reads-counts | 12 / 12 | 12 / 12 | 4 | 2 |
+| count-jit-off-serial-reads-counts | 12 / 12 | 12 / 12 | 4 | 2 |
 
 The retained runtime identity, resource limits, identical database fingerprints
 and executed source SQL were rechecked. This uncovered an evidence limitation:
@@ -996,3 +1001,17 @@ Per-campaign `*-profile-verification.json` artifacts under
 `passed-with-runtime-setting-coverage-gap`. The initial verifier failure and the
 first baseline verifier output remain retained separately. The helper reuses the
 pinned SQL recognizer; it is not an independent parser or raw latency recount.
+
+
+The consolidated smoke receipt is
+`results/serial-count-aot-rebaseline-20260929/all-smokes-verification.json`.
+[Profile PR 26](https://github.com/honua-io/geobench/pull/26) merged after these
+checks. Three paired repetitions of each mixed profile and all eleven individual
+requests for baseline and both joint read/count candidates remain in the running
+queue. Server issue 5322 remains open for that performance acceptance.
+
+Post-merge [CI 36575492131](https://github.com/honua-io/geobench/actions/runs/36575492131)
+passed all 62 tests, Ruff, Python compilation, JavaScript syntax and ShellCheck
+on `944b88996effc601ec08324a92b94b31072ecf19`, covering the combined profile support
+and runtime-setting capture. This does not change the running campaign's older
+harness identity or its disclosed evidence gap.
