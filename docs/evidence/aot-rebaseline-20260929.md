@@ -1227,3 +1227,20 @@ retains harness `d4a2009`, its original schedule and four-core generator. Future
 generator-budget comparisons require separate campaigns and cannot be pooled with
 these results. Extra local CPU does not replace isolated-generator or observer
 calibration for publication.
+
+The follow-up queue is prepared under `results/generator-headroom-20260929/`
+using the reviewed PR 31 head `5b0a5029b8eb46d6f681989c6cfa5c3b56541a42`.
+It waits for the current serial-count campaign queue and all nine independent
+sustained-campaign raw verifications to pass. Only then does it acquire a build
+slot and run four full-corpus smokes followed by four three-pair mixed campaigns:
+baseline at four/eight generator CPUs, then the fully tuned read/count/JIT profile
+at eight/four. Each campaign gives both products the same generator budget.
+The production AOT image and dataset remain pinned to the identities above.
+
+The waiting supervisor checks predecessor PID start times, command lines and
+host boot identity; failures or missing processes stop it without reruns. Driver
+syntax and small offline guard fixtures passed, including CPU/memory drift and
+observer-budget mismatch rejection. No new-budget traffic has started. Completed
+attempts will be copied outside the worktree and independently recounted before
+the next campaign starts. This follow-up measures local generator sensitivity;
+separately timed configurations do not by themselves prove a causal speedup.
