@@ -105,6 +105,23 @@ all eleven individual baseline corpus requests, and medium/large bbox requests
 with count JIT disabled. Other concurrency and arrival-rate settings receive
 smoke coverage only at this stage.
 
+The first baseline mixed-workload pair has completed at 10 VUs, with 30 seconds
+of warmup and 30 seconds of measurement. Both attempts passed their correctness
+and fairness checks. Two further paired repetitions and the count-tuned campaign
+remain pending; this is an individual shared-host observation, not a completed
+campaign conclusion.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 23.87 | 41.47 | 920.49 | 448.22 |
+
+This pair favors GeoServer on both metrics. Honua's sampled database pressure
+reached six active source queries and five parallel workers; GeoServer reached
+four active source queries and no observed parallel workers. These observations
+support further count-planning investigation, without establishing a causal
+speedup or a reason to force serial execution. The campaign's partial readout
+retains individual completed pairs and explicitly marks the campaign incomplete.
+
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
 score. The first milestone can be near parity or mixed wins and losses, assessed
