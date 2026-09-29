@@ -192,6 +192,33 @@ priority. `mixed-request-breakdown.json` retains all per-repetition counts,
 percentiles, latency shares, paired ratios and raw hashes; the adjacent
 `geobench-mixed-request-breakdown.py` reproduces the breakdown.
 
+The individual-query baseline has completed its first matched pair. The table
+below retains all eleven rows, including losses; two more pairs are scheduled.
+These use the default Honua planner profile, not the count-tuned profile above,
+and do not establish a completed campaign result.
+
+| Request, pair 1 only | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| Equality | 66.07 | 59.37 | 284.23 | 307.84 |
+| Numeric range | 64.43 | 64.70 | 278.26 | 293.03 |
+| Tested prefix | 74.47 | 43.60 | 256.67 | 382.32 |
+| Small bbox | 160.20 | 161.30 | 115.95 | 119.71 |
+| Medium bbox | 7.67 | 40.03 | 2012.53 | 387.14 |
+| Large bbox | 5.97 | 16.60 | 2260.68 | 832.91 |
+| Shallow page | 53.00 | 66.93 | 312.63 | 270.82 |
+| Medium page | 55.37 | 56.17 | 307.75 | 329.44 |
+| Deep page | 35.77 | 22.10 | 420.61 | 720.06 |
+| Empty query | 336.63 | 451.20 | 63.50 | 54.30 |
+| Bbox boundary | 202.40 | 398.87 | 102.43 | 53.93 |
+
+Both attempts passed all eleven semantic and fairness checks. Honua leads both
+metrics for equality, the tested prefix and deep pagination in this pair. Range,
+small bbox and medium-page throughput are close; broad bboxes, shallow pagination,
+empty queries and the boundary case remain optimization targets. The unmerged
+first-page reuse change is not in this image. Remaining repetitions, the spatial
+count-tuned campaign and the separately queued serial profiles must complete
+before a profile-level conclusion.
+
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
 score. The first milestone can be near parity or mixed wins and losses, assessed
@@ -260,8 +287,12 @@ The first-page PR's merge conflict is now resolved at
 the tuning dependency alongside the tested fixture correction. All ten
 optimization paths remain byte-identical to the previously verified `4a2a805`
 candidate. Fresh [CI run 36529383205](https://github.com/honua-io/honua-server/actions/runs/36529383205)
-and PR gates are pending; the old test results do not establish that this new
-whole-tree revision has passed. Future AOT images must be checked
+passed all 1,688 tests on PostgreSQL 16, 17 and 18 at this reconciled revision,
+plus the full solution build and formatting verification. Required PR gates and
+the separate [hosting rollback PR 5317](https://github.com/honua-io/honua-server/pull/5317)
+remain pending. That repair now has ten new regression cases and a candidate
+retaining externally supplied mount paths; its baseline and candidate validation
+are still in progress. No whole-workflow pass is claimed. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
