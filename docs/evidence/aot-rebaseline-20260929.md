@@ -19,9 +19,11 @@ H/G throughput above one favors Honua; H/G p95 below one favors Honua.
 | Serial counts | 0.859 | 1.471 | GeoServer leads all three |
 | Count-JIT-off + serial counts | 0.887 | 1.236 | GeoServer leads all three |
 | Serial reads + serial counts | **1.245** | **0.755** | **Honua leads all three** |
+| Count-JIT-off + serial reads + serial counts | **1.211** | **0.791** | **Honua leads all three** |
 
-The count-JIT-off + serial-read/count profile is running. All six full-corpus
-smoke profiles passed, but smoke timings do not establish performance. The earlier
+All six mixed profiles are complete and independently verified; individual-query
+comparisons are running. All six full-corpus smoke profiles also passed, but smoke
+timings do not establish performance. The earlier
 first-page image's best tuned mixed result (throughput H/G 0.946, p95 H/G 1.073)
 remains separately identified below and is not a result from this newer image.
 
@@ -1260,8 +1262,59 @@ Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
 Report SHA-256:
 `9702864a1767d9c29c4a053f00f19d2d5926a8ffe41955b01f9f29e40c8320de`.
 Independent recount CPU/wall time was 6.68/63.07 seconds. Publication remains
-disabled on this shared-host diagnostic. The all-three-policy mixed campaign is
-running, followed by the full individual-query campaigns.
+disabled on this shared-host diagnostic. The all-three-policy mixed campaign has
+also completed, as recorded below; individual-query campaigns are running.
+
+
+## New serial-count image: completed all-three-policy mixed comparison
+
+Serial feature reads, serial spatial counts and count-specific PostgreSQL JIT
+suppression are all enabled in this profile. All three paired mixed repetitions
+passed independent raw verification, with zero invalid responses or cancellations.
+Five measurement attempts have ten late completions each; GeoServer repetition
+two has eleven. Late completions are excluded from measured throughput and
+latency. Each attempt used ten VUs, 30-second warmup and 30-second measurement.
+The same runtime planner environment capture gap is retained; the intended
+configuration and preflight executed SQL are available separately.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 196.00 | 161.90 | 78.82 | 98.96 |
+| 2 | 191.20 | 160.43 | 85.29 | 107.86 |
+| 3 | 215.40 | 171.30 | 70.92 | 92.24 |
+
+Median paired throughput H/G is **1.211**, range **1.192–1.257**; p95 H/G is
+**0.791**, range **0.769–0.797**. Honua leads both overall metrics in every pair.
+Together with the separate serial-read/count result, both profiles that enable
+serial reads and counts favor Honua consistently on this mixed workload. Their
+separately timed results do not establish whether adding count-JIT suppression
+improves or worsens performance. Individual-query comparisons remain pending.
+
+Within mixed traffic, median paired p95 H/G is 0.771 for medium bbox
+(range 0.750–0.801), 0.730 for the tested prefix (0.656–0.740), 0.949 for numeric
+range (0.913–0.982), and 1.002 for equality (0.960–1.012). Medium bbox, prefix
+and range favor Honua in every pair; equality is approximately even and varies
+across parity. These are request latencies within mixed traffic, not standalone
+throughput. Medium bbox contributes a median 45.6% of Honua's summed response
+latency; this is not CPU attribution.
+
+Measurement-and-drain samples show zero parallel workers for both products.
+Honua database CPU sample medians are 304.80–311.80%, and server medians are
+255.28–265.50%. Generator medians are 399.31–409.26% for Honua and
+384.53–394.02% for GeoServer. Both generators are near their four-core budgets;
+the queued generator-headroom diagnostics remain necessary before inferring
+server capacity. These are sampled values including drain, not exact-window
+utilization or true peaks.
+
+Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
+`mixed-count-jit-off-serial-reads-counts/report.json` and its
+`-raw-verification.json`, `-profile-verification.json`, `-request-breakdown.json`
+and `-phase-pressure.json`.
+Report SHA-256:
+`aff4bfae31c02de8b3a4b5d1956df8590e0f1b6c658acfd951df2b21f6b4845f`.
+Independent recount CPU/wall time was 5.60/59.82 seconds. Publication remains
+disabled. The queue has moved to all eleven individual corpus requests for
+baseline and both combined read/count profiles.
 
 
 ## Generator headroom follow-up
@@ -1302,3 +1355,22 @@ observer-budget mismatch rejection. No new-budget traffic has started. Completed
 attempts will be copied outside the worktree and independently recounted before
 the next campaign starts. This follow-up measures local generator sensitivity;
 separately timed configurations do not by themselves prove a causal speedup.
+
+
+## Source attribute decoding candidate
+
+[Server issue 5324](https://github.com/honua-io/honua-server/issues/5324) and
+[draft PR 5325](https://github.com/honua-io/honua-server/pull/5325) investigate
+removing the per-feature UTF-16 attributes string before JSON parsing. Npgsql
+10.0.1's direct `JsonDocument` mapping uses built-in DOM type metadata and parses
+the UTF-8 wire stream. Source files and hashes from Npgsql revision
+`12d792ac2163596385152dcea5c68ba99769731f` are retained under
+`results/source-json-document-20260929/`.
+
+The initial PR contains an actual PostgreSQL/Npgsql allocation experiment and
+expected-red wire-type regressions: ordinary reads would use JSONB, while
+distinct reads retain text comparison and ordering semantics. Five alternating
+allocation measurements cover scalar and nested Unicode payloads, including the
+canonical scalar conversion and immutable copy. Hosted provider validation is
+running; allocation benefit is unproven, production reader code is unchanged,
+and no HTTP gain is claimed. This candidate does not alter any running campaign.
