@@ -1367,10 +1367,31 @@ the UTF-8 wire stream. Source files and hashes from Npgsql revision
 `12d792ac2163596385152dcea5c68ba99769731f` are retained under
 `results/source-json-document-20260929/`.
 
-The initial PR contains an actual PostgreSQL/Npgsql allocation experiment and
-expected-red wire-type regressions: ordinary reads would use JSONB, while
-distinct reads retain text comparison and ordering semantics. Five alternating
-allocation measurements cover scalar and nested Unicode payloads, including the
-canonical scalar conversion and immutable copy. Hosted provider validation is
-running; allocation benefit is unproven, production reader code is unchanged,
-and no HTTP gain is claimed. This candidate does not alter any running campaign.
+The initial tests-only head `a7b4fc003875781e59e47836d0d729be37b83f3e`
+completed the [hosted provider experiment](https://github.com/honua-io/honua-server/actions/runs/36585109710)
+on PostgreSQL 16, 17 and 18. Each provider recorded 1,726 passing tests and exactly
+two expected failures asserting the ordinary-read JSONB wire type. Both
+allocation cases passed on every provider. Five alternating measurements include
+canonical scalar conversion, nested cloning and the immutable copy:
+
+| PostgreSQL | Scalar text / document bytes per row | Nested text / document bytes per row |
+|---|---:|---:|
+| 16 | 2,362 / 1,818 | 3,058 / 2,418 |
+| 17 | 2,362 / 1,818 | 3,059 / 2,419 |
+| 18 | 2,362 / 1,818 | 3,010 / 2,370 |
+
+These medians show about 23% fewer allocated bytes for scalar rows and 21% for
+nested rows in the provider test. They do not establish Native AOT HTTP speedup.
+The raw logs, all samples, expected failures and log hashes are retained under
+`results/source-json-document-20260929/implementation-receipt.json`.
+
+Implementation head `5808b6523` now decodes ordinary JSONB directly through the
+shared attribute reader and retains text decoding for distinct comparison and
+ordering. Added coverage exercises buffered/streamed reads, physical/JSONB field
+mappings, scalar types, Unicode, nested values larger than the read buffer,
+projection, masking, excluded attributes and numeric distinct text ordering.
+[Hosted implementation validation](https://github.com/honua-io/honua-server/actions/runs/36587027449)
+is running; the PR remains draft. Local pre-PR inspection was dry-run only
+(nine affected projects, ten selected server shards and AOT verification).
+No production image contains this candidate yet, no HTTP gain is claimed, and
+none of the running campaigns have changed.
