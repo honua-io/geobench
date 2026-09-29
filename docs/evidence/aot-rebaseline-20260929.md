@@ -192,12 +192,36 @@ priority. `mixed-request-breakdown.json` retains all per-repetition counts,
 percentiles, latency shares, paired ratios and raw hashes; the adjacent
 `geobench-mixed-request-breakdown.py` reproduces the breakdown.
 
-The individual-query baseline has completed two matched pairs. The tables
-below retain all eleven rows, including losses; the third pair is pending.
-These use the default Honua planner profile, not the count-tuned profile above,
-and do not establish a completed campaign result.
+The individual-query baseline has completed all three matched pairs at 10 VUs,
+with 30-second warmups and 30-second measurement windows. All six attempts
+passed semantic and fairness checks across all eleven requests. This is the
+default Honua planner profile, not the count-tuned profile above, and it does
+not include the unmerged first-page optimization.
 
-| Request, pair 1 only | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+The tested prefix and deep pagination favor Honua in the median paired
+comparisons for both throughput and p95, but neither wins every pair. All other
+rows favor GeoServer on both median paired metrics. Broad bboxes remain the
+largest, most consistent gaps. These results do not establish near parity overall.
+
+Ratios below compare Honua with GeoServer within each matched pair. Higher
+is better for throughput; lower is better for p95. Each entry gives the median
+paired ratio and its full three-pair range. No latency percentiles are averaged.
+
+| Request | Throughput H/G, median [range] | p95 H/G, median [range] |
+|---|---:|---:|
+| Equality | 0.848 [0.730–1.113] | 1.190 [0.923–1.289] |
+| Numeric range | 0.824 [0.597–0.996] | 1.111 [0.950–1.540] |
+| Tested prefix | 1.123 [0.631–1.708] | 0.962 [0.671–2.067] |
+| Small bbox | 0.660 [0.454–0.993] | 1.519 [0.969–2.224] |
+| Medium bbox | 0.192 [0.165–0.203] | 5.198 [4.527–5.381] |
+| Large bbox | 0.386 [0.359–0.449] | 2.600 [1.973–2.714] |
+| Shallow page | 0.684 [0.651–0.792] | 1.425 [1.154–1.478] |
+| Medium page | 0.718 [0.675–0.986] | 1.450 [0.934–1.592] |
+| Deep page | 1.292 [0.974–1.618] | 0.743 [0.584–1.125] |
+| Empty query | 0.653 [0.643–0.746] | 1.374 [1.170–1.574] |
+| Bbox boundary | 0.507 [0.454–0.723] | 1.899 [1.275–2.217] |
+
+| Request, pair 1 | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
 | Equality | 66.07 | 59.37 | 284.23 | 307.84 |
 | Numeric range | 64.43 | 64.70 | 278.26 | 293.03 |
@@ -211,7 +235,7 @@ and do not establish a completed campaign result.
 | Empty query | 336.63 | 451.20 | 63.50 | 54.30 |
 | Bbox boundary | 202.40 | 398.87 | 102.43 | 53.93 |
 
-| Request, pair 2 only | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+| Request, pair 2 | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
 | Equality | 52.03 | 61.37 | 347.75 | 292.22 |
 | Numeric range | 49.40 | 59.97 | 338.19 | 304.53 |
@@ -225,27 +249,43 @@ and do not establish a completed campaign result.
 | Empty query | 222.97 | 346.83 | 95.16 | 69.24 |
 | Bbox boundary | 202.47 | 280.07 | 98.04 | 76.89 |
 
-All four attempts passed all eleven semantic and fairness checks. Honua leads
-both metrics for the tested prefix in both pairs. Equality and deep pagination
-lead in the first pair but not the second; the first pair's near throughput
-parity for small bbox and medium pagination also does not repeat. Broad bboxes,
-shallow pagination, empty queries and the boundary case favor GeoServer in both
-pairs. Shared-host variation remains substantial, and no completed-campaign
-summary or general parity claim follows from these two pairs. The unmerged
-first-page reuse change is not in this image. Remaining repetitions, the spatial
-count-tuned campaign and the separately queued serial profiles must complete
-before a profile-level conclusion.
+| Request, pair 3 | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| Equality | 38.30 | 52.50 | 455.92 | 353.57 |
+| Numeric range | 34.93 | 58.47 | 497.94 | 323.41 |
+| Tested prefix | 25.93 | 41.07 | 867.18 | 419.61 |
+| Small bbox | 57.80 | 127.23 | 367.17 | 165.09 |
+| Medium bbox | 5.80 | 35.23 | 2527.58 | 469.76 |
+| Large bbox | 5.83 | 13.00 | 2301.45 | 1166.23 |
+| Shallow page | 42.63 | 65.47 | 403.21 | 272.74 |
+| Medium page | 37.87 | 56.07 | 508.27 | 319.23 |
+| Deep page | 24.33 | 18.83 | 639.01 | 860.32 |
+| Empty query | 155.97 | 238.67 | 144.76 | 91.95 |
+| Bbox boundary | 126.27 | 278.20 | 165.39 | 74.60 |
+
+The measurement windows contain 73,529 valid Honua completions and 106,361
+valid GeoServer completions across the 33 sequential scenarios per product,
+with zero invalid responses or cancellations. The 337 Honua and 335 GeoServer
+late completions are reported separately. These totals are completion accounting,
+not an overall throughput or winner score. All p50/p95/p99 values, warmup/drain
+counts and per-repetition ranges remain in `features-baseline/report.json`.
+The report records seven auxiliary clock anomalies for Honua and 18 for
+GeoServer; diagnostic latency uses monotonic executor progress. Clock anomalies,
+diagnostic mode and missing calibration keep the report explicitly not publishable.
 
 Hash-verified telemetry also shows substantial variation. Across samples labelled
-measurement-and-drain, pair 2's median one-minute host load was 21.46 during Honua
-and 14.21 during GeoServer, compared with 16.02 and 15.42 in pair 1. Collector
-passes reached 14.24 seconds during Honua pair 2, so a nominal five-second cadence
-does not guarantee five-second coverage. Host load includes the benchmark itself
-as well as other work; these sparse, non-instantaneous samples cannot assign the
-latency difference to interference. Collector elapsed time is not its CPU usage
-or a measured throughput penalty. `feature-telemetry-analysis.json` and its
-adjacent `analyze-feature-telemetry.py` retain the per-scenario values and hashes.
-Losses remain in the report, and this remains shared-host diagnostic evidence.
+measurement-and-drain, median one-minute host load for Honua/GeoServer was
+16.02/15.42 in pair 1, 21.46/14.21 in pair 2 and 26.11/30.59 in pair 3. Collector
+passes reached 15.29 seconds, so a nominal five-second cadence does not guarantee
+five-second coverage. Host load includes the benchmark itself as well as other
+work; sparse, non-instantaneous samples cannot assign latency differences to
+interference. Collector elapsed time is not CPU utilization or a measured
+throughput penalty. `feature-telemetry-analysis.json` and its adjacent
+`analyze-feature-telemetry.py` retain the per-scenario values and hashes.
+
+The separate spatial count-tuned campaign is now running; the queued serial
+profiles follow it. The first-page optimization still needs a new production
+AOT build and its own measurements.
 
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
