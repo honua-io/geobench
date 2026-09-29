@@ -142,7 +142,11 @@ def record_resources(owner):
     return {kind: owned_ids(owner, kind) for kind in ("container", "volume", "network")}
 
 
-def runtime_receipt(ids, images):
+def runtime_receipt(ids, images, honua_profile=None):
+    if honua_profile is not None and honua_profile not in HONUA_PROFILES:
+        raise ValueError(f"Unknown Honua profile: {honua_profile}")
+    # Capture only profile-owned keys: other Database values may contain secrets.
+    planner_keys = {key for options in HONUA_PROFILES.values() for key in options}
     result = {"docker_engine": docker_engine_identity()}
     for name, identity in ids.items():
         info = inspect(identity)
@@ -151,8 +155,13 @@ def runtime_receipt(ids, images):
                         "cpus": info["HostConfig"]["NanoCpus"] / 1e9,
                         "memory": info["HostConfig"]["Memory"],
                         "environment": [e for e in info["Config"].get("Env", [])
-                                        if e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT="))]}
+                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT="))]}
         if name == "honua":
+            planner_entries = [e.split("=", 1) for e in result[name]["environment"]
+                               if e.partition("=")[0] in planner_keys]
+            if honua_profile is not None and (len(planner_entries) != len(dict(planner_entries)) or
+                    dict(planner_entries) != HONUA_PROFILES[honua_profile]):
+                raise ValueError(f"Honua planner configuration drift: {honua_profile}")
             maps = command("docker", "exec", identity, "cat", "/proc/1/maps")
             result[name]["coreclr_mapped"] = "libcoreclr" in maps or "libclrjit" in maps
             result[name]["command"] = command("docker", "exec", identity, "cat", "/proc/1/cmdline").replace("\x00", " ").strip()
@@ -241,7 +250,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
                 attempt["resources"] = identities
                 save()
             ids = {name: command(*compose, "ps", "-q", name) for name in (server, "postgis-" + server, "k6")}
-            runtime = runtime_receipt(ids, manifest["images"])
+            runtime = runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"))
             write(path / "runtime.json", runtime)
             if runtime["docker_engine"] != manifest["host_identity"]["docker_engine"]:
                 raise ValueError("Docker engine identity/resource drift from prepared campaign")
@@ -344,7 +353,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         if pressure["source_sessions"] > BUDGET["source_connections"] or pressure["source_active"] > BUDGET["source_connections"]:
             attempt["fairness_failures"].append("observed source-query pressure exceeds six connections")
         # Verify effective settings and image/resource identity again after traffic.
-        if runtime_receipt(ids, manifest["images"]) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
+        if runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline")) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
             attempt["fairness_failures"].append("runtime/database configuration drift")
         if server == "geoserver":
             current_jars = command("docker", "exec", ids[server], "sh", "-c",
