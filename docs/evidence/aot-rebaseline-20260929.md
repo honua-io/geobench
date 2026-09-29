@@ -157,7 +157,8 @@ increasing-count controls passed. Commit
 `4a2a80544081875659b980977e0dda0983701a02` preserves the fetched page and floors
 the later total at its size. In
 [run 36523993300](https://github.com/honua-io/honua-server/actions/runs/36523993300),
-PostgreSQL 17 and 18 each passed all 1,688 tests, including all six concurrency
-cases. The [review finding was resolved with that evidence](https://github.com/honua-io/honua-server/pull/5315#discussion_r4129824810),
-and the required Review Gate is green at the fixed revision. PostgreSQL 16,
-full build/format checks, and the remaining merge checks are still pending.
+PostgreSQL 16, 17 and 18 each passed all 1,688 tests, including all six concurrency
+cases. Full solution build passed with zero warnings/errors, and formatting
+verification passed at the same revision. The [review finding was resolved with evidence](https://github.com/honua-io/honua-server/pull/5315#discussion_r4129824810),
+and the required Review Gate is green. The remaining PR Gate checks and other
+workflow jobs are still running; the PR has not merged yet.
