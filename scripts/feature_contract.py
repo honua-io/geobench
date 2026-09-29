@@ -42,6 +42,13 @@ def fingerprint(value):
                                     allow_nan=False).encode()).hexdigest()
 
 
+def generator_budget(cpus=BUDGET["cpus"]):
+    """One generator budget for every product; server/database limits stay fixed."""
+    if type(cpus) is not int or cpus <= 0:
+        raise ValueError("Generator CPUs must be a positive integer")
+    return {"cpus": cpus, "memory_bytes": BUDGET["memory_bytes"]}
+
+
 def immutable_image(image):
     return bool(re.fullmatch(r"(?:[^\s]+@)?sha256:[0-9a-f]{64}", image))
 

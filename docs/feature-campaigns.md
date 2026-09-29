@@ -81,10 +81,25 @@ measurement per scenario. Comparison defaults are five paired repetitions,
 server order, reversed on every subsequent pair. Each server/repetition gets
 fresh private PostGIS storage, network and ephemeral loopback port. Both server
 and DB have 4 CPUs / 4 GiB; source pools target six connections. The load generator
-also has 4 CPUs / 4 GiB. Normal metadata caches remain enabled. Honua exact
+defaults to 4 CPUs / 4 GiB. Normal metadata caches remain enabled. Honua exact
 response caching and adaptive admission are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
+
+Use `--generator-cpus 8` in a new diagnostic campaign to investigate generator
+headroom. The option accepts positive integers and applies the same k6 CPU budget
+to both products; server/database CPU, memory and source-connection limits remain
+unchanged, and k6 memory remains 4 GiB. The manifest and reports record the separate
+generator budget, and nondefault profile names include `generator-8cpu`. Effective
+limits are checked before and after traffic. Changed budgets invalidate the resume
+and calibration binding. Observer CPU warnings use inspected per-container quotas,
+so 400% CPU is saturation for a four-core server but not an eight-core generator.
+
+An enlarged local generator is a separate diagnostic configuration. It does not
+prove unlimited generator capacity or replace isolated-generator and observer
+calibration for publication. Compare the same server image/workload under each
+generator budget and retain every repetition. Do not change a running campaign's
+budget or combine rows across generator configurations.
 
 The default `--honua-profile baseline` preserves the server's default count
 planning. Use `--honua-profile count-jit-off` in a separate campaign to enable

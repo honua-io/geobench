@@ -27,6 +27,7 @@ from feature_contract import (
     HONUA_PROFILES,
     MODES,
     fingerprint,
+    generator_budget,
     immutable_image,
     oracle,
     request_url,
@@ -104,7 +105,8 @@ def resolve_images(args):
     return images
 
 
-def make_compose(owner, server, images, honua_profile="baseline"):
+def make_compose(owner, server, images, honua_profile="baseline", generator_cpus=BUDGET["cpus"]):
+    load_budget = generator_budget(generator_cpus)
     if honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
@@ -122,7 +124,8 @@ def make_compose(owner, server, images, honua_profile="baseline"):
         service["labels"] = labels
         service["networks"] = {"default": {"aliases": [name]}}
         service["pull_policy"] = "never"
-        service["deploy"] = {"resources": {"limits": {"cpus": str(BUDGET["cpus"]), "memory": str(BUDGET["memory_bytes"])}}}
+        budget = load_budget if name == "k6" else BUDGET
+        service["deploy"] = {"resources": {"limits": {"cpus": str(budget["cpus"]), "memory": str(budget["memory_bytes"])}}}
         if name == server:
             service["ports"] = [{"target": 8080, "host_ip": "127.0.0.1", "published": "0", "protocol": "tcp"}]
         if name.startswith("postgis-"):
@@ -142,7 +145,8 @@ def record_resources(owner):
     return {kind: owned_ids(owner, kind) for kind in ("container", "volume", "network")}
 
 
-def runtime_receipt(ids, images, honua_profile=None):
+def runtime_receipt(ids, images, honua_profile=None, generator_cpus=BUDGET["cpus"]):
+    load_budget = generator_budget(generator_cpus)
     if honua_profile is not None and honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     # Capture only profile-owned keys: other Database values may contain secrets.
@@ -167,7 +171,8 @@ def runtime_receipt(ids, images, honua_profile=None):
             result[name]["command"] = command("docker", "exec", identity, "cat", "/proc/1/cmdline").replace("\x00", " ").strip()
             if images[role]["labels"].get("honua.runtime.compilation") == "native-aot" and result[name]["coreclr_mapped"]:
                 raise ValueError("Honua runtime contradicts its Native AOT image label")
-        if info["Image"] != images[role]["id"] or result[name]["cpus"] != BUDGET["cpus"] or result[name]["memory"] != BUDGET["memory_bytes"]:
+        budget = load_budget if name == "k6" else BUDGET
+        if info["Image"] != images[role]["id"] or result[name]["cpus"] != budget["cpus"] or result[name]["memory"] != budget["memory_bytes"]:
             raise ValueError(f"Runtime image/resource drift: {name}")
     return result
 
@@ -223,6 +228,7 @@ def wait_ready(compose, server, log):
 
 def execute_attempt(directory, manifest, attempt, save, calibration_workload=None):
     verify_snapshot(directory, manifest)
+    generator_cpus = manifest.get("generator_budget", generator_budget())["cpus"]
     server = attempt["server"]
     fixture = manifest.setdefault("fixtures", {}).get(server) if manifest.get("reuse_fixture") else None
     owner = manifest["owner"] + ("-fixture-" + server if manifest.get("reuse_fixture") else "-" + attempt["id"])
@@ -231,7 +237,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
     path = directory / attempt["id"]
     path.mkdir()
     compose_file = path / "compose.json"
-    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"))
+    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus)
     for volume in composition["services"]["k6"]["volumes"]:
         if volume.get("target") == "/tests":
             volume["source"] = str(directory / "harness" / "src/tests")
@@ -250,7 +256,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
                 attempt["resources"] = identities
                 save()
             ids = {name: command(*compose, "ps", "-q", name) for name in (server, "postgis-" + server, "k6")}
-            runtime = runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"))
+            runtime = runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus)
             write(path / "runtime.json", runtime)
             if runtime["docker_engine"] != manifest["host_identity"]["docker_engine"]:
                 raise ValueError("Docker engine identity/resource drift from prepared campaign")
@@ -353,7 +359,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         if pressure["source_sessions"] > BUDGET["source_connections"] or pressure["source_active"] > BUDGET["source_connections"]:
             attempt["fairness_failures"].append("observed source-query pressure exceeds six connections")
         # Verify effective settings and image/resource identity again after traffic.
-        if runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline")) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
+        if runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
             attempt["fairness_failures"].append("runtime/database configuration drift")
         if server == "geoserver":
             current_jars = command("docker", "exec", ids[server], "sh", "-c",
@@ -400,6 +406,8 @@ def main():
     parser.add_argument("--protocol", choices=("ogc", "gsr"), default="ogc")
     parser.add_argument("--honua-profile", choices=HONUA_PROFILES, default="baseline",
                         help="Keep query-scoped PostgreSQL tuning separate from the default baseline")
+    parser.add_argument("--generator-cpus", type=int, default=BUDGET["cpus"],
+                        help="Positive integer k6 CPU budget, equal for both products; server/database budgets stay fixed")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--prepare-only", action="store_true", help="Write immutable inputs and calibration binding without starting stacks")
@@ -412,6 +420,10 @@ def main():
     for key in ("honua", "geoserver", "postgis", "k6"):
         parser.add_argument("--" + key + "-image", default=os.environ.get(key.upper() + "_IMAGE", ""))
     args = parser.parse_args()
+    try:
+        load_budget = generator_budget(args.generator_cpus)
+    except ValueError as exc:
+        parser.error(str(exc))
     if len(set(args.servers)) != len(args.servers) or (args.mode == "comparison" and set(args.servers) != {"honua", "geoserver"}):
         parser.error("Comparison requires both servers; duplicate servers are invalid")
     if args.reuse_fixture and args.mode != "diagnostic":
@@ -437,14 +449,17 @@ def main():
                 "honua_profile": args.honua_profile,
                 "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
                 **MODES[args.mode], "scenarios": scenarios, "servers": args.servers,
-                "budget": BUDGET, "seed": args.seed, "images": images, "corpus": corpus,
+                "budget": BUDGET, "generator_budget": load_budget,
+                "seed": args.seed, "images": images, "corpus": corpus,
                 "host_identity": host_identity(),
                 "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
                 "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
                 "honua_compilation": images.get("honua", {}).get("labels", {}).get("honua.runtime.compilation", "unverified-diagnostic"),
-                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile) for s in args.servers}}
+                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile, args.generator_cpus) for s in args.servers}}
     if args.honua_profile != "baseline":
         manifest["profile"] += "-honua-" + args.honua_profile
+    if args.generator_cpus != BUDGET["cpus"]:
+        manifest["profile"] += f"-generator-{args.generator_cpus}cpu"
     if "honua" in args.servers and manifest["honua_compilation"] != "native-aot":
         manifest["profile"] += "-honua-jit-or-unverified-diagnostic"
     if args.smoke:
