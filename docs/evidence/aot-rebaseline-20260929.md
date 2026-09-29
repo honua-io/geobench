@@ -7,8 +7,11 @@ the ascending-ID oracle, but this does not prove the requested sorting was
 honored. The performance cost of repeated warning output is unmeasured.
 The ratios below remain historical diagnostic observations, not a clean
 Honua-versus-GeoServer speed claim. [PR 32](https://github.com/honua-io/geobench/pull/32)
-will enable and verify sorting and add a descending-order oracle preflight.
-Corrected campaigns are required before drawing that comparison.
+merged as `74743b70d12fbeb4bf2f5102fe47272fcac01e64`. It enables and verifies
+sorting and adds a descending-order oracle preflight. The corrected smoke
+campaign passed all 24 scenario rows across both products, with zero ignored-sort
+warnings. Corrected sustained mixed campaigns are now running; no corrected
+throughput or latency result is available yet.
 
 The production serial-count Native AOT image's completed **serial-reads-counts**
 mixed campaign favors Honua in all three pairs: median paired Honua/GeoServer
@@ -19,7 +22,9 @@ Honua's generator reached its four-core cap in sampled telemetry, so a
 generator-headroom comparison remains necessary before inferring server capacity.
 The not-yet-started headroom driver was cancelled after discovering the sorting
 confound; it must be recreated with the corrected harness. No timed attempt from
-that driver had started, and the active original campaigns were not modified.
+that driver had started. The original timed queue was subsequently interrupted
+through its own signal handler: the partial attempt remains recorded as
+interrupted, and exact owned container/network/volume cleanup was verified.
 
 Completed mixed profiles on this same production image are listed separately.
 Each value is a median of three paired ratios, not a pooled or averaged percentile.
@@ -34,8 +39,11 @@ H/G throughput above one favors Honua; H/G p95 below one favors Honua.
 | Serial reads + serial counts | **1.245** | **0.755** | **Honua leads all three** |
 | Count-JIT-off + serial reads + serial counts | **1.211** | **0.791** | **Honua leads all three** |
 
-All six mixed profiles are complete and independently verified; individual-query
-comparisons are running. All six full-corpus smoke profiles also passed, but smoke
+All six original mixed profiles are complete and independently verified, with
+the sorting confound above. The original full baseline also passed independent
+raw verification of its 33 paired scenario rows. The subsequent tuned campaign
+was interrupted because of the confound, not its performance outcomes. All six
+original full-corpus smoke profiles also passed, but smoke
 timings do not establish performance. The earlier
 first-page image's best tuned mixed result (throughput H/G 0.946, p95 H/G 1.073)
 remains separately identified below and is not a result from this newer image.
@@ -1346,13 +1354,13 @@ passed. The tests-only predecessor recorded the missing APIs/CLI and CPU receipt
 failures before implementation. Receipts and logs are retained under
 `results/generator-cpu-budget-20260929/`.
 
-No new-budget HTTP smoke or headroom comparison has run yet: the existing queue
-retains harness `d4a2009`, its original schedule and four-core generator. Future
+No eight-core generator comparison has run yet. The original queue retained
+harness `d4a2009` and its four-core generator until interruption. Future
 generator-budget comparisons require separate campaigns and cannot be pooled with
 these results. Extra local CPU does not replace isolated-generator or observer
 calibration for publication.
 
-The follow-up queue is prepared under `results/generator-headroom-20260929/`
+The original follow-up queue was prepared under `results/generator-headroom-20260929/`
 using the reviewed PR 31 head `5b0a5029b8eb46d6f681989c6cfa5c3b56541a42`.
 It waits for the current serial-count campaign queue and all nine independent
 sustained-campaign raw verifications to pass. Only then does it acquire a build
@@ -1361,7 +1369,7 @@ baseline at four/eight generator CPUs, then the fully tuned read/count/JIT profi
 at eight/four. Each campaign gives both products the same generator budget.
 The production AOT image and dataset remain pinned to the identities above.
 
-The waiting supervisor checks predecessor PID start times, command lines and
+The supervisor checks predecessor PID start times, command lines and
 host boot identity; failures or missing processes stop it without reruns. Driver
 syntax and small offline guard fixtures passed, including CPU/memory drift and
 observer-budget mismatch rejection. No new-budget traffic has started. Completed
@@ -1369,11 +1377,17 @@ attempts will be copied outside the worktree and independently recounted before
 the next campaign starts. This follow-up measures local generator sensitivity;
 separately timed configurations do not by themselves prove a causal speedup.
 
+After the sorting confound was confirmed, this idle supervisor was cancelled
+before starting any campaign. Its previous queue receipt, exact PID identity and
+verified cancellation remain under `sort-confound-cancellation.json`. The
+schedule above is historical preparation, not an active queue; headroom tests
+must use the corrected harness.
+
 
 ## Source attribute decoding candidate
 
 [Server issue 5324](https://github.com/honua-io/honua-server/issues/5324) and
-[draft PR 5325](https://github.com/honua-io/honua-server/pull/5325) investigate
+[PR 5325](https://github.com/honua-io/honua-server/pull/5325) investigate
 removing the per-feature UTF-16 attributes string before JSON parsing. Npgsql
 10.0.1's direct `JsonDocument` mapping uses built-in DOM type metadata and parses
 the UTF-8 wire stream. Source files and hashes from Npgsql revision
@@ -1410,8 +1424,8 @@ coverage. PR Gate, formatting and [Native AOT compilation verification](https://
 passed on this head. The compile job produced a 269MB native binary using its
 standard admin-client/Oracle/Snowflake exclusions; it does not replace full
 production-image boundary/runtime verification. The overall CI run remains
-failed for the two unrelated issues recorded below. The decoder PR remains
-draft pending integrated verification. Local pre-PR inspection was dry-run only
+failed for the two unrelated issues recorded below. At that stage the decoder PR
+remained draft pending integrated verification. Local pre-PR inspection was dry-run only
 (nine affected projects, ten selected server shards and AOT verification).
 
 The run's Docker job failed its filesystem security scan on the unchanged OGC
@@ -1446,8 +1460,35 @@ The decoder branch now integrates both merged repairs from trunk at head
 `2e2fff7b14ac73535113722e1743d8cdf5b3f87b`. The merge was conflict-free and the
 diff against trunk remains the intended six decoder/test files. Its
 [full integrated CI run](https://github.com/honua-io/honua-server/actions/runs/36594858604)
-is running. Earlier passing checks establish evidence only for their recorded
-heads; they do not substitute for verification of this integrated revision.
+has passed all 5,220 PostgreSQL tests again, provider-foundation tests, and Docker
+integration. Required PR Gate and Review Gate passed at this head; PR 5325 is
+ready and awaiting the normal automatic lander. Integrated native compilation
+and the broader CI matrix are still running. Earlier passing checks establish
+evidence only for their recorded heads.
 
-No production image contains this candidate yet, no HTTP gain is claimed, and
-none of the running campaigns have changed.
+No production image contains this candidate yet and no decoder HTTP gain is
+claimed. The corrected harness smoke and new mixed campaigns use the existing
+production source `2db24e648350927c3dada3eb00638bcec1e5cc3e`.
+
+## Sorting correction verification and fresh queue
+
+Harness head `224d4c4fa3d5eebc083036be7bb5d981a3f03f98` matches the content of
+merged PR 32. Hosted CI passed all 82 tests, Ruff, compilation, JavaScript syntax,
+ShellCheck and CodeQL; local tests/lint/syntax also passed under the shared build
+lock after the old HTTP queue stopped. A fresh two-product smoke campaign passed
+all 12 selected scenarios per product. Both descending-ID preflights matched
+PostGIS; source SQL retained descending ordering, GeoServer exposed the primary
+key and advertised sorting, and its service fingerprint stayed unchanged after
+traffic. The GeoServer container log contained zero ignored-sort warnings.
+Independent raw recount and exact owned cleanup passed. Receipts are retained
+under `results/geoserver-sorting-20260929/`; these are correctness results, not
+speed evidence.
+
+`results/sorting-corrected-mixed-20260929/` records the next predeclared schedule:
+baseline, then serial reads plus serial counts, each with three paired
+repetitions, seed 42, 30-second warmup and measurement, ten VUs and fresh stacks.
+Server, database and generator each retain four CPUs and 4GiB; each source pool
+retains six connections. Independent raw verification runs between campaigns,
+with no concurrent HTTP load. The queue does not retry or replace failed
+attempts. This remains shared-WSL diagnostic evidence and is separate from the
+future decoder-image rebaseline and generator-headroom checks.
