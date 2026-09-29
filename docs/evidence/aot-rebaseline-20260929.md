@@ -599,17 +599,21 @@ does not establish a Honua-versus-GeoServer speedup.
 Summary SHA-256: `11f0b4e12ff4ce6d9c5dd3434911645ba01c43cea272726dc64f9c4cec0c75cd`.
 `verification.json` retains the independent sample-accounting checks.
 
-## Implementation follow-up at 11:02 UTC
+## Implementation follow-up at 11:27 UTC
 
 [PR 5315](https://github.com/honua-io/honua-server/pull/5315) merged into trunk
 at `f34496e1893e17f974b4e5e330043078f8355b42`. It reuses exact totals from short
 first pages and restores the independent count-specific PostgreSQL JIT option.
 The production amd64 Native AOT build in
 [run 36555577096](https://github.com/honua-io/honua-server/actions/runs/36555577096)
-is running from subsequent trunk revision
-`beac25991794543f96c79fac8fb9ed0745b136dd`. That image includes PR 5315 but does
-not include the serial-count candidate below. Its immutable digest and successful
-boundary/smoke verification must be captured before starting a new campaign.
+passed from subsequent trunk revision
+`beac25991794543f96c79fac8fb9ed0745b136dd`. The exact amd64 job passed its
+boundary check, GeoParquet smoke and image publication. Its immutable reference is
+`ghcr.io/honua-io/honua-server@sha256:cbb62cbc230af7d07afd53ac5ab658300b9c249cc7e2bd656a0c478cbb764d39`.
+The build log confirms the full production profile and speed-optimized Native
+AOT publish; local runtime inspection records `/app/Honua.Server` with no CoreCLR
+mapping. Other architecture jobs in the workflow are independent and still running.
+This image includes PR 5315 but does not include the serial-count candidate below.
 
 [Server PR 5323](https://github.com/honua-io/honua-server/pull/5323), head
 `c57159360d48a587bef413fb538a953727a85243`, implements the default-off
@@ -632,7 +636,9 @@ all 72 targeted regression cases present in every leg. Independent checks
 verified all six retained log/TRX hashes and individual test outcomes. Earlier
 candidate failures remain in `results/source-serial-count-5322/`, alongside
 the red/green TRX files, matrix receipts and logs. All three owned fixtures were
-cleaned. The server PR is ready for review; hosted PR/review gates remain pending.
+cleaned. The server PR is ready for review. Its Review Gate, formatting, main
+build/unit/architecture step and all six affected integration groups have passed;
+the encompassing build/test job still has native-tool execution smokes to finish.
 
 [GeoBench PR 26](https://github.com/honua-io/geobench/pull/26) adds separate
 serial-count and combined count profiles. All 58 harness tests and CI lint/syntax
@@ -648,12 +654,15 @@ followed by a separately identified serial-count comparison after its merge
 and production AOT build, is still required. No parity or broader protocol
 performance claim follows from the SQL-only diagnostic.
 
-The first-page campaign queue is observing the exact existing AOT job. Once
-that job's build, boundary check, GeoParquet smoke and publication all pass, it
-will pull the verified candidate digest, check its source/runtime identity,
-and acquire a shared build slot. It schedules paired full-corpus smoke checks
-and three-pair mixed diagnostics for baseline and count-JIT-off profiles.
+The first-page campaign queue has verified and pulled that candidate digest and
+acquired a shared build slot. The baseline smoke passed all 12 selected scenarios
+on both products with zero invalid responses; both owned stacks were cleaned.
+Independent verification checked every retained raw artifact hash and all scenario
+outcomes. This smoke uses two-second warmup and three-second measurement windows,
+so it establishes correctness rather than a sustained speed ratio. The separate
+count-JIT-off smoke is now running, followed by three-pair baseline and count-JIT-off
+mixed diagnostics.
 Completed attempts, including failed attempts, are copied outside the worktree
-to `results/first-page-aot-rebaseline-20260929/`. No measured result exists for
-this queued campaign yet. The serial-count candidate still requires its own
+to `results/first-page-aot-rebaseline-20260929/`. No sustained paired result exists
+for this new image yet. The serial-count candidate still requires its own
 merged production AOT image and full feature/mixed comparison.
