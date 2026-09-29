@@ -424,8 +424,10 @@ snapshot with the count-tuning option present.
 
 A later review correction narrowed the expected cancellation exception in the
 count-tuning regression test, advancing PR 5315 to
-`547eae82565df1f255b79601c97e7a32b1ac817e`. Its fresh required checks are running;
-the earlier PostgreSQL matrix evidence belongs to `f4265d5`, not this new head.
+`547eae82565df1f255b79601c97e7a32b1ac817e`. Both required gates passed at this
+head: [PR Gate run 36541206062](https://github.com/honua-io/honua-server/actions/runs/36541206062)
+and Review Gate. The earlier PostgreSQL matrix evidence belongs to `f4265d5`,
+not this new head.
 
 The older trunk run `36533906528` has completed with the two known hosting
 failures and their failed summary gates. It predates the merged hosting repair.
@@ -435,9 +437,11 @@ watcher: GitHub's branch-filtered workflow listing repeatedly returned September
 September 29 runs. [Flow PR 97](https://github.com/honua-io/honua-flow/pull/97)
 merged at `91b7d0513d0c8d0b60dfcb0f04603829892c15e1` after offline discovery,
 full landing/crash-recovery, dashboard and hosted checks passed. It preserves
-existing merge gates and fails closed on unavailable evidence. Normal fleet sync
-and the repaired-trunk matrix still need to complete; the new discovery code is
-not evidence that the server brake has cleared. The read-only reproduction and
+existing merge gates and fails closed on unavailable evidence. Normal fleet sync has picked up the repair and its two runtime files match
+the tested content. The normal watcher then recognized the stale failure and dispatched
+[full trunk matrix 36544117214](https://github.com/honua-io/honua-server/actions/runs/36544117214)
+at repaired revision `8f2c9a6`. That run must still pass before the server brake
+can clear; successful dispatch is not a green matrix. The read-only reproduction and
 verification receipt are retained in `results/trunk-ci-discovery-20260929/`.
 
 An isolated Git-index rehearsal confirmed the modify/delete conflict in the
@@ -456,6 +460,10 @@ source queries on the same backend, and revalidates the raw SQL at report time.
 All 56 harness tests, Ruff, Python compilation, JavaScript syntax and ShellCheck
 passed at `879b9610b0587b45916ab25b67a09403b27f731b` in
 [run 36528776047](https://github.com/honua-io/geobench/actions/runs/36528776047).
-End-to-end checks remain pending. A sequential driver queues both profile
-smokes and three-pair mixed diagnostics after the existing campaigns, using the
-same immutable AOT image. These are additional diagnostics, not measured wins.
+The serial-read smoke has now passed on both products for equality, small/medium/large
+bboxes and deep pagination, with zero invalid responses or cancellations. Its SQL
+proof records four scoped feature queries and zero scoped counts; all recorded
+artifact hashes were verified in `smoke-serial-reads/verification-receipt.json`.
+The combined count/read profile smoke is running. The sequential driver runs
+three-pair mixed diagnostics after both smokes, using the same immutable AOT
+image. Smoke results establish correctness and profile activation, not capacity.
