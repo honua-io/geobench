@@ -1,12 +1,25 @@
 # AOT feature rebaseline — September 29, 2026
 
+**Comparison confound found September 29:** GeoServer sorting conformance was
+not enabled. Its retained log contains 228,000 ignored-`sortby` warnings in the
+first full-baseline repetition. Natural primary-key ordering happened to pass
+the ascending-ID oracle, but this does not prove the requested sorting was
+honored. The performance cost of repeated warning output is unmeasured.
+The ratios below remain historical diagnostic observations, not a clean
+Honua-versus-GeoServer speed claim. [PR 32](https://github.com/honua-io/geobench/pull/32)
+will enable and verify sorting and add a descending-order oracle preflight.
+Corrected campaigns are required before drawing that comparison.
+
 The production serial-count Native AOT image's completed **serial-reads-counts**
 mixed campaign favors Honua in all three pairs: median paired Honua/GeoServer
 throughput is **1.245** (range **1.075–1.404**) and p95 latency is **0.755**
 (range **0.662–0.942**). All semantic checks passed. This is a tuned local mixed
 workload result on 100K points; individual-query comparisons remain pending.
-Honua's generator reached its four-core cap in sampled telemetry, so the queued
+Honua's generator reached its four-core cap in sampled telemetry, so a
 generator-headroom comparison remains necessary before inferring server capacity.
+The not-yet-started headroom driver was cancelled after discovering the sorting
+confound; it must be recreated with the corrected harness. No timed attempt from
+that driver had started, and the active original campaigns were not modified.
 
 Completed mixed profiles on this same production image are listed separately.
 Each value is a median of three paired ratios, not a pooled or averaged percentile.
