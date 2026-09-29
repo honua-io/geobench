@@ -105,17 +105,18 @@ all eleven individual baseline corpus requests, and medium/large bbox requests
 with count JIT disabled. Other concurrency and arrival-rate settings receive
 smoke coverage only at this stage.
 
-The first baseline mixed-workload pair has completed at 10 VUs, with 30 seconds
-of warmup and 30 seconds of measurement. Both attempts passed their correctness
-and fairness checks. Two further paired repetitions and the count-tuned campaign
-remain pending; this is an individual shared-host observation, not a completed
+Two baseline mixed-workload pairs have completed at 10 VUs, with 30 seconds
+of warmup and 30 seconds of measurement. All four attempts passed their correctness
+and fairness checks. One further paired repetition and the count-tuned campaign
+remain pending; these are individual shared-host observations, not a completed
 campaign conclusion.
 
 | Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
 | 1 | 23.87 | 41.47 | 920.49 | 448.22 |
+| 2 | 23.10 | 47.53 | 1065.23 | 388.61 |
 
-This pair favors GeoServer on both metrics. Honua's sampled database pressure
+Both pairs favor GeoServer on both metrics. In the first pair, Honua's sampled database pressure
 reached six active source queries and five parallel workers; GeoServer reached
 four active source queries and no observed parallel workers. These observations
 support further count-planning investigation, without establishing a causal
@@ -177,5 +178,14 @@ the later total at its size. In
 PostgreSQL 16, 17 and 18 each passed all 1,688 tests, including all six concurrency
 cases. Full solution build passed with zero warnings/errors, and formatting
 verification passed at the same revision. The [review finding was resolved with evidence](https://github.com/honua-io/honua-server/pull/5315#discussion_r4129824810),
-and the required Review Gate is green. The remaining PR Gate checks and other
-workflow jobs are still running; the PR has not merged yet.
+and both required PR Gate and Review Gate are green. The PR has not merged:
+trunk's failure brake is active after
+[run 36520583030](https://github.com/honua-io/honua-server/actions/runs/36520583030).
+[Repair PR 5318](https://github.com/honua-io/honua-server/pull/5318) proposes
+reverting the scoped count-JIT change because its tests exposed the pooled-session
+smallint fixture assumption. The isolated 12-line fixture correction is already
+in this verified candidate at commit `64eaf870caba390f8cd46d262f13147b2245b067`.
+If the rollback lands first, the first-page PR needs explicit reconciliation and
+verified restoration of the tuning dependency. Future AOT images must be checked
+for that content; the current benchmark image remains the immutable `6e4962b`
+snapshot with the count-tuning option present.
