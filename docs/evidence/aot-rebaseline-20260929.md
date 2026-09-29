@@ -7,7 +7,8 @@ and local identity checks. Both products passed the 20-scenario baseline smoke
 campaign with no invalid responses. The paired tuned smoke campaign also passed.
 All three baseline mixed-workload pairs are complete and favor GeoServer: median
 paired Honua/GeoServer throughput is 0.576 and p95 latency is 2.054. The sustained
-count-tuned campaign is running; the baseline has not established parity.
+count-tuned campaign is also complete: its paired throughput ratio is 0.809 and
+p95 ratio is 1.339. Neither profile has established parity on this mixed workload.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
@@ -84,7 +85,7 @@ distinct `SELECT ALL COUNT(*)` query identity. The baseline trace contains no
 such settings. `count-profile-sql-proof.json` retains the observations and source
 trace hashes. Tuned Honua passed its four selected smoke scenarios with no invalid
 responses, and the matching GeoServer campaign also passed. Sustained performance
-measurements are pending.
+mixed-workload measurements are complete below; individual spatial rows remain pending.
 
 | Component | Immutable local image identity |
 |---|---|
@@ -112,11 +113,7 @@ All three baseline mixed-workload pairs completed at 10 VUs, with 30 seconds
 of warmup and 30 seconds of measurement. All six attempts passed their correctness
 and fairness checks, with no invalid responses, cancellations or dropped
 iterations. Each measurement phase had ten late completions, reported separately
-from measured completions. Warmup has its own drain accounting. The count-tuned
-campaign is incomplete. Its first completed pair measured Honua at 25.73 requests/s
-and 756.54 ms p95, versus GeoServer at 31.80 requests/s and 564.87 ms p95. That is
-one pair, not a three-pair conclusion or evidence that the option alone caused an
-improvement relative to the earlier campaign on this shared host.
+from measured completions. Warmup has its own drain accounting.
 
 | Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
@@ -144,6 +141,32 @@ four active source queries and no observed parallel workers. These observations
 support further count-planning investigation, without establishing a causal
 speedup or a reason to force serial execution. Readouts for still-running campaigns
 retain individual completed pairs and explicitly mark those campaigns incomplete.
+
+The separate count-tuned campaign has now completed all three pairs with the same
+runtime image and workload. All six attempts passed semantic and fairness checks,
+with zero invalid responses, cancellations or dropped iterations. Each measured
+phase recorded ten drain completions separately.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 25.73 | 31.80 | 756.54 | 564.87 |
+| 2 | 32.10 | 38.63 | 645.72 | 490.17 |
+| 3 | 29.97 | 47.60 | 682.32 | 374.25 |
+| Median of repetitions | 29.97 | 38.63 | 682.32 | 490.17 |
+| Range | 25.73–32.10 | 31.80–47.60 | 645.72–756.54 | 374.25–564.87 |
+
+The count-tuned median paired Honua/GeoServer throughput ratio is **0.809**, range
+**0.630–0.831**. The paired p95 ratio is **1.339**, range **1.317–1.823**. GeoServer
+leads both metrics in every pair. Full p50/p95/p99 values and completion accounting
+are retained in `mixed-count-jit-off/report.json`. GeoServer had four auxiliary
+negative HTTP timings during measurement and two during warmup. As with the
+baseline, the custom latency uses monotonic executor progress, and publication is
+blocked by the clock anomalies, diagnostic mode and missing calibration.
+
+The tuned campaign shows a smaller paired gap than the baseline, but the two
+campaigns ran at different times on a shared host. This does not isolate the
+setting's causal speedup. Individual-query results and the queued serial-read
+profiles will determine the next optimization priority.
 
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
