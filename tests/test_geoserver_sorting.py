@@ -1,14 +1,27 @@
 import json
+import io
+import importlib.util
+import subprocess
+import tempfile
 import sys
 import unittest
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from xml.etree import ElementTree as ET
+from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from feature_contract import oracle, request_url
-from feature_geoserver import SORTING_CONFORMANCE, enable_sorting_settings, sorting_receipt
+from feature_geoserver import SORTING_CONFORMANCE, enable_sorting_settings, geoserver_sorting, sorting_receipt
+
+
+def runner_module():
+    spec = importlib.util.spec_from_file_location('sorting_campaign_runner', ROOT / 'scripts/run-feature-campaign.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class GeoServerSortingTests(unittest.TestCase):
@@ -71,3 +84,85 @@ class GeoServerSortingTests(unittest.TestCase):
             oracle(corpus, lambda statement: self.fail('Invalid order reached the database'))
         with self.assertRaises(ValueError):
             request_url('honua', 'ogc', corpus['requests'][0], 'http://test')
+
+    def test_fresh_configuration_is_read_back_and_anonymously_advertised(self):
+        enabled = enable_sorting_settings(b'<wfs/>')
+        bodies = [b'<wfs/>', b'', enabled, json.dumps({'conformsTo': [SORTING_CONFORMANCE]}).encode()]
+        with patch('feature_geoserver.urlopen', side_effect=[io.BytesIO(body) for body in bodies]) as transport:
+            receipt = geoserver_sorting('http://owned', 'test-credential', configure=True)
+        requests = [call.args[0] for call in transport.call_args_list]
+        self.assertEqual(['GET', 'PUT', 'GET', 'GET'], [r.get_method() for r in requests])
+        self.assertTrue(receipt['sort_by'])
+        self.assertEqual(enabled, requests[1].data)
+        self.assertFalse(requests[-1].has_header('Authorization'))
+
+    def test_reused_fixture_with_disabled_sorting_is_rejected_without_mutation(self):
+        bodies = [b'<wfs/>', json.dumps({'conformsTo': [SORTING_CONFORMANCE]}).encode()]
+        with patch('feature_geoserver.urlopen', side_effect=[io.BytesIO(body) for body in bodies]) as transport:
+            with self.assertRaises(ValueError):
+                geoserver_sorting('http://owned', 'test-credential')
+        self.assertTrue(all(call.args[0].get_method() == 'GET' for call in transport.call_args_list))
+
+    def test_hidden_primary_key_is_rejected_by_effective_store_check(self):
+        runner = runner_module()
+        for exposed in [None, 'false', 'true']:
+            values = {'max connections': '6', 'min connections': '3'}
+            if exposed is not None:
+                values['Expose primary keys'] = exposed
+            body = {'dataStore': {'connectionParameters': {'entry': [{'@key': k, '$': v} for k, v in values.items()]}}}
+            with self.subTest(exposed=exposed), patch.object(runner, 'urlopen', return_value=io.BytesIO(json.dumps(body).encode())):
+                if exposed == 'true':
+                    self.assertEqual(values, runner.geoserver_store('http://owned', 'test-credential'))
+                else:
+                    with self.assertRaises(ValueError):
+                        runner.geoserver_store('http://owned', 'test-credential')
+
+    def test_missing_or_duplicated_probe_receipt_cannot_pass(self):
+        runner = runner_module()
+        config = {'requests': [{'id': 'normal'}], 'preflight_requests': [{'id': 'ordering-desc'}],
+                  'duration': 1, 'protocol': 'ogc'}
+        for names in [['normal'], ['normal', 'normal'], ['normal', 'wrong'], ['normal', 'ordering-desc']]:
+            checks = [{'id': name, 'failure': None} for name in names]
+            def fake_run(*args, **kwargs):
+                kwargs['stdout'].write(json.dumps({'msg': 'PREFLIGHT ' + json.dumps(checks)}) + '\n')
+                kwargs['stdout'].flush()
+                return SimpleNamespace(returncode=0)
+            with self.subTest(names=names), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                directory = root / 'results/campaign/attempt'
+                directory.mkdir(parents=True)
+                with patch.object(runner, 'ROOT', root), patch.object(runner.subprocess, 'run', side_effect=fake_run):
+                    if names == ['normal', 'ordering-desc']:
+                        self.assertEqual(checks, runner.run_k6({'k6': 'owned'}, directory, config, 'preflight')[1])
+                    else:
+                        with self.assertRaises(ValueError):
+                            runner.run_k6({'k6': 'owned'}, directory, config, 'preflight')
+
+    def test_ignored_reverse_order_fails_preflight_and_probe_is_not_measured(self):
+        subprocess.run(['node', '--input-type=module', '-e', r'''
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const validator = fs.readFileSync('src/tests/feature-validation.js');
+const {validateFeatureResponse} = await import('data:text/javascript;base64,' + validator.toString('base64'));
+let source = fs.readFileSync('src/tests/feature-campaign.js','utf8')
+ .replace(/^import .*;$/gm,'').replace('export default function ()','function iterate()')
+ .replaceAll('export function ','function ').replaceAll('export const ','const ');
+const geometry = {type:'Point',coordinates:[1,2]};
+const rows = [{id:1,geometry},{id:2,geometry}];
+const config = {requests:[{id:'normal',url:'http://normal',expected:{features:rows,matched:2}}],
+ preflight_requests:[{id:'ordering-desc',url:'http://reverse',expected:{features:[...rows].reverse(),matched:2}}],
+ fields:[],protocol:'ogc',scenario:'normal',duration:1,phase:'measurement',vus:1};
+const called = []; let ignoreSort = true;
+class Metric {add() {}}
+const context = {__ENV:{CAMPAIGN_INPUT:'input'},open:()=>JSON.stringify(config),Counter:Metric,Trend:Metric,
+ exec:{scenario:{progress:0.5,iterationInTest:0}},console:{log:()=>{},error:()=>{}},validateFeatureResponse,
+ http:{get:url=>{called.push(url);const selected=url==='http://reverse'&&!ignoreSort?[...rows].reverse():rows;
+ return {status:200,headers:{},json:()=>({type:'FeatureCollection',numberMatched:2,
+ features:selected.map(r=>({type:'Feature',id:r.id,properties:{},geometry:r.geometry}))})};}}};
+vm.runInNewContext(source+';this.iterate=iterate;',context);
+assert.throws(()=>context.setup(),/Corpus validation failed/);
+ignoreSort=false;called.length=0;context.setup();
+assert.deepEqual(called,['http://normal','http://reverse']);
+called.length=0;context.iterate();assert.deepEqual(called,['http://normal']);
+'''], cwd=ROOT, check=True)
