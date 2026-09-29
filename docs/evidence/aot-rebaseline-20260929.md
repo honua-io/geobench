@@ -6,8 +6,10 @@ image has passed build, boundary verification, GeoParquet smoke and publication,
 and has been acquired locally by digest. Both new-image full-corpus smoke profiles passed. The sustained baseline mixed
 campaign is now complete and independently raw-verified: GeoServer wins all three
 pairs, with median throughput H/G **0.482** (range **0.442–0.548**) and p95 H/G
-**2.486** (range **1.715–3.083**). The tuned campaign is running. No decoder HTTP
-improvement or baseline parity is established. The sorting-correction results
+**2.486** (range **1.715–3.083**). The tuned campaign also completed: throughput H/G **1.447** (range
+**1.173–1.802**), p95 H/G **0.637** (range **0.472–0.784**), favoring Honua in all
+three tuned pairs. Baseline parity remains false; this does not isolate the decoder
+change from query tuning and shared-host variation. The sorting-correction results
 immediately below describe the preceding image; the new-image table appears in
 the decoder section.
 
@@ -1595,10 +1597,47 @@ merged decoder image, separate from the previous image's results. Different run
 times and shared-host conditions prevent treating their difference as a controlled
 before/after decoder experiment.
 
-The tuned mixed campaign is running; the remaining predeclared schedule follows
-only after passing validation. Shared-WSL results remain diagnostic. The report
-retains negative wall-clock auxiliary HTTP timings and lacks isolated-generator
-calibration, so it is not publishable.
+The tuned mixed campaign also completed all six attempts and passed independent
+raw verification. Every pair favors Honua on throughput and p95:
+
+| New decoder AOT serial-reads-counts pair | Throughput H/G | p95 H/G |
+|---|---:|---:|
+| 1 | 1.802 | 0.472 |
+| 2 | 1.447 | 0.637 |
+| 3 | 1.173 | 0.784 |
+| Median paired ratio | 1.447 | 0.637 |
+
+Report SHA-256:
+`e3153c4db24887335c8a3cc793256bda83d1b3ffb8cab539f0bb86e0b79b2746`.
+Independent raw-verification SHA-256:
+`c698ef09e9282b7a7f6f8dddbaa6ac9c0a79afa3f5901f72528577e731fbfe0d`.
+The review is retained as `tuned-performance-review.json`. This supports a tuned
+mixed-workload diagnostic win only. Individual-query comparisons and generator
+headroom remain unverified; the baseline still loses. Negative wall-clock
+auxiliary HTTP timings and missing isolated-generator calibration still prohibit
+publication.
+
+### Switch to local JIT optimization
+
+The user subsequently authorized local JIT builds to shorten the optimization
+loop. The scheduler was stopped while its current child drained normally; after
+all six tuned attempts and exact owned cleanup finished, only the scheduler was
+interrupted. Independent raw verification then completed under the shared build
+and measurement locks. Its original interruption receipt remains retained,
+with `jit-workflow-switch.json` recording the intentional schedule change. No
+timed attempt was cancelled or silently replaced. The not-yet-started AOT
+headroom and individual-query campaigns are deferred, not counted as passed.
+
+An isolated worktree at the exact production decoder source
+`e2bf1bf5e236566a056d1d078fa98f784e5df36b` now supplies the local Release JIT build.
+It uses the cached pinned .NET SDK, persistent NuGet and incremental build
+artifacts, four build CPUs and an 8GiB build-memory cap. Runtime code is freshly
+published into a pinned existing JIT runtime image after removing its old `/app`.
+The runtime base and source are disclosed in
+`results/local-jit-optimization-20260929/build-receipt.json`; this is a development
+configuration, not a replacement for production AOT evidence. A 12-scenario
+oracle-validated Honua smoke is queued with an eight-core generator. JIT results
+will be labelled separately, and final production gains require an AOT rebaseline.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
