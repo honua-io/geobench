@@ -8,8 +8,8 @@ one pair and loses two on both metrics. This is near parity in this local tuned
 mixed-workload diagnostic, not evidence of parity across all individual requests.
 All semantic checks passed. Generator headroom and shared-host variability limit
 interpretation. The newer serial-count AOT image has passed its production build
-and image checks; its diagnostic campaign queue has started, with no completed
-HTTP result yet.
+and image checks. Baseline, count-JIT-off and serial-count smoke campaigns have
+passed on both products; sustained new-image comparisons remain pending.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -805,8 +805,8 @@ baseline, count-JIT-off, serial-counts, count-JIT-off-serial-counts,
 serial-reads-counts and count-JIT-off-serial-reads-counts. The baseline and both
 joint page/count candidates then receive all eleven individual request
 comparisons. The count-only mixed rows isolate that policy without repeating the
-entire corpus for every settings combination. No completed serial-count HTTP
-result exists yet. Acquisition evidence is retained in
+entire corpus for every settings combination. Completed smoke checks are recorded
+below; no sustained serial-count HTTP comparison exists yet. Acquisition evidence is retained in
 `results/serial-count-aot-rebaseline-20260929/build-receipt.json`; the build-log
 SHA-256 is `03c0833c75bde055eae6b4c68f606e6aade8727642f04698b974c33342c49dda`.
 
@@ -960,3 +960,39 @@ Artifacts are retained in `results/validator-overhead-20260929/`, including
 `parity-result.json`, `experiment-receipt.json`, per-trial summaries and logs,
 `verification.json`, and the experimental source. Receipt SHA-256:
 `fc7d79672c8023ecf6bcc30cf202bb0dd85677c0ae4bf37b0b431f9c86a8a196`.
+
+## New serial-count image: initial smoke evidence and capture limitation
+
+The new `50aacf73` Native AOT image has completed the following full-corpus smoke
+pairs. Each product passed all semantic checks with zero invalid responses or
+cancellations. Owned cleanup passed. These three-second measurement windows are
+correctness checks and do not establish comparative speed.
+
+| Honua profile | Honua scenarios | GeoServer scenarios | Scoped Honua counts in SQL preflight |
+|---|---:|---:|---:|
+| baseline | 12 / 12 | 12 / 12 | 0 |
+| count-jit-off | 12 / 12 | 12 / 12 | 2 |
+| serial-counts | 12 / 12 | 12 / 12 | 2 |
+
+The retained runtime identity, resource limits, identical database fingerprints
+and executed source SQL were rechecked. This uncovered an evidence limitation:
+the pinned harness `d4a2009` omits `Database__...` planner keys from the environment
+allowlist in `runtime.json`. The manifest retains configured intent and the SQL
+trace proves executed tuning, but neither supplies the missing inspected
+container environment. The campaigns remain diagnostic and unchanged.
+
+[GeoBench PR 27](https://github.com/honua-io/geobench/pull/27) captures exact planner
+keys from the shared profiles and checks them before traffic and at final drift
+validation. Unrelated database values remain excluded to avoid exposing secrets.
+Missing, changed, duplicated and unrequested flags fail validation. The original
+capture failure was reproduced in hosted CI; the implementation's Python checks,
+59 tests, JavaScript syntax, ShellCheck and CodeQL passed at `767ed9b`. The PR
+merged normally as `b534ef0f93cba07a0f709feeac720ffc21fb9e06`. Future campaigns
+need a new harness fingerprint; this fix
+cannot retroactively complete the old environment receipts.
+
+Per-campaign `*-profile-verification.json` artifacts under
+`results/serial-count-aot-rebaseline-20260929/` explicitly report
+`passed-with-runtime-setting-coverage-gap`. The initial verifier failure and the
+first baseline verifier output remain retained separately. The helper reuses the
+pinned SQL recognizer; it is not an independent parser or raw latency recount.
