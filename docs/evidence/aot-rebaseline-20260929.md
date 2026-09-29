@@ -165,8 +165,17 @@ blocked by the clock anomalies, diagnostic mode and missing calibration.
 
 The tuned campaign shows a smaller paired gap than the baseline, but the two
 campaigns ran at different times on a shared host. This does not isolate the
-setting's causal speedup. Individual-query results and the queued serial-read
-profiles will determine the next optimization priority.
+setting's causal speedup. A retrospective audit of the seven-repetition saved
+SQL plans makes that distinction concrete: **zero of seven medium-bbox exact
+count plans used JIT**, and both ordinary and JIT-disabled variants launched one
+parallel worker. Their elapsed-time difference does not establish a benefit from
+removing compilation. Large and world exact counts did contain JIT in all seven
+plans. These are saved SQL diagnostics, not plans captured during the current
+HTTP run; `saved-plan-audit.json` retains each plan hash, JIT presence and worker
+observations. Serial
+page/count pressure therefore remains a separate hypothesis requiring its own
+measurements. Individual-query results and the queued serial-read profiles will
+determine the next optimization priority.
 
 The completed mixed runs can also be split by request type using the raw
 `feature_latency` samples. The analysis verifies each raw file's recorded hash and
