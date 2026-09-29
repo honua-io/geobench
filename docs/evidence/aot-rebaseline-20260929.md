@@ -2,8 +2,9 @@
 
 This campaign measures the merged source-query optimizations against GeoServer
 on the shared WSL development host. It is diagnostic evidence for optimization,
-not a publishable performance comparison. At the preparation checkpoint, the
-production Native AOT build is still compiling and no new HTTP results exist.
+not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
+and local identity checks. The new campaign is queued for the shared build slot;
+no new HTTP performance results exist yet.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
@@ -18,17 +19,32 @@ The server changes have landed through the normal PR lander:
 | Resolve read security once per public operation | [5302](https://github.com/honua-io/honua-server/pull/5302) | `3db220fb4f70c0bfb7beb1d442bb13555bf23a79` |
 | Opt-in PostgreSQL JIT suppression for eligible spatial counts | [5307](https://github.com/honua-io/honua-server/pull/5307) | `6e4962be59b608ea573e098aabe3b6ae573dda91` |
 
-The image candidate is `619e6f123328994342b44a36c530641285e261e5` on
+The selected CI image was built from the exact trunk snapshot
+`6e4962be59b608ea573e098aabe3b6ae573dda91` in
+[run 36517628422](https://github.com/honua-io/honua-server/actions/runs/36517628422).
+Its amd64 job passed the serving-image boundary check, GeoParquet smoke, and
+verified image publication. The immutable image reference is
+`ghcr.io/honua-io/honua-server@sha256:7345b8a0d0467b38393415c2ed8c7db86d5f5a99fdca9c255606050cb4dcf313`.
+Local inspection confirms amd64, Native AOT, and the expected source revision.
+
+The earlier local image candidate was `619e6f123328994342b44a36c530641285e261e5` on
 `test/geobench-aot-rebaseline-20260929`. It uses the unchanged production
 `docker/Dockerfile.aot`, the full build profile, and Native AOT with speed
 optimization. The count change was cherry-picked while its normal merge was
 pending. After that merge, all 11 files touched by these optimizations matched
 the merged source exactly.
 
-The complete trees are different: the candidate omits the later
+The complete trees are different: the earlier local candidate omits the later
 [ArcGIS prefix change, PR 5308](https://github.com/honua-io/honua-server/pull/5308),
-including its global `UsePathBase` middleware. Results must retain the candidate's
-actual revision and must not identify it as an identical trunk build.
+including its global `UsePathBase` middleware. The selected CI image includes that change. Results must retain the selected
+image's actual revision; it is a snapshot, not a claim to include later trunk work.
+
+After the CI image had passed verification and been pulled by digest, the
+redundant local build was explicitly cancelled through its exact owned buildx
+client. The local build and its waiting campaign runners are terminal; no timed
+traffic ran in that attempt. Its original exit-130 receipt and supersession
+reason remain in `results/merged-aot-rebaseline-20260929/`. A separate campaign
+uses the verified CI image under `results/trunk-aot-rebaseline-20260929/`.
 
 The harness revision selected before the run is
 `536d5823b796e2c2ca13bf35a9bcef4ffedcc902`. Its feature-campaign implementation
@@ -58,8 +74,8 @@ scoped setting before attributing a result to it.
 | PostGIS | `sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6` |
 | k6 | `sha256:1f40432b1cbe7234e977f96c362c9bc550a2d2b583d014dd8669fe40d3e9e755` |
 
-The Honua image ID is recorded after successful build completion and verified
-again during runtime preflight. An image tag alone is insufficient evidence.
+The selected Honua image identity is recorded in the new campaign build receipt
+and must pass runtime preflight. An image tag alone is insufficient evidence.
 
 ## Scheduled measurements and interpretation
 
@@ -87,7 +103,8 @@ correctness. Rendering, tiles, WFS, GSR, non-point geometries and larger dataset
 remain outside this campaign.
 
 Local evidence is retained under
-`results/merged-aot-rebaseline-20260929/`: build and campaign receipts, immutable
+`results/trunk-aot-rebaseline-20260929/`, with the superseded local attempt retained
+in `results/merged-aot-rebaseline-20260929/`: build and campaign receipts, immutable
 image metadata, source merge proof, raw observations, campaign manifests,
 per-attempt reports and failure ledgers. These generated files are gitignored.
 Shared-host observer calibration has not passed publication requirements, and
@@ -101,5 +118,11 @@ is short. The saved oracle contains 35 matches for the small bbox and one for th
 boundary case. All mixed-workload requests exceed the 100-feature limit, so this
 strategy would still need their exact counts and would not remove a mixed-workload
 round trip. Empty queries already take one SQL statement in the count-first path.
-Prioritize fresh measured losses before implementing this candidate; preserve
-security, distinct-query semantics, offsets, and concurrent-update behavior.
+This follow-up is implemented separately under
+[issue 5313](https://github.com/honua-io/honua-server/issues/5313), preserving
+security, distinct-query semantics, offsets, and existing full-page concurrency
+semantics. All 1,682 Postgres tests passed on each of PostgreSQL 16, 17, and 18 at
+commit `865cd6a36cebf6740cfc771b63cab69c4810967e`, and the full build and formatting
+check passed. [PR 5315](https://github.com/honua-io/honua-server/pull/5315) is open
+for normal review and merge. It is not part of the selected CI image and will
+need its own AOT measurements.
