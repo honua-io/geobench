@@ -96,6 +96,9 @@ class PlannerProfileTests(unittest.TestCase):
             ('count-jit-off-serial-counts', COUNT_BATCH),
             ('count-jit-off-serial-counts', COUNT_BATCH + SERIAL_COUNT_BATCH),
             ('serial-counts', COMBINED_COUNT_BATCH),
+            ('serial-counts', execution(READ_SETTING) + execution(COUNT)),
+            ('count-jit-off-serial-counts', execution(COMBINED_SETTING) + execution(SERIAL_COUNT)),
+            ('serial-counts', execution(READ_SETTING) + execution(COMBINED_COUNT)),
             ('baseline', SERIAL_COUNT_BATCH),
         ]:
             with self.subTest(profile=profile, trace=trace), self.assertRaises(ValueError):

@@ -94,39 +94,56 @@ def validate_honua_planner_profile(trace, profile):
     """
     if profile not in HONUA_PROFILES:
         raise ValueError(f'Unknown Honua planner profile: {profile}')
-    settings = {
-        'count': ('Database__DisableJitForSourceSpatialCounts', 'jit', 'off'),
-        'feature': ('Database__PreferSerialBoundedSpatialReads', 'max_parallel_workers_per_gather', '0'),
+    flags = HONUA_PROFILES[profile]
+    expected_settings = {
+        'count': {name for key, name in (
+            ('Database__DisableJitForSourceSpatialCounts', 'jit'),
+            ('Database__PreferSerialSourceSpatialCounts', 'max_parallel_workers_per_gather'),
+        ) if key in flags},
+        'feature': ({'max_parallel_workers_per_gather'}
+                    if 'Database__PreferSerialBoundedSpatialReads' in flags else set()),
     }
-    patterns = {kind: re.compile(
-        rf"SELECT\s+(?:pg_catalog\.)?set_config\(\s*'{name}'\s*,\s*'{value}'\s*,\s*true\s*\)\s*;?", re.IGNORECASE)
-        for kind, (_, name, value) in settings.items()}
-    expected = {kind for kind, (key, _, _) in settings.items() if key in HONUA_PROFILES[profile]}
+    expected = {kind for kind, settings in expected_settings.items() if settings}
+    call = (r"(?:pg_catalog\.)?set_config\(\s*'(jit|max_parallel_workers_per_gather)'"
+            r"\s*,\s*'(off|0)'\s*,\s*true\s*\)")
+    setting_statement = re.compile(rf"SELECT\s+{call}(?:\s*,\s*{call})*\s*;?", re.IGNORECASE)
+    setting_call = re.compile(call, re.IGNORECASE)
     pending = {}
     observed = Counter()
     for backend, statement in executed_records(trace):
-        kind = next((kind for kind, pattern in patterns.items() if pattern.fullmatch(statement.strip())), None)
-        if kind is not None:
-            if kind not in expected or backend in pending:
+        statement = statement.strip()
+        if setting_statement.fullmatch(statement):
+            pairs = [(name.lower(), value.lower()) for name, value in setting_call.findall(statement)]
+            settings = {name for name, _ in pairs}
+            valid = all((name, value) in {('jit', 'off'), ('max_parallel_workers_per_gather', '0')}
+                        for name, value in pairs)
+            if (not valid or len(settings) != len(pairs) or backend in pending or
+                    settings not in expected_settings.values()):
                 raise ValueError('Unexpected or unpaired Honua planner setting')
-            pending[backend] = kind
+            pending[backend] = settings
             continue
         if re.match(r"SELECT\s+(?:\w+\.)?set_config\(\s*'(?:jit|max_parallel_workers_per_gather)'|"
                     r"SET\s+(?:(?:LOCAL|SESSION)\s+)?(?:jit|max_parallel_workers_per_gather)\b",
-                    statement.strip(), re.IGNORECASE):
+                    statement, re.IGNORECASE):
             raise ValueError('Unrecognized or non-local Honua planner setting')
         if backend not in pending:
             continue
-        kind = pending.pop(backend)
+        settings = pending.pop(backend)
         tokens = query_tokens(statement)
         functions = {token[1] for index, token in enumerate(tokens[:-1])
                      if token[0] in {'word', 'identifier'} and tokens[index + 1] == ('punct', '(')}
+        kind = 'count' if 'count' in functions else 'feature'
         scoped = tokens[:2] == [('word', 'select'), ('word', 'all')]
         source = relations(tokens) == {('public', 'bench_points')}
         spatial = 'st_makeenvelope' in functions
-        matches_kind = ('count' in functions if kind == 'count' else
-                        bool(functions & {'st_asbinary', 'st_asewkb'}) and 'count' not in functions)
-        if not (scoped and source and spatial and matches_kind):
+        projection = kind == 'count' or bool(functions & {'st_asbinary', 'st_asewkb'})
+        identity = True
+        if kind == 'count' and 'max_parallel_workers_per_gather' in settings:
+            tag = 'serial-jit-off-source-count' if 'jit' in settings else 'serial-source-count'
+            # Fixed server-generated policy identities separate prepared counts.
+            # The marker alone never proves a setting, source relation or predicate.
+            identity = statement.startswith(f'SELECT ALL /* honua:{tag} */ COUNT(*)')
+        if not (scoped and source and spatial and projection and identity and settings == expected_settings[kind]):
             raise ValueError(f'Planner {kind} setting did not precede its scoped spatial source query')
         observed[kind] += 1
     if pending or set(observed) != expected:
