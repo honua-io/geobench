@@ -85,7 +85,7 @@ distinct `SELECT ALL COUNT(*)` query identity. The baseline trace contains no
 such settings. `count-profile-sql-proof.json` retains the observations and source
 trace hashes. Tuned Honua passed its four selected smoke scenarios with no invalid
 responses, and the matching GeoServer campaign also passed. Sustained performance
-mixed-workload measurements are complete below; individual spatial rows remain pending.
+mixed-workload and individual spatial measurements are complete below.
 
 | Component | Immutable local image identity |
 |---|---|
@@ -292,9 +292,41 @@ interference. Collector elapsed time is not CPU utilization or a measured
 throughput penalty. `feature-telemetry-analysis.json` and its adjacent
 `analyze-feature-telemetry.py` retain the per-scenario values and hashes.
 
-The separate spatial count-tuned campaign is now running; the queued serial
-profiles follow it. The first-page optimization still needs a new production
-AOT build and its own measurements.
+The separate spatial count-tuned campaign completed all three pairs. All six
+attempts passed semantic and fairness checks and cleaned up their owned stacks.
+The same production AOT image, 10 VUs, 30-second warmup and 30-second measurement
+were used; this profile disables PostgreSQL JIT only for eligible spatial counts.
+
+| Bbox | Pair | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|---:|
+| Medium | 1 | 12.20 | 20.57 | 1165.64 | 709.46 |
+| Medium | 2 | 12.50 | 24.50 | 1169.85 | 663.48 |
+| Medium | 3 | 13.13 | 37.53 | 1101.66 | 455.17 |
+| Large | 1 | 12.00 | 8.80 | 1195.65 | 1863.79 |
+| Large | 2 | 14.67 | 9.87 | 941.29 | 1481.29 |
+| Large | 3 | 10.57 | 17.10 | 1373.04 | 837.54 |
+
+| Bbox | Paired H/G throughput median [range] | Paired H/G p95 median [range] |
+|---|---:|---:|
+| Medium | 0.510 [0.350, 0.593] | 1.763 [1.643, 2.420] |
+| Large | 1.364 [0.618, 1.486] | 0.642 [0.635, 1.639] |
+
+There were 2,252 valid measured Honua completions and 3,551 GeoServer
+completions, with 60 drain completions per product and zero invalid responses or
+cancellations. These totals are completion accounting, not an aggregate winner score.
+Full p50/p95/p99 values and per-product repetition medians/ranges remain in
+`spatial-count-jit-off/report.json`. All recorded artifact hashes were checked
+before generating these tables; `documentation-receipt.json` records that check.
+
+Medium bbox favors GeoServer in every pair. Large bbox favors Honua in the first
+two pairs and GeoServer in the third: its favorable median is not a consistent
+win. The report remains diagnostic and not publishable; isolated-generator
+calibration is missing. Comparing this separately timed campaign with the baseline
+does not establish an option-only speedup on the shared host.
+
+The serial-planner queue has now started its first smoke campaign. Its separate
+mixed-workload measurements follow both profile smokes. The first-page optimization
+still needs a new production AOT build and its own measurements.
 
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
