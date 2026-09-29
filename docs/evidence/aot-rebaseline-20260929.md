@@ -208,8 +208,13 @@ trunk's failure brake is active after
 because its tests exposed the pooled-session
 smallint fixture assumption. The isolated 12-line fixture correction is already
 in this verified candidate at commit `64eaf870caba390f8cd46d262f13147b2245b067`.
-The first-page PR now has a merge conflict and needs explicit reconciliation and
-verified restoration of the tuning dependency. Future AOT images must be checked
+The first-page PR's merge conflict is now resolved at
+`f4265d5d670486ebba81208584bd9fb72de5fdee`, which merges actual trunk and restores
+the tuning dependency alongside the tested fixture correction. All ten
+optimization paths remain byte-identical to the previously verified `4a2a805`
+candidate. Fresh [CI run 36529383205](https://github.com/honua-io/honua-server/actions/runs/36529383205)
+and PR gates are pending; the old test results do not establish that this new
+whole-tree revision has passed. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
@@ -218,8 +223,9 @@ count-tuning tests. Retaining the updated regression file and restoring the
 original tuning patch produced a recovery tree whose ten optimization paths
 match the verified candidate exactly. `rollback-recovery-rehearsal.json` records
 the tree identities and both patch-application attempts. This changed neither
-branch and is not new CI evidence; actual trunk must be reconciled and verified
-against the landed rollback.
+branch and is not new CI evidence. The later actual reconciliation is recorded
+separately in `landed-rollback-reconciliation.json` and was pushed as a normal
+fast-forward to PR 5315 without changing the other repair agent's checkout.
 
 [GeoBench PR 25](https://github.com/honua-io/geobench/pull/25) adds separately
 fingerprinted serial spatial-read and combined count/read planner profiles. It
