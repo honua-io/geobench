@@ -125,20 +125,43 @@ plan. The reviewed trunk snapshot only scoped its serial-spatial helper to featu
 reads. The count candidate described below adds separate opt-in JIT suppression;
 it does not force serial counts or change the exact spatial predicate.
 
-### Fetch size and prepared statements are secondary hypotheses
+### Cursor fetching can change parallel execution
 
-[JDBCDataStoreFactory][jdbc-factory] defaults fetch size to 1,000;
-[JDBCFeatureReader][jdbc-reader] applies it to a forward-only, read-only statement.
-[PostgisNGDataStoreFactory][postgis-factory] defaults the prepared-statement
-dialect option to false. Neither override appears in the saved store. This is
-the source-default interpretation, not an independent live getter measurement.
-The SQL trace's literal predicates and base64 EWKB are consistent with that path.
-PostgreSQL protocol parse/bind messages alone do not establish that the GeoTools
-prepared-statement option is enabled.
+The pinned GeoTools factory defaults fetch size to 1,000, and its feature reader
+uses a forward-only, read-only statement. Before opening that reader,
+[JDBCFeatureSource](https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java#L603)
+sets autocommit from the dialect's query policy. The base
+[SQLDialect](https://github.com/geotools/geotools/blob/820904c219b584f817dbf7341ba2c480fc1a3e06/modules/library/jdbc/src/main/java/org/geotools/jdbc/SQLDialect.java#L1112)
+returns false; the reviewed PostGIS dialect does not override that method.
+[pgJDBC documents](https://jdbc.postgresql.org/documentation/query/#getting-results-based-on-a-cursor)
+that positive fetch size, autocommit off and a forward-only single-statement query
+enable cursor fetching.
 
-With 100 requested rows, increasing fetch size is a lower-priority Honua experiment
-than count plans and redundant encoding. Prepared versus custom/generic plans
-deserves a targeted test because selectivity varies sharply across bbox sizes.
+This matters beyond buffer sizing: [PostgreSQL 17 documents](https://www.postgresql.org/docs/17/when-can-parallel-query-be-used.html)
+that an extended-protocol Execute with a nonzero fetch count cannot execute its
+plan in parallel. An ordinary EXPLAIN ANALYZE of the same SQL can therefore differ
+from the JDBC execution path. This is an explanation to investigate, not a reason
+to copy GeoServer's connection policy or change global database settings.
+
+Six retained GeoServer preflight traces from the completed September 29 first-page
+mixed campaigns contain 208 source feature executions using named `C_` portals.
+All 398 source count executions use the non-cursor path. The source and traces
+support the inference that cursor fetching contributes to serial feature execution.
+The wire-level Execute row count was not captured, so this is not a direct protocol
+attestation or causal speedup measurement. Counts obtain their connection through
+a separate path that restores autocommit; the cursor explanation must not be
+extended to counts. Source files, hashes and per-trace observations are retained
+in `results/geoserver-fetch-planner-20260929/review-receipt.json`.
+
+[PostgisNGDataStoreFactory][postgis-factory] also defaults the prepared-statement
+dialect option to false. Neither a fetch-size nor prepared-statement override
+appears in the saved store. This remains a source-default interpretation supported
+by the literal SQL and cursor traces, not an independent live getter measurement.
+Prepared versus custom/generic plans remains a separate diagnostic dimension.
+
+Honua's scoped serial-read option directly tests the worker-startup hypothesis
+without adopting JDBC cursor transport. Separate count-only and combined profiles
+are still required; no application performance gain follows from this review alone.
 
 ## Additional correctness follow-up discovered in the trace
 
