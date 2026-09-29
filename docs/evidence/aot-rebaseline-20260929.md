@@ -390,6 +390,24 @@ are retained with the hosting repair evidence. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
+A later review correction narrowed the expected cancellation exception in the
+count-tuning regression test, advancing PR 5315 to
+`547eae82565df1f255b79601c97e7a32b1ac817e`. Its fresh required checks are running;
+the earlier PostgreSQL matrix evidence belongs to `f4265d5`, not this new head.
+
+The older trunk run `36533906528` has completed with the two known hosting
+failures and their failed summary gates. It predates the merged hosting repair.
+A separate operational problem was preventing current runs from reaching the
+watcher: GitHub's branch-filtered workflow listing repeatedly returned September
+4 runs, while an unfiltered listing with an exact local trunk filter returned
+September 29 runs. [Flow PR 97](https://github.com/honua-io/honua-flow/pull/97)
+merged at `91b7d0513d0c8d0b60dfcb0f04603829892c15e1` after offline discovery,
+full landing/crash-recovery, dashboard and hosted checks passed. It preserves
+existing merge gates and fails closed on unavailable evidence. Normal fleet sync
+and the repaired-trunk matrix still need to complete; the new discovery code is
+not evidence that the server brake has cleared. The read-only reproduction and
+verification receipt are retained in `results/trunk-ci-discovery-20260929/`.
+
 An isolated Git-index rehearsal confirmed the modify/delete conflict in the
 count-tuning tests. Retaining the updated regression file and restoring the
 original tuning patch produced a recovery tree whose ten optimization paths
