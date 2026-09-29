@@ -6,7 +6,7 @@ import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from feature_contract import MODES
+from feature_contract import BUDGET, MODES, generator_budget
 from feature_sql_evidence import validate_source_trace
 
 
@@ -210,11 +210,15 @@ def report(directory, manifest, attempts):
     publication_failures.extend(calibration_failures(manifest.get("calibration"), manifest["binding"]))
     result = {"valid": not failures, "publishable": not publication_failures, "failures": failures,
               "publication_failures": publication_failures, "dataset": "100K points only",
+              "server_database_budget": manifest.get("budget", BUDGET),
+              "generator_budget": manifest.get("generator_budget", generator_budget()),
               "profile": manifest["profile"], "attempts": attempts, "scenarios": by_scenario, "paired_ratios": pairs}
     directory = Path(directory)
     (directory / "report.json").write_text(json.dumps(result, indent=2) + "\n")
     lines = [f"GeoBench {manifest['mode']}: 100K points, {manifest['profile']}", "",
-             f"Valid: {result['valid']}. Publishable: {result['publishable']}.", ""]
+             f"Valid: {result['valid']}. Publishable: {result['publishable']}.", "",
+             f"Server/database budget (each): {json.dumps(result['server_database_budget'], sort_keys=True)}.",
+             f"Generator budget (same for both products): {json.dumps(result['generator_budget'], sort_keys=True)}.", ""]
     lines.extend(f"- {reason}" for reason in dict.fromkeys(publication_failures))
     lines += ["", "| Scenario | Server | Repetition | Offered req/s | Valid req/s | p50 ms | p95 ms | p99 ms | Late | Dropped |", "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for scenario, servers in by_scenario.items():

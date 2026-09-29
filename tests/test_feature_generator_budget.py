@@ -13,6 +13,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from feature_contract import BUDGET, fingerprint
+from feature_evidence import report
 from feature_runtime import Observer
 
 
@@ -29,6 +30,18 @@ def compose_input():
 
 
 class GeneratorBudgetTests(unittest.TestCase):
+    def test_report_discloses_generator_budget_even_when_evidence_fails(self):
+        manifest = {'mode': 'diagnostic', 'profile': 'bounded-generator-8cpu', 'repetitions': 3,
+                    'servers': ['honua', 'geoserver'], 'scenarios': ['equality'], 'binding': 'x',
+                    'budget': BUDGET, 'generator_budget': {'cpus': 8, 'memory_bytes': 4 * 1024**3}}
+        with tempfile.TemporaryDirectory() as temp:
+            result = report(temp, manifest, [])
+            self.assertFalse(result['valid'])
+            self.assertFalse(result['publishable'])
+            self.assertEqual(manifest['generator_budget'], result['generator_budget'])
+            self.assertEqual(BUDGET, result['server_database_budget'])
+            self.assertIn('Generator budget (same for both products): {"cpus": 8', (Path(temp) / 'report.md').read_text())
+
     def test_only_generator_cpu_changes_and_both_products_get_same_budget(self):
         runner = runner_module()
         with patch.object(runner, 'command', return_value=compose_input()):
