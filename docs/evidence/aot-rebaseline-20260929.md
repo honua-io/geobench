@@ -21,7 +21,8 @@ These server changes reached trunk through the normal PR lander and are present
 in the measured image. The count-tuning change was subsequently reverted by
 PR 5318 and restored with the first-page optimization in PR 5315. The tables in
 the original campaign sections below describe that original image. The final section records the subsequent first-page image and its separate
-HTTP results; the serial-count implementation still awaits merge and measurement.
+HTTP results; the serial-count implementation has merged and awaits a new AOT
+image and measurement.
 
 | Change | PR | Merge revision |
 |---|---|---|
@@ -644,10 +645,13 @@ The current head, `02c3968117b62b1ab8cb920773da031330ad7fe7`, adds an assertion 
 the cancellation test's cleanup handler in response to review. Production source
 and documentation are byte-identical to the implementation revision. Both focused
 cancellation cases passed after this test-only change. Its Review Gate and format
-check passed; build and affected integration checks are still running as of
-11:52 UTC. The 5,172 provider executions above belong to the implementation
+check passed, followed by the complete PR Gate and all six affected integration
+groups at that exact head. The 5,172 provider executions above belong to the implementation
 revision, not a repeat of the full matrix at the test-only follow-up head. The PR
-has not merged and is absent from the measured first-page AOT image.
+merged through the normal lander at 12:03:45 UTC as
+`2db24e648350927c3dada3eb00638bcec1e5cc3e`. Source and documentation on trunk
+match the reviewed head exactly. The change is absent from the first-page AOT
+image measured above.
 
 [GeoBench PR 26](https://github.com/honua-io/geobench/pull/26) adds separate
 serial-count and combined count profiles. All 58 harness tests and CI lint/syntax
@@ -774,4 +778,14 @@ Evidence lives in `results/source-projection-20260929-r2/`. The existing
 the same first-page AOT digest in a separate queue under
 `results/serial-read-first-page-aot-20260929/`, with their own paired GeoServer
 runs and executed-SQL checks. No completed performance result exists for that
-queue yet. These profiles do not include the still-unmerged serial-count change.
+queue yet. These profiles use the earlier AOT image and do not include the serial-count change.
+
+The serial-count production AOT build is now running in
+[workflow 36565949830](https://github.com/honua-io/honua-server/actions/runs/36565949830)
+from exact merged revision `2db24e648350927c3dada3eb00638bcec1e5cc3e`. An observer
+tracks that existing workflow without dispatching retries. It requires the amd64
+build, serving boundary, GeoParquet smoke and publication steps to pass, then
+checks the immutable image identity. The deferred campaign queue waits for the
+existing serial-read diagnostics to finish and validates separate baseline,
+count-JIT-off, serial-count and combined count profiles before sustained mixed
+and full eleven-request comparisons. No serial-count AOT result exists yet.
