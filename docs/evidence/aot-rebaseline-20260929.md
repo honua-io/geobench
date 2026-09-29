@@ -5,8 +5,8 @@ on the shared WSL development host. It is diagnostic evidence for optimization,
 not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
 and local identity checks. Both products passed the 20-scenario baseline smoke
 campaign with no invalid responses. The paired tuned smoke campaign also passed,
-and sustained mixed-workload diagnostics have started. No completed paired
-sustained results exist yet.
+and sustained mixed-workload diagnostics have started. No sustained campaign has
+yet completed all scheduled repetitions.
 The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
 roughly 2× on mixed-workload throughput; source-level improvements do not replace
 a fresh measurement.
