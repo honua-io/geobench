@@ -168,6 +168,30 @@ campaigns ran at different times on a shared host. This does not isolate the
 setting's causal speedup. Individual-query results and the queued serial-read
 profiles will determine the next optimization priority.
 
+The completed mixed runs can also be split by request type using the raw
+`feature_latency` samples. The analysis verifies each raw file's recorded hash and
+completion counts, selects only semantically valid measurement completions, and
+uses every selected sample once. These are latencies under mixed traffic, not
+standalone per-request throughput tests.
+
+| Request in count-tuned mixed traffic | Median paired Honua/GeoServer p95 | Paired range |
+|---|---:|---:|
+| Equality | 1.010 | 0.949–1.359 |
+| Numeric range | 0.887 | 0.878–1.132 |
+| Tested prefix | 0.652 | 0.620–0.848 |
+| Medium bbox | 1.478 | 1.312–1.843 |
+
+Ratios below one favor Honua. The prefix case favors Honua in all three pairs;
+equality and range are mixed. This is evidence for the particular corpus query,
+not a general literal-prefix claim: the escaped-underscore coverage limitation
+still applies. Medium bbox remains slower in every pair and contributes a median
+60.8% of Honua's summed valid response latency despite making up 40% of the mixed
+request sequence. That share includes waiting, transfer and validation; it is not
+CPU utilization. The spatial page/count path is therefore the first diagnostic
+priority. `mixed-request-breakdown.json` retains all per-repetition counts,
+percentiles, latency shares, paired ratios and raw hashes; the adjacent
+`geobench-mixed-request-breakdown.py` reproduces the breakdown.
+
 Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
 paired ratios and ranges. Do not combine percentiles or use a single winner
 score. The first milestone can be near parity or mixed wins and losses, assessed
