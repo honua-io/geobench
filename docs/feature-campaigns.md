@@ -18,6 +18,16 @@ Missing/malformed payloads, ignored filters, duplicates, wrong order, incomplete
 pages and wrong geometries fail. The OGC profile requires exact `numberMatched`; returned counts must agree with
 the oracle. Count-metadata presence is also compared across products.
 
+Fresh GeoServer fixtures expose the primary-key attribute and explicitly enable
+OGC sorting in their WFS service metadata. The campaign verifies both persisted
+settings and advertised sorting conformance, records the effective service
+fingerprint, and checks it again after traffic. Reused fixtures must already
+match; they are not silently reconfigured. A separate descending-ID oracle probe
+runs during preflight for both products, so natural ascending database order
+cannot conceal an ignored `sortby` parameter. This probe does not enter the
+measured workload. Earlier campaigns without this check may contain repeated
+GeoServer ignored-sort warnings and need a corrected rebaseline.
+
 ## Prepare immutable images
 
 Use digest references for Honua, PostGIS and k6. Tags are rejected. The comparison

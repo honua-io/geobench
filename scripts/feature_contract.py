@@ -53,6 +53,13 @@ def immutable_image(image):
     return bool(re.fullmatch(r"(?:[^\s]+@)?sha256:[0-9a-f]{64}", image))
 
 
+def order_direction(request):
+    direction = request.get("order", "asc")
+    if direction not in ("asc", "desc"):
+        raise ValueError("Unsupported feature ordering")
+    return direction.upper()
+
+
 def oracle(corpus, sql):
     """sql executes against the isolated source database and returns JSON."""
     requests = []
@@ -61,6 +68,7 @@ def oracle(corpus, sql):
         if "boundary_id" in request:
             x, y = sql(f"SELECT json_build_array(ST_X(geom),ST_Y(geom)) FROM public.bench_points WHERE id={int(request['boundary_id'])}")
             request["bbox"] = [x, y, x + 0.000001, y + 0.000001]
+        direction = order_direction(request)
         where = request.get("filter", "TRUE")
         if "bbox" in request:
             coords = ",".join(str(float(v)) for v in request["bbox"])
@@ -69,9 +77,9 @@ def oracle(corpus, sql):
         # Corpus is repository-owned SQL, never user-supplied request text.
         query = f"""WITH selected AS (
           SELECT id,{fields},ST_AsGeoJSON(geom,9)::jsonb AS geometry
-          FROM public.bench_points WHERE {where} ORDER BY id
+          FROM public.bench_points WHERE {where} ORDER BY id {direction}
           LIMIT {int(corpus['limit'])} OFFSET {int(request.get('offset', 0))}
-        ) SELECT json_build_object('features',COALESCE(jsonb_agg(to_jsonb(selected) ORDER BY id),'[]'::jsonb),
+        ) SELECT json_build_object('features',COALESCE(jsonb_agg(to_jsonb(selected) ORDER BY id {direction}),'[]'::jsonb),
           'matched',(SELECT count(*) FROM public.bench_points WHERE {where})) FROM selected"""
         request["expected"] = sql(query)
         requests.append(request)
@@ -79,10 +87,11 @@ def oracle(corpus, sql):
 
 
 def request_url(server, protocol, request, base, limit=100):
+    direction = order_direction(request)
     if protocol == "ogc":
         path = ("/ogc/features/collections/1/items" if server == "honua" else
                 "/geoserver/ogc/features/v1/collections/geobench:bench_points/items")
-        params = {"f": "json", "limit": limit, "sortby": "id",
+        params = {"f": "json", "limit": limit, "sortby": "id" if direction == "ASC" else "-id",
                   "offset" if server == "honua" else "startIndex": request.get("offset", 0)}
         if request.get("filter"):
             params.update({"filter": request["filter"], "filter-lang": "cql2-text"})
@@ -92,7 +101,7 @@ def request_url(server, protocol, request, base, limit=100):
         path = ("/rest/services/default/FeatureServer/1/query" if server == "honua" else
                 "/geoserver/gsr/services/geobench/FeatureServer/0/query")
         params = {"f": "json", "where": request.get("filter", "1=1"), "outFields": "*",
-                  "returnGeometry": "true", "outSR": 4326, "orderByFields": "id ASC",
+                  "returnGeometry": "true", "outSR": 4326, "orderByFields": "id " + direction,
                   "resultRecordCount": limit, "resultOffset": request.get("offset", 0)}
         if "bbox" in request:
             params.update({"geometry": ",".join(map(str, request["bbox"])), "inSR": 4326,

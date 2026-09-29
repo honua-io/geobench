@@ -34,6 +34,7 @@ from feature_contract import (
     validate_plugin_jars,
 )
 from feature_evidence import calibration_failures, report, summarize
+from feature_geoserver import geoserver_sorting
 from feature_runtime import (
     DB_FINGERPRINT_SQL,
     LABEL,
@@ -185,6 +186,8 @@ def geoserver_store(base, password):
     params = {entry["@key"]: entry["$"] for entry in entries}
     if int(params.get("max connections", 0)) != BUDGET["source_connections"] or int(params.get("min connections", -1)) != 3:
         raise ValueError("GeoServer effective source pool differs from bounded profile")
+    if str(params.get("Expose primary keys", "")).lower() != "true":
+        raise ValueError("GeoServer must expose the id property for explicit query ordering")
     return {key: value for key, value in params.items() if key not in {"passwd", "password", "user"}}
 
 
@@ -213,6 +216,10 @@ def run_k6(ids, directory, config, name):
         process = subprocess.run(args, check=False, stdout=log, stderr=subprocess.STDOUT, timeout=config["duration"] + DRAIN_SECONDS + 180)
     checks = preflight_results((directory / (name + ".log")).read_text())
     write(directory / (name + "-preflight.json"), checks)
+    expected_ids = {r["id"] for r in config["requests"] + config.get("preflight_requests", [])}
+    observed_ids = [row["id"] for row in checks]
+    if set(observed_ids) != expected_ids or len(observed_ids) != len(expected_ids):
+        raise ValueError(f"{name}: incomplete or duplicated semantic preflight receipt")
     if process.returncode or any(row["failure"] for row in checks):
         if config["protocol"] == "gsr":
             write(directory / "coverage-gaps.json", [{"request": r["id"], "reason": r["failure"]}
@@ -280,8 +287,12 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
                 subprocess.run(["bash", str(directory / "harness" / "adapters" / server / "setup.sh")], env=env, cwd=ROOT,
                                stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
         store = geoserver_store(base, env["GS_PASS"]) if server == "geoserver" else None
+        service = None
         if store:
             write(path / "effective-store.json", store)
+            if manifest["protocol"] == "ogc":
+                service = geoserver_sorting(base, env["GS_PASS"], configure=not fixture)
+                write(path / "effective-service.json", service)
         db = ids["postgis-" + server]
         command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", "ANALYZE public.bench_points")
         database = sql(db, DB_FINGERPRINT_SQL)
@@ -290,7 +301,11 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
             raise ValueError("Dataset must contain 100K analyzed points")
         attempt["database_fingerprint"] = fingerprint(database)
         expected = oracle(manifest["corpus"], lambda statement: sql(db, statement))
-        for request in expected["requests"]:
+        # Ascending IDs can coincide with natural database order even when sortby
+        # is ignored. This reverse-order probe is preflight-only for both servers.
+        probe_corpus = {**manifest["corpus"], "requests": [{"id": "ordering-desc", "order": "desc"}]}
+        expected["preflight_requests"] = oracle(probe_corpus, lambda statement: sql(db, statement))["requests"]
+        for request in expected["requests"] + expected["preflight_requests"]:
             request["url"] = request_url(server, manifest["protocol"], request, f"http://{server}:8080", expected["limit"])
         write(path / "oracle.json", expected)
         config = {**expected, "protocol": manifest["protocol"], "duration": 1, "drain": DRAIN_SECONDS,
@@ -366,6 +381,11 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
                 "find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} +").splitlines()
             if sorted(jars) != sorted(current_jars) or geoserver_store(base, env["GS_PASS"]) != store:
                 attempt["fairness_failures"].append("GeoServer plugin or datastore configuration drift")
+            if service is not None:
+                current_service = geoserver_sorting(base, env["GS_PASS"])
+                write(path / "effective-service-after.json", current_service)
+                if current_service != service:
+                    attempt["fairness_failures"].append("GeoServer feature service configuration drift")
         attempt["status"] = "passed" if not attempt["fairness_failures"] else "failed"
     except (OSError, ValueError, subprocess.SubprocessError, KeyError) as exc:
         attempt.update({"status": "failed", "error": str(exc)})
