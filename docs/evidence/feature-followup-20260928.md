@@ -1,0 +1,199 @@
+# Feature comparison follow-up — 2026-09-28
+
+Scope: seed-42 100K points, source-backed PostGIS reads, anonymous OGC API
+Features, bounded four-CPU/four-GiB services and six source connections.
+This follow-up resolves the source-pool blocker and adds runnable local observer
+calibration. It does not produce a publishable product comparison.
+
+## Updated runtime
+
+The published Native AOT image
+`ghcr.io/honua-io/honua-server@sha256:b72513a9a724d7331d8b2a0285b2a29b8f8de9b865f381a1c95192a31da73091`
+records revision `75e88443eb008ac010f890d16e9efcbcf421dd50`. That revision includes
+[`c1ede6f63`](https://github.com/honua-io/honua-server/commit/c1ede6f634cfa984c204db5a4cf5c5336086939a),
+which routes bound-source reads through shared admission and configured pools.
+The fix was already merged; this work verified its published runtime rather than
+creating another server patch. Runtime receipts confirm `/app/Honua.Server`, no
+CoreCLR mappings, and effective four-CPU/four-GiB budgets.
+
+GeoServer remains the prepared stable 3.0.1 OGC extension image
+`sha256:a395701a5eea4884c855f136be84363d0ce05e06da1ea6c7e3b84e146279927b`.
+PostGIS and k6 retain the immutable identities in the [initial evidence](feature-campaign-20260928.md).
+
+## Complete smoke campaign
+
+`results/feature-aot-followup-smoke-20260928` passed all **40 rows**: each product
+completed eleven corpus scenarios, four closed-loop mixed concurrency levels,
+and five fixed arrival rates. Every response underwent oracle validation. The
+campaign used two-second warmup and three-second measurement windows and only
+supports harness validation, not capacity or product-performance claims.
+
+Both products passed the source-query SQL pass, full-corpus preflight, database
+fingerprints and runtime checks. Sampled source sessions/active queries stayed
+at or below six for both products. Maximum sampled parallel workers were six
+for Honua and one for GeoServer; these are separate from client connections and
+remain visible in the telemetry under the equal database CPU budgets.
+
+The report is diagnostic-valid and not publishable. Honua's measured samples had
+no clock anomalies. GeoServer's 240 req/s mixed row included one auxiliary
+`http_req_receiving` value of **−38.252283 ms**, which is retained and rejects
+publication. Custom window/latency accounting uses monotonic executor progress.
+Both smoke stacks and their private resources were removed.
+
+## Local observer calibration
+
+The new `scripts/run-observer-calibration.py` collects actual observer-off/on
+samples from a prepared campaign, with separate ledgers, raw hashes, alternating
+order, fresh owned stacks, normal preflights and explicit drain. It cannot approve
+publication without an isolated-generator comparison. Interrupted attempts remain
+visible and cleanup validates exact resource ownership. Calibration validation
+also rejects reused raw files across treatments and clock anomalies.
+
+`results/feature-observer-followup-20260928` records three paired repetitions for
+each product at `mixed:vus:10`, using diagnostic 30-second warmup and 30-second
+measurement windows. These durations and this selected workload do not qualify
+as calibration for a strict campaign. See the [operating guide](../feature-campaigns.md)
+for the command and the strict 180s/120s preparation option.
+
+All six product/repetition attempts completed; all twelve measured treatment
+samples had zero invalid responses and zero cancellations. Each sample's warmup,
+late completions and measured traffic remain separate. The source-budget checks
+passed. The calibration gate rejected the evidence: GeoServer samples contained
+nine auxiliary clock anomalies, and each product exceeded 5% on one observer
+comparison metric.
+
+| Product | Observer off median req/s | Observer on median req/s | Throughput change | Observer off median p95 ms | Observer on median p95 ms | p95 change |
+|---|---:|---:|---:|---:|---:|---:|
+| Honua AOT | 35.67 | 33.23 | −6.82% | 580.85 | 607.04 | +4.51% |
+| GeoServer | 71.27 | 74.20 | +4.12% | 257.22 | 241.10 | −6.27% |
+
+These are medians of per-repetition statistics, not a combined latency
+distribution or an average of percentiles. The per-repetition observer-on
+throughput ratios, GeoServer/Honua, were 2.112, 2.233 and 2.195 (median **2.195**).
+Observer-off paired ratios were 1.686, 1.998 and 2.101 (median **1.998**).
+For this diagnostic mixed workload, GeoServer completed roughly twice as many
+valid requests per second. The smoke attribute-filter rows favored Honua, but
+three-second windows cannot establish sustained filter performance. There is
+no overall or publishable winner claim.
+
+The JSON ledger retains each treatment's counts, throughput, p95, raw path/hash
+and phase duration. A final audit at harness `862c5c9` re-read all twelve raw
+measurement windows, verified their full mixed-request coverage and all retained
+artifact hashes, and wrote `observer-ea4d7cbd2a-verified-report.json`. It retains
+the diagnostic medians while rejecting clock-invalid calibration. The original
+collector report and raw evidence are unchanged.
+
+## Strict gate and remaining prerequisites
+
+`results/feature-comparison-followup-20260928` records the normal five-pair,
+fifteen-scenario, 180s/120s schedule. Both products passed the complete oracle,
+source-query and bounded-pressure preflights. Both stopped before timed comparison
+traffic because no strict calibration receipt exists. The eight remaining server
+attempts are explicitly `not-run`; there are no strict measurement rows or
+publication approval.
+
+The available environment is WSL with local Docker. No separate generator host
+was supplied or configured. A publishable campaign still needs a setup without
+clock anomalies, observer-on/off and isolated-generator calibration within 5%,
+and all five paired comparison repetitions. The short observer diagnostics above
+cannot replace those prerequisites. GSR remains a separate community profile;
+this follow-up makes no new GSR, rendering, line/polygon or memory-leak claims.
+
+All **37 harness tests** pass, including interrupted calibration recovery,
+ownership refusal, observer phase separation, reused-treatment rejection and
+clock rejection. Ruff, Python compilation, all k6 JavaScript syntax checks,
+Bash syntax checks and CI's warning-level ShellCheck command pass. The final raw
+calibration audit verified all required mixed requests and artifact hashes.
+
+Cleanup-only was also exercised against the completed collector ledger. Final
+inspection found no campaign-labelled containers, volumes or networks. All five
+unrelated containers present at the start remained running. Failed attempts and
+both original and verified reports remain retained under their campaign paths.
+
+## Paging optimization candidate — no new product measurements yet
+
+The next investigation used a separate, owned PostGIS fixture containing the
+same deterministic 100K points. `results/source-query-plans-20260928` retains
+SQL, executed plans, database/image fingerprints, artifact hashes and cleanup
+receipts. This was an isolated SQL diagnostic, outside measured HTTP traffic.
+
+The original deep-page query encoded geometry and JSON for **50,100 rows** to
+return 100 features after offset 50,000. Moving encoding after pagination
+reduced that work to 100 rows. Single diagnostic executions took approximately
+706 ms and 56 ms respectively; these are query-plan observations, not repeated
+HTTP throughput measurements or a Honua–GeoServer comparison.
+
+[Honua draft PR #5299](https://github.com/honua-io/honua-server/pull/5299), commit
+`3ea992756692d8189339374ab8b0dd62a826694b`, implements explicit raw-column
+projection followed by encoding after pagination. It preserves column-level
+permissions and carries typed sort values through aliases. The aliases also
+fix an existing ordering error when a physical source field is named
+`attributes`.
+
+Seven new integration tests cover execution work, ordering/nulls, field masks,
+restricted database permissions, JSON types, alias collisions, streaming,
+nearest-neighbor distance and output reprojection. Three failed against the
+baseline and four passed. After implementation, all **145 mapped-reader tests**
+passed with no skips. The smaller regression fixture verifies that a ten-row
+page and its one-row has-more probe encode at most 11 rows instead of 911.
+Baseline and candidate TRX receipts are retained with the SQL artifacts.
+
+The production Native AOT image build was intentionally cancelled after an hour
+when the user deferred official comparisons and prioritized targeted optimization
+on the shared host. The compiler was still active; this was not a compilation
+failure. No candidate AOT image or new HTTP comparison measurements were produced.
+The dependent smoke test and long diagnostic sweep were cancelled before creating
+campaigns. Cancellation receipts and the original build log are retained under
+`results/source-query-plans-20260928`.
+
+This candidate is based on
+trunk `e9ef3d292787834ac3f943044788da5ccd7e9427`, which also includes newer
+authorization optimizations than the previously benchmarked published image.
+Future comparisons must retain these runtime identities; an improvement over
+the older image cannot be attributed solely to pagination. The mixed-workload
+results and strict-publication limitations above remain unchanged.
+
+## Spatial-count optimization diagnostics on the shared host
+
+`results/spatial-predicate-diagnostic-20260928` records a separate SQL experiment
+using the same immutable PostGIS image and deterministic 100K-point artifact.
+It uses one shared build slot, an owned four-CPU/four-GiB database, no product
+servers, and no published comparison campaign. Other development work was active.
+The private database and volume were removed after completion.
+
+Five alternatives were evaluated: the original exact intersection predicate,
+an explicit bbox check plus exact intersection (also observed in GeoServer's
+captured SQL), guarded point-coordinate comparisons with an exact fallback,
+the original predicate with PostgreSQL JIT disabled, and that predicate with
+both JIT and parallel workers disabled. Settings were transaction-local.
+One warmup repetition is excluded from these seven-repetition summaries; order
+was shuffled with recorded seed 20260928.
+
+Complete ordered ID sequences matched for all predicate forms across small, medium,
+large, world and empty bboxes. Additional cases checked exact corners, immediately
+adjacent double-precision coordinates inside and outside each boundary, null and
+empty geometries, 3D points, and non-point fallback behavior. This validates the
+SQL experiments' selected predicates, not an implemented server fast path.
+
+| Bbox | Original exact count ms, median [min–max] | Exact, JIT off | Exact, JIT off and serial |
+|---|---:|---:|---:|
+| Small | 1.19 [0.69–10.90] | 1.04 [0.66–2.76] | 2.50 [0.86–13.96] |
+| Medium | 55.30 [32.47–104.74] | 40.18 [31.60–209.39] | 26.53 [18.81–98.01] |
+| Large | 179.03 [144.42–502.51] | 43.32 [28.86–122.16] | 36.10 [28.03–140.03] |
+| World | 634.76 [431.37–1269.21] | 126.99 [71.44–243.19] | 123.72 [94.29–249.77] |
+| Empty | 0.35 [0.23–0.63] | 0.36 [0.25–1.63] | 0.39 [0.31–0.74] |
+
+The wide ranges preclude precise speedup claims. The executed plans nevertheless
+identify avoidable JIT work in broad spatial counts. JIT here means PostgreSQL's
+SQL compilation, independent of whether the Honua process uses Native AOT.
+The next candidate is scoped JIT suppression while retaining the exact predicate;
+serial execution needs separate assessment because it did not help every case.
+No production setting or query behavior was changed by this experiment.
+
+The alternative predicates are not being adopted: the explicit bbox-plus-exact
+form helped the large case but its world-bbox median rose to 1575.03 ms. The
+coordinate form had a large-bbox median of 257.23 ms and a world-bbox median of
+1195.71 ms. This broader check rules out using their occasional wins as a reason
+to replace the original predicate. The script, database fingerprint, complete
+expected ID sequences, boundary checks, all SQL/plans, raw samples, and summaries
+are retained with the diagnostic artifacts.

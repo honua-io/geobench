@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "dataset": "small-100k-points-seed42",
+  "limit": 100,
+  "crs": "OGC:CRS84",
+  "compression": "identity",
+  "fields": ["feature_name", "category", "status", "priority", "temperature", "population", "created_at", "updated_at", "country_code", "description"],
+  "requests": [
+    {"id": "equality", "filter": "category = 'park'"},
+    {"id": "range", "filter": "temperature >= 10 AND temperature <= 20"},
+    {"id": "prefix", "filter": "feature_name LIKE 'feature\\_1%'"},
+    {"id": "bbox-small", "bbox": [139.565,35.565,139.815,35.815]},
+    {"id": "bbox-medium", "bbox": [137.19,33.19,142.19,38.19]},
+    {"id": "bbox-large", "bbox": [114.69,10.69,164.69,60.69]},
+    {"id": "page-shallow", "offset": 0},
+    {"id": "page-medium", "offset": 1000},
+    {"id": "page-deep", "offset": 50000},
+    {"id": "empty", "filter": "category = 'does-not-exist'"},
+    {"id": "bbox-boundary", "boundary_id": 1}
+  ],
+  "mixed": ["bbox-medium", "bbox-medium", "bbox-medium", "bbox-medium", "equality", "equality", "equality", "range", "range", "prefix"]
+}

@@ -101,7 +101,6 @@ def generate(output_path, count):
     with open(output_path, "w") as f:
         # Header
         f.write("-- GeoBench: 100K point dataset (deterministic, seed=42)\n")
-        f.write(f"-- Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
         f.write(f"-- Features: {count:,}\n\n")
 
         # Extensions and table

@@ -1,5 +1,11 @@
 # GeoBench
 
+Feature comparison work should use the explicit **diagnostic** and **comparison**
+modes in [the feature campaign guide](docs/feature-campaigns.md). These use a
+PostGIS oracle for every response, owned isolated stacks, and fail-closed
+publication gates. Historical broad protocol runs below are retained for
+investigation; their shape checks are not the new comparison contract.
+
 [![CI](https://github.com/honua-io/geobench/actions/workflows/ci.yml/badge.svg)](https://github.com/honua-io/geobench/actions/workflows/ci.yml)
 [![Security](https://github.com/honua-io/geobench/actions/workflows/security.yml/badge.svg)](https://github.com/honua-io/geobench/actions/workflows/security.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/honua-io/geobench/badge)](https://scorecard.dev/viewer/?uri=github.com/honua-io/geobench)
@@ -48,7 +54,7 @@ servers support which rows.
 | Server | Runtime | Default Image |
 |--------|---------|---------------|
 | [GeoServer](https://geoserver.org/) | Java / JVM | `docker.osgeo.org/geoserver:3.0.1` |
-| [Honua Server](https://github.com/honua-io/honua-server) | .NET 10 | `honuaio/honua-server:latest` |
+| [Honua Server](https://github.com/honua-io/honua-server) | .NET 10 | `ghcr.io/honua-io/honua-server:nightly-aot` |
 | [QGIS Server](https://qgis.org/en/site/about/features.html#qgis-server) | C++ / Qt | `qgis/qgis-server:3.38` |
 
 Published snapshots may pin a digest or a specific nightly tag; the exact

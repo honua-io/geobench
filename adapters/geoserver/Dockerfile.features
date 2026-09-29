@@ -1,0 +1,10 @@
+# Build once before campaigns. The base must be an immutable digest.
+ARG BASE_IMAGE=docker.osgeo.org/geoserver@sha256:7cb827ba3f6d9fc04a6647fc0cfa6c254fc642407f0d99281fdf026d2540b558
+FROM ${BASE_IMAGE}
+ARG EXTENSIONS=ogcapi-features
+ARG COMMUNITY=
+USER root
+RUN INSTALL_EXTENSIONS=true STABLE_EXTENSIONS="$EXTENSIONS" COMMUNITY_EXTENSIONS="$COMMUNITY" /opt/install-extensions.sh \
+    && test -n "$(find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name 'gs-ogcapi-features-*.jar' -print -quit)" \
+    && find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} + > /opt/geobench-jars.sha256
+ENV INSTALL_EXTENSIONS=false STABLE_EXTENSIONS="" COMMUNITY_EXTENSIONS=""

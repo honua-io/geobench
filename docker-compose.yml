@@ -106,7 +106,7 @@ services:
   # ─── Feature servers (one at a time via profiles) ──────────────────
 
   honua:
-    image: ${HONUA_IMAGE:-honuaio/honua-server:latest}
+    image: ${HONUA_IMAGE:-ghcr.io/honua-io/honua-server:nightly-aot}
     profiles: ["honua"]
     ports:
       - "${HONUA_PORT:-8081}:8080"

@@ -1,7 +1,7 @@
 {
   "name": "Honua Server",
   "version": "latest",
-  "image": "honuaio/honua-server:latest",
+  "image": "ghcr.io/honua-io/honua-server:nightly-aot",
   "runtime": ".NET 10 (ASP.NET Core)",
   "language": "C#",
   "ogcApiFeatures": {
