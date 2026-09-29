@@ -654,11 +654,15 @@ match the reviewed head exactly. The change is absent from the first-page AOT
 image measured above.
 
 [GeoBench PR 26](https://github.com/honua-io/geobench/pull/26) adds separate
-serial-count and combined count profiles. All 58 harness tests and CI lint/syntax
-checks passed. The executed-SQL check requires both settings before the same
-eligible count for the combined profile; unsupported or ignored flags fail.
-It remains draft pending a retained smoke campaign against a production AOT
-image that contains the server change.
+serial-count and combined count profiles, plus combinations with the existing
+serial page-read option. All eight settings combinations have distinct
+fingerprints. At current harness head `d4a2009dfb11ed6db15ea6097a06b3f740b838ea`,
+[CI 36566493767](https://github.com/honua-io/geobench/actions/runs/36566493767)
+passed all 59 tests, Ruff, Python compilation, JavaScript syntax and ShellCheck.
+Executed-SQL checks require both count settings before the same eligible count
+and independent evidence for the feature-read setting. Missing flags, substituted
+query targets and swapped backend evidence fail. The PR remains draft pending
+retained smoke campaigns against the new production AOT image.
 
 These implementation checks establish behavior, not a performance gain. The
 serial-count candidate requires its own merged production AOT image and full
@@ -786,6 +790,11 @@ from exact merged revision `2db24e648350927c3dada3eb00638bcec1e5cc3e`. An observ
 tracks that existing workflow without dispatching retries. It requires the amd64
 build, serving boundary, GeoParquet smoke and publication steps to pass, then
 checks the immutable image identity. The deferred campaign queue waits for the
-existing serial-read diagnostics to finish and validates separate baseline,
-count-JIT-off, serial-count and combined count profiles before sustained mixed
-and full eleven-request comparisons. No serial-count AOT result exists yet.
+existing serial-read diagnostics to finish and for exact-head harness CI to pass.
+Six profiles receive all-corpus smoke and three paired mixed repetitions:
+baseline, count-JIT-off, serial-counts, count-JIT-off-serial-counts,
+serial-reads-counts and count-JIT-off-serial-reads-counts. The baseline and both
+joint page/count candidates then receive all eleven individual request
+comparisons. The count-only mixed rows isolate that policy without repeating the
+entire corpus for every settings combination. No serial-count AOT result exists
+yet.
