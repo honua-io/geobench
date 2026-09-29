@@ -1,13 +1,14 @@
 # AOT feature rebaseline — September 29, 2026
 
-The latest completed serial-read-only campaign on the production Native AOT
-first-page image has median paired Honua/GeoServer throughput **0.753** (range
-**0.690–0.799**) and p95 latency **1.582** (range **1.451–1.794**). GeoServer leads
-both metrics in all three pairs. Combining serial reads with count JIT suppression
-is still being measured. The separate baseline and count-JIT-off results on this
-image remain **0.531 / 2.445** and **0.621 / 1.953** for throughput/p95 respectively.
-All completed profiles passed semantic checks. The newer serial-count AOT image
-is still building; it has no HTTP result yet.
+The latest completed tuned mixed campaign combines serial feature reads with
+count-specific PostgreSQL JIT suppression on the production Native AOT first-page
+image. Median paired Honua/GeoServer throughput is **0.946** (range
+**0.846–1.110**) and p95 latency is **1.073** (range **0.858–1.168**). Honua wins
+one pair and loses two on both metrics. This is near parity in this local tuned
+mixed-workload diagnostic, not evidence of parity across all individual requests.
+All semantic checks passed. Generator headroom and shared-host variability limit
+interpretation. The newer serial-count AOT image is still building and has no
+HTTP result yet.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -781,8 +782,7 @@ Evidence lives in `results/source-projection-20260929-r2/`. The existing
 `serial-reads` and `count-jit-off-serial-reads` profiles are now being tested against
 the same first-page AOT digest in a separate queue under
 `results/serial-read-first-page-aot-20260929/`, with their own paired GeoServer
-runs and executed-SQL checks. The serial-read-only mixed campaign has now completed, as recorded below; the
-combined read/count-JIT profile is still running. These profiles use the earlier
+runs and executed-SQL checks. Both mixed campaigns in that queue have completed, as recorded below. These profiles use the earlier
 AOT image and do not include the serial-count change.
 
 The serial-count production AOT build is now running in
@@ -832,7 +832,7 @@ Within mixed traffic, medium-bbox median paired p95 H/G is **1.755** (range
 **1.634–1.908**). Equality is 1.532, numeric range 1.346 and the tested prefix
 0.915. Prefix is mixed across repetitions (0.830–1.037); the other three request
 types favor GeoServer on p95 in all pairs. This does not establish parity overall.
-The count-JIT-off/serial-read campaign remains incomplete.
+The separate count-JIT-off/serial-read campaign has now completed below.
 
 Evidence is retained in `results/serial-read-first-page-aot-20260929/`, including
 `smoke-sql-verification.json`, `mixed-serial-reads/report.json`,
@@ -874,3 +874,42 @@ source findings are retained in `validator-cost-review.json` under
 `results/serial-read-first-page-aot-20260929/`. No microbenchmark or causal
 attribution of generator CPU has been performed. Publication calibration remains
 outstanding.
+
+## Completed serial-read and count-JIT-off mixed comparison
+
+This profile enables serial planning for eligible feature pages and PostgreSQL
+JIT suppression for eligible spatial counts. It does not enable the new serial
+count policy. All three pairs completed at ten VUs with 30-second warmup and
+measurement phases. Independent raw verification passed, with zero invalid
+responses and cancellations and 10–11 measured-phase drain completions per
+attempt retained separately. All owned resources were cleaned.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 159.00 | 168.07 | 99.39 | 92.65 |
+| 2 | 153.13 | 137.90 | 103.67 | 120.85 |
+| 3 | 149.37 | 176.63 | 104.16 | 89.22 |
+
+Median paired throughput H/G is **0.946**, range **0.846–1.110**; p95 H/G is
+**1.073**, range **0.858–1.168**. Honua leads both metrics in pair 2 and trails
+in pairs 1 and 3. This supports a near-parity observation for this tuned mixed
+workload on this host; it does not establish a shipping-default result, consistent
+wins, a causal gain over earlier campaigns, or parity across all feature cases.
+
+Within mixed traffic, median paired p95 ratios are 1.181 for equality, 1.190 for
+range, 0.904 for the tested prefix and 1.051 for medium bbox. All four vary across
+parity between repetitions. Full individual-request throughput comparisons on the
+next image remain necessary.
+
+During measurement-and-drain, Honua's database still approaches the four-core
+budget and has three to four sampled parallel workers. Its generator's sample
+median is about 2.65–2.74 cores across repetitions; GeoServer's is about 3.23–3.84.
+The generator-headroom limitation therefore still applies. The new serial-count
+candidate remains the next server optimization to measure, not an established
+speedup.
+
+Artifacts under `results/serial-read-first-page-aot-20260929/` include
+`mixed-count-jit-off-serial-reads/report.json`, the corresponding
+`-raw-verification.json`, `-request-breakdown.json` and `-phase-pressure.json`.
+The completed report SHA-256 is
+`c2850fe38895a4e4e24fdca254a37e5a2ea5d13b5532b575dea15fadffd6b7ac`.
