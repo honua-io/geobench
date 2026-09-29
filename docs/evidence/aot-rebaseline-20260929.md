@@ -1467,8 +1467,9 @@ diff against trunk remains the intended six decoder/test files. Its
 [full integrated CI run](https://github.com/honua-io/honua-server/actions/runs/36594858604)
 has passed all 5,220 PostgreSQL tests again, provider-foundation tests, and Docker
 integration. Required PR Gate and Review Gate passed at this head; PR 5325 is
-ready and awaiting the normal automatic lander. Integrated native compilation
-and the broader CI matrix are still running. Earlier passing checks establish
+ready and awaiting the normal automatic lander. The integrated full CI matrix
+and Native AOT compilation have now passed (AOT job 109503910896, 269MB
+native binary). Production container/runtime verification remains pending. Earlier passing checks establish
 evidence only for their recorded heads.
 
 No production image contains this candidate yet and no decoder HTTP gain is
