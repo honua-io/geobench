@@ -15,6 +15,11 @@ BUDGET = {"cpus": 4, "memory_bytes": 4 * 1024**3, "source_connections": 6}
 HONUA_PROFILES = {
     "baseline": {},
     "count-jit-off": {"Database__DisableJitForSourceSpatialCounts": "true"},
+    "serial-reads": {"Database__PreferSerialBoundedSpatialReads": "true"},
+    "count-jit-off-serial-reads": {
+        "Database__DisableJitForSourceSpatialCounts": "true",
+        "Database__PreferSerialBoundedSpatialReads": "true",
+    },
 }
 
 

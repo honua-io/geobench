@@ -289,7 +289,8 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         (path / "source-query.log").write_text(trace)
         for statement in ("ALTER SYSTEM SET log_min_duration_statement=-1", "SELECT pg_reload_conf()"):
             command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
-        write(path / "source-query.json", validate_source_trace(trace))
+        profile = manifest.get("honua_profile", "baseline") if server == "honua" else None
+        write(path / "source-query.json", validate_source_trace(trace, profile))
         attempt["response_contract"] = [{k: v for k, v in row.items() if k != "failure"} for row in checks]
         # Pressure probe is diagnostic traffic before any timed comparison.
         config.update({"duration": 6, "vus": 10, "phase": "warmup"})

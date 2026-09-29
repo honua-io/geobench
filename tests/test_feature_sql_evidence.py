@@ -62,7 +62,7 @@ class SourceEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / attempt['id']
             path.mkdir()
-            (path / 'source-query.json').write_text(json.dumps(validate_source_trace(COUNT + FEATURES)))
+            (path / 'source-query.json').write_text(json.dumps(validate_source_trace(COUNT + FEATURES, 'baseline')))
             (path / 'source-query.log').write_text(COUNT + execution('SELECT ST_AsBinary(geometry) FROM honua.features'))
             result = report(temp, manifest, [attempt])
             self.assertTrue(any('invalid executed source-query evidence' in value for value in result['failures']))

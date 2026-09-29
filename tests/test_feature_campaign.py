@@ -153,22 +153,27 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
             with self.assertRaises(ValueError):
                 runner.verify_snapshot(root, manifest)
 
-    def test_count_tuning_is_scoped_to_honua_and_changes_configuration_fingerprint(self):
+    def test_planner_profiles_are_isolated_and_have_distinct_configuration_fingerprints(self):
         runner = load('run-feature-campaign')
         original = {'services': {name: {'environment': {'keep': 'value'}} for name in
                     ('honua', 'geoserver', 'postgis-honua', 'postgis-geoserver', 'k6')}}
         with patch.object(runner, 'command', return_value=json.dumps(original)):
             baseline = runner.make_compose('owned', 'honua', {})
-            tuned = runner.make_compose('owned', 'honua', {}, 'count-jit-off')
             geo = runner.make_compose('owned', 'geoserver', {})
-            geo_tuned = runner.make_compose('owned', 'geoserver', {}, 'count-jit-off')
-        key = 'Database__DisableJitForSourceSpatialCounts'
-        self.assertNotIn(key, baseline['services']['honua']['environment'])
-        self.assertEqual('true', tuned['services']['honua']['environment'][key])
-        self.assertNotEqual(fingerprint(baseline), fingerprint(tuned))
-        del tuned['services']['honua']['environment'][key]
-        self.assertEqual(baseline, tuned)
-        self.assertEqual(geo, geo_tuned)
+            count = 'Database__DisableJitForSourceSpatialCounts'
+            serial = 'Database__PreferSerialBoundedSpatialReads'
+            fingerprints = {fingerprint(baseline)}
+            for profile, keys in [('count-jit-off', [count]), ('serial-reads', [serial]),
+                                  ('count-jit-off-serial-reads', [count, serial])]:
+                with self.subTest(profile=profile):
+                    tuned = runner.make_compose('owned', 'honua', {}, profile)
+                    fingerprints.add(fingerprint(tuned))
+                    for key in keys:
+                        self.assertNotIn(key, baseline['services']['honua']['environment'])
+                        self.assertEqual('true', tuned['services']['honua']['environment'].pop(key))
+                    self.assertEqual(baseline, tuned)
+                    self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, profile))
+            self.assertEqual(4, len(fingerprints))
         with patch.object(runner, 'command') as command:
             with self.assertRaises(ValueError):
                 runner.make_compose('owned', 'honua', {}, 'unknown')

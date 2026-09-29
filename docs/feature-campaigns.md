@@ -87,10 +87,26 @@ planning. Use `--honua-profile count-jit-off` in a separate campaign to enable
 it is independent of Honua Native AOT and does not change database-wide JIT or
 parallel-worker settings. The profile name and effective environment are included
 in the campaign fingerprint, preventing resume across different tuning settings.
-GeoServer's configuration is identical in both campaigns. Keep the baseline and
+GeoServer's configuration is identical across these campaigns. Keep the baseline and
 tuned rows separate; if database JIT is already off, this option adds no JIT-removal
 benefit. A supporting image and executed SQL evidence are needed to establish
 that the option was actually applied.
+
+Use `--honua-profile serial-reads` to test the existing
+`Database__PreferSerialBoundedSpatialReads=true` option separately. It requests
+zero parallel workers only for eligible source-backed point bbox feature reads:
+first pages of 1–100 features with default ID ordering and no ambient transaction.
+It does not tune counts, later pages, or custom sorting. The
+`--honua-profile count-jit-off-serial-reads` profile enables both options, using
+separate transaction-local settings for count and feature queries. Neither option
+changes database-wide settings or Honua's Native AOT compilation mode.
+
+All four profiles have distinct configuration fingerprints. Before timed traffic,
+the SQL diagnostic must show the profile's settings actually executing on the
+same database backend immediately before their eligible source queries. Report
+generation independently checks this raw trace. An ignored or unsupported option,
+unexpected tuning in the baseline, or missing half of the combined profile fails
+validation. These profiles test planner choices; their names imply no speed benefit.
 
 Each scenario runs warmup and measurement in separate k6 processes, with a
 35-second graceful drain after each. The HTTP timeout is 30 seconds. No process

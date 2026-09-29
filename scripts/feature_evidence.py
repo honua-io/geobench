@@ -156,7 +156,8 @@ def report(directory, manifest, attempts):
                 failures.append(f"attempt {attempt['id']}: missing required runtime/semantic/measurement artifacts")
             try:
                 source_receipt = json.loads((Path(directory) / attempt["id"] / "source-query.json").read_text())
-                if validate_source_trace((Path(directory) / attempt["id"] / "source-query.log").read_text()) != source_receipt:
+                profile = manifest.get("honua_profile", "baseline") if attempt["server"] == "honua" else None
+                if validate_source_trace((Path(directory) / attempt["id"] / "source-query.log").read_text(), profile) != source_receipt:
                     failures.append(f"attempt {attempt['id']}: source-query evidence mismatch")
             except (OSError, ValueError, KeyError, TypeError):
                 failures.append(f"attempt {attempt['id']}: missing or invalid executed source-query evidence")
