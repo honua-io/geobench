@@ -599,7 +599,7 @@ does not establish a Honua-versus-GeoServer speedup.
 Summary SHA-256: `11f0b4e12ff4ce6d9c5dd3434911645ba01c43cea272726dc64f9c4cec0c75cd`.
 `verification.json` retains the independent sample-accounting checks.
 
-## Implementation follow-up at 10:56 UTC
+## Implementation follow-up at 11:02 UTC
 
 [PR 5315](https://github.com/honua-io/honua-server/pull/5315) merged into trunk
 at `f34496e1893e17f974b4e5e330043078f8355b42`. It reuses exact totals from short
@@ -627,9 +627,12 @@ interaction. All 72 targeted regression cases now pass, including pooling
 restoration after errors/cancellation, actual generic parallel/serial plans,
 boundary and empty counts, and existing first-page/JIT coverage. Formatting
 verification passed. The complete unchanged provider suite passed all 1,724
-cases on PostgreSQL 16; PostgreSQL 17/18 verification is still running. Earlier
+cases on each of PostgreSQL 16, 17 and 18: 5,172 successful executions, with
+all 72 targeted regression cases present in every leg. Independent checks
+verified all six retained log/TRX hashes and individual test outcomes. Earlier
 candidate failures remain in `results/source-serial-count-5322/`, alongside
-the red/green TRX files, matrix receipts and logs. The server PR remains draft.
+the red/green TRX files, matrix receipts and logs. All three owned fixtures were
+cleaned. The server PR is ready for review; hosted PR/review gates remain pending.
 
 [GeoBench PR 26](https://github.com/honua-io/geobench/pull/26) adds separate
 serial-count and combined count profiles. All 58 harness tests and CI lint/syntax
@@ -644,3 +647,13 @@ the count-JIT-off profile relative to GeoServer. A fresh first-page rebaseline,
 followed by a separately identified serial-count comparison after its merge
 and production AOT build, is still required. No parity or broader protocol
 performance claim follows from the SQL-only diagnostic.
+
+The first-page campaign queue is observing the exact existing AOT job. Once
+that job's build, boundary check, GeoParquet smoke and publication all pass, it
+will pull the verified candidate digest, check its source/runtime identity,
+and acquire a shared build slot. It schedules paired full-corpus smoke checks
+and three-pair mixed diagnostics for baseline and count-JIT-off profiles.
+Completed attempts, including failed attempts, are copied outside the worktree
+to `results/first-page-aot-rebaseline-20260929/`. No measured result exists for
+this queued campaign yet. The serial-count candidate still requires its own
+merged production AOT image and full feature/mixed comparison.
