@@ -221,6 +221,7 @@ build_k6_env_flags() {
     GEOSERVICES_DIAG_DURATION
     GEOSERVICES_DIAG_WARMUP
     GEOSERVICES_DIAG_VARIANTS
+    GEOSERVICES_DIAG_ID_FIELD
     GEOSERVICES_QUERY_DURATION
     GEOSERVICES_QUERY_WARMUP
     GEOSERVICES_EXPORT_DURATION
@@ -562,6 +563,11 @@ for test in tests:
             entry["vus"] = int(os.environ.get(vus_env, vus_default))
         if scenarios_env:
             entry["selected_scenarios"] = csv_values(scenarios_env, scenarios_default)
+    if test == "geoservices-query-diagnostics":
+        entry["id_field_by_server"] = {
+            server: os.environ.get("GEOSERVICES_DIAG_ID_FIELD") or ("id" if server == "honua" else "objectid")
+            for server in os.environ.get("GEOBENCH_SERVERS", "").split()
+        }
     if test == "wmts":
         entry["wmts_cache_policy"] = wmts_cache_policy
     if test == "concurrent":
