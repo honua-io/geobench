@@ -27,6 +27,10 @@ Its amd64 job passed the serving-image boundary check, GeoParquet smoke, and
 verified image publication. The immutable image reference is
 `ghcr.io/honua-io/honua-server@sha256:7345b8a0d0467b38393415c2ed8c7db86d5f5a99fdca9c255606050cb4dcf313`.
 Local inspection confirms amd64, Native AOT, and the expected source revision.
+The workflow has since completed: the server AOT jobs for both architectures and
+the AOT manifest publication passed. The separate Lambda arm64 image build failed,
+so the overall workflow result is failure. The selected server image's successful
+job and verification steps are the evidence for this campaign.
 
 The earlier local image candidate was `619e6f123328994342b44a36c530641285e261e5` on
 `test/geobench-aot-rebaseline-20260929`. It uses the unchanged production
@@ -131,3 +135,11 @@ commit `865cd6a36cebf6740cfc771b63cab69c4810967e`, and the full build and format
 check passed. [PR 5315](https://github.com/honua-io/honua-server/pull/5315) is open
 for normal review and merge. It is not part of the selected CI image and will
 need its own AOT measurements.
+
+Review subsequently identified a concurrent-write edge case: after a full first
+page is fetched, deletes can make the later count smaller than that page, and a
+zero count currently discards it. Six deterministic regression cases were added
+at `adddea4f8d25f575086cafbf5085f09239d67428` in
+[run 36523173989](https://github.com/honua-io/honua-server/actions/runs/36523173989).
+Their results and the correction remain pending; the prior head's passing tests
+do not establish that this finding is resolved.
