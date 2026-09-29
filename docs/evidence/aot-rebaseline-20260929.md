@@ -1401,9 +1401,26 @@ The run's Docker job failed its filesystem security scan on the unchanged OGC
 conformance tooling's fast-uri 3.1.6 dependency (CVE-2026-84292 and
 CVE-2026-84394). [Separate PR 5327](https://github.com/honua-io/honua-server/pull/5327)
 updates the existing override and lockfile to registry-verified 3.1.7, without
-adding ignores or changing the gate. Its [security validation](https://github.com/honua-io/honua-server/actions/runs/36588528189)
-and conformance verification are running. The failed Docker attempt and provider
-logs remain retained; integrated validation will follow the dependency repair.
+adding ignores or changing the gate. Its filesystem security scan, NuGet scan,
+clean npm installation, OGC conformance run and PR build/tests passed. Review
+Gate is green; the final PR Gate summary is queued on a hosted runner. The
+[wider security workflow](https://github.com/honua-io/honua-server/actions/runs/36588528189)
+is not fully green: its JIT runtime probe rejects the unchanged fixture's
+placeholder database password, tracked in [issue 5328](https://github.com/honua-io/honua-server/issues/5328).
+The production validation policy remains enabled. Its AOT container lane is
+still running. Failed attempts and logs remain retained.
+
+The decoder's provider foundation aggregate also failed the previously reported
+plugin-metrics listener assertion from issue 3734. Two ordinary listener tests
+still wrote concurrent callbacks into non-thread-safe Lists. [PR 5329](https://github.com/honua-io/honua-server/pull/5329)
+uses ConcurrentBag for those collectors, preserving exact tag/cardinality
+assertions and the existing 32-listener stress case. Its [provider foundation job](https://github.com/honua-io/honua-server/actions/runs/36590622311/job/109482681905)
+passed all 76 plugin tests and 1,003 tests overall, with five existing Oracle
+skips; formatting also passed. It is ready for normal review/gates. One passing
+run does not prove the cause of the earlier missing event or eliminate every
+possible metrics race; repeated integrated verification remains under issue
+3734. The decoder will be validated with the merged fixes before its next
+production image/rebaseline.
 
 No production image contains this candidate yet, no HTTP gain is claimed, and
 none of the running campaigns have changed.
