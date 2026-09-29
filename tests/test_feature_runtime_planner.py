@@ -48,10 +48,12 @@ class RuntimePlannerEvidenceTests(unittest.TestCase):
                 result = self.receipt(runner, actual, profile)
                 self.assertEqual(actual, result['honua']['environment'])
             for key in options:
-                for variant in ('missing', 'wrong'):
+                for variant in ('missing', 'wrong', 'duplicate'):
                     changed = [entry for entry in actual if not entry.startswith(key + '=')]
                     if variant == 'wrong':
                         changed.append(key + '=false')
+                    if variant == 'duplicate':
+                        changed.extend([key + '=true', key + '=false'])
                     with self.subTest(profile=profile, key=key, variant=variant), self.assertRaisesRegex(ValueError, 'planner.*drift'):
                         self.receipt(runner, changed, profile)
             extras = set().union(*(set(value) for value in runner.HONUA_PROFILES.values())) - options.keys()

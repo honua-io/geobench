@@ -41,6 +41,12 @@ receipt. Downloading plugins during a campaign is disabled. Rebuilding from a
 mutable plugin URL may produce a different image; it is a new profile identity,
 not a valid resume of the old campaign.
 
+Runtime receipts also retain the exact Honua planner keys defined by the shared
+profile configuration, without exposing unrelated database environment values.
+The runner checks the inspected keys against the selected profile before traffic
+and at the final drift check. Missing, changed, duplicated or unrequested planner
+options fail the attempt. Executed-SQL proof remains a separate requirement.
+
 For **separate community GSR evidence**, build with a compatible community
 GeoServer base digest and `--build-arg COMMUNITY=gsr`, then run with
 `--protocol gsr`. Both extension versions must match the core and pass the
