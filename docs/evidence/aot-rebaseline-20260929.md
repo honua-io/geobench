@@ -288,9 +288,10 @@ the tuning dependency alongside the tested fixture correction. All ten
 optimization paths remain byte-identical to the previously verified `4a2a805`
 candidate. Fresh [CI run 36529383205](https://github.com/honua-io/honua-server/actions/runs/36529383205)
 passed all 1,688 tests on PostgreSQL 16, 17 and 18 at this reconciled revision,
-plus the full solution build and formatting verification. Required PR gates and
-the separate [hosting rollback PR 5317](https://github.com/honua-io/honua-server/pull/5317)
-remain pending. That repair now has ten new regression cases and a candidate
+plus the full solution build and formatting verification. Both required gates
+are green at `f4265d5`: [PR Gate run 36529753831](https://github.com/honua-io/honua-server/actions/runs/36529753831)
+and Review Gate. The separate [hosting rollback PR 5317](https://github.com/honua-io/honua-server/pull/5317)
+remains pending. That repair now has ten new regression cases and a candidate
 retaining externally supplied mount paths; its baseline and candidate validation
 are still in progress. No whole-workflow pass is claimed. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
