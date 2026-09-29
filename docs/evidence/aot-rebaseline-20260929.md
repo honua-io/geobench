@@ -9,7 +9,8 @@ mixed-workload diagnostic, not evidence of parity across all individual requests
 All semantic checks passed. Generator headroom and shared-host variability limit
 interpretation. The newer serial-count AOT image has passed its production build
 and image checks. All six scheduled smoke profiles passed on both products;
-sustained new-image comparisons are running, with no completed campaign yet.
+its untuned mixed baseline completed at throughput H/G **0.532** and p95 H/G
+**2.471**. Tuned new-image comparisons are running.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -1015,3 +1016,53 @@ passed all 62 tests, Ruff, Python compilation, JavaScript syntax and ShellCheck
 on `944b88996effc601ec08324a92b94b31072ecf19`, covering the combined profile support
 and runtime-setting capture. This does not change the running campaign's older
 harness identity or its disclosed evidence gap.
+
+
+## New serial-count image: completed untuned mixed baseline
+
+All three paired baseline repetitions completed on the production `50aacf73`
+Native AOT image. The planner options are disabled in this profile. The campaign
+retains ten VUs, 30-second warmup and 30-second measurement windows, with separate
+drain accounting. Independent raw verification passed for every warmup and
+measurement phase; there were zero invalid responses or cancellations and exactly
+ten late completions per measurement attempt, excluded from measured throughput
+and latency. Runtime/source SQL verification retains the disclosed environment
+capture gap above.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 84.63 | 195.47 | 229.91 | 79.11 |
+| 2 | 101.67 | 190.97 | 201.49 | 81.55 |
+| 3 | 102.97 | 178.03 | 200.92 | 89.06 |
+
+Median paired throughput H/G is **0.532**, range **0.433–0.578**; p95 H/G is
+**2.471**, range **2.256–2.906**. GeoServer leads both metrics in all three pairs.
+The earlier near-parity result used the previous image with serial feature reads
+and count-JIT suppression. New-image tuned results remain pending. The separate
+campaign times on a shared host do not establish a causal cross-build change.
+
+Within this baseline mixed workload, medium-bbox median paired p95 H/G is 2.683
+and its median share of Honua's summed response latency is about 61%, despite
+making up 40% of scheduled mixed requests. Equality is 1.811, range 1.579 and the
+tested prefix 1.095 on paired p95. These are request latencies within mixed
+traffic, not standalone throughput or CPU attribution.
+
+Measurement-and-drain telemetry shows Honua database sample medians of
+397.90–399.59% CPU and four to six sampled parallel workers, with server medians
+114.19–128.03%. GeoServer's generator medians are 379.47–389.94%, close to its
+four-core limit. These phase samples include drain and do not prove exact-window
+utilization or true concurrency peaks. The queued serial-count/read policies
+remain the next performance experiment; generator headroom still limits the
+interpretation of any apparent tie or win.
+
+Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
+`mixed-baseline/report.json`, `mixed-baseline-raw-verification.json`,
+`mixed-baseline-profile-verification.json`, `mixed-baseline-request-breakdown.json`
+and `mixed-baseline-phase-pressure.json`. Completed report SHA-256:
+`6bbfa5e818c122ca8d8ef8b3034d16a9157d0bb71fa3d18e1cc945032dba46c6`.
+
+Completed-campaign analysis uses low process priority, idle IO priority and
+cooperative yields between raw-sample chunks. The analysis queue retains start
+and finish times and child CPU usage; the first recount used 3.90 CPU seconds
+across 46.72 wall seconds. It sends no HTTP or oracle queries. These controls do
+not replace observer/load-generator calibration, and publication remains disabled.
