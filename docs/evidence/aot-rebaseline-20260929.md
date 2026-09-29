@@ -4,8 +4,10 @@ The latest production Native AOT image includes the merged first-page count
 optimization. Its three paired baseline mixed-workload repetitions are complete:
 median paired Honua/GeoServer throughput is **0.531** (range **0.407–0.555**) and
 p95 latency is **2.445** (range **2.239–3.389**). GeoServer leads both metrics in
-every pair. All semantic checks passed. The separate count-JIT-off campaign is
-still running; its completed smoke is correctness evidence only.
+every pair. The separate count-JIT-off campaign has also completed all three
+pairs: throughput **0.621** (range **0.603–0.649**), p95 **1.953** (range
+**1.902–1.962**). GeoServer leads both metrics in every tuned pair as well. All
+semantic checks passed in both profiles.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -693,6 +695,34 @@ Artifacts are retained outside the harness worktree under
 `mixed-baseline/report.json`, `mixed-baseline-raw-verification.json` and
 `mixed-baseline-request-breakdown.json`. The baseline report SHA-256 is
 `12950ef80ef8fb334ddffea568ecfca777d78734d02a5fba7a939480bc1f6785`.
-The first-page count-JIT-off mixed campaign remains incomplete and has no
-three-pair summary yet. The earlier 0.809 throughput ratio belongs to the old
-image; it must not be presented as a result from this image.
+The count-JIT-off mixed campaign also completed all three pairs with the same
+production image. Independent raw-sample verification passed, with zero invalid
+responses or cancellations and 10–11 measurement drain completions per attempt.
+
+| Repetition, count JIT off | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+
+| 1 | 111.63 | 179.90 | 170.68 | 86.99 |
+| 2 | 103.27 | 171.33 | 180.75 | 92.54 |
+| 3 | 113.93 | 175.57 | 171.27 | 90.06 |
+
+The tuned median paired throughput ratio is **0.621**, range **0.603–0.649**;
+paired p95 is **1.953**, range **1.902–1.962**. GeoServer leads both metrics in
+every pair. Medium-bbox p95 within mixed traffic is **1.888** times GeoServer's
+(median paired ratio), accounting for a median **62.2%** of Honua's summed
+response latency. Equality, range and the tested prefix have median paired p95
+ratios of 1.441, 1.303 and 1.065 respectively. None establishes parity across
+all measured requests. These request-type ratios describe latency within mixed
+traffic, not independent throughput comparisons.
+
+The smaller gap than the separate baseline run does not isolate the setting's
+causal benefit. The earlier 0.809 throughput ratio belongs to the old image and
+must not be presented as a result from this image. Both completed profiles remain
+shared-host diagnostics, with auxiliary clock anomalies and no isolated-generator
+calibration. Original and failed attempts remain retained.
+
+The new tuned report and raw verification are
+`mixed-count-jit-off/report.json` and `mixed-count-jit-off-raw-verification.json`;
+request-level samples are summarized in
+`mixed-count-jit-off-request-breakdown.json`. Report SHA-256:
+`0cb9a97c0da7cdeb3f2ba4b70911c913961f39295ba9fe71c036cedbaaa11403`.
