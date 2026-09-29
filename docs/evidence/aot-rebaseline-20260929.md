@@ -14,9 +14,21 @@ warnings. The corrected baseline mixed campaign has now completed all three
 pairs and passed independent raw verification. Its median paired throughput H/G
 is **0.547** (range **0.260–0.730**) and p95 H/G is **2.290** (range
 **1.345–5.503**): GeoServer leads in every baseline pair. The corrected tuned
-campaign is still running. These results use the existing production image,
-without the pending decoder change; shared-host variability and negative
-wall-clock timing observations still prohibit publication.
+campaign is also complete and raw-verified. Honua wins two pairs but loses one
+badly: median throughput H/G **1.368** (range **0.383–1.609**), p95 H/G **0.661**
+(range **0.573–2.679**). This is not a consistent win or established parity.
+These results use the existing production image, without the pending decoder
+change; shared-host variability and negative wall-clock timing observations
+still prohibit publication. Honua's tuned generator reaches its four-core
+budget in sampled telemetry; generator-headroom checks remain required.
+
+| Corrected tuned pair | Throughput H/G | p50 H/G | p95 H/G | p99 H/G |
+|---|---:|---:|---:|---:|
+| 1 | 0.383 | 2.610 | 2.679 | 2.770 |
+| 2 | 1.609 | 0.625 | 0.573 | 0.601 |
+| 3 | 1.368 | 0.745 | 0.661 | 0.644 |
+
+## Historical observations before sorting correction
 
 The production serial-count Native AOT image's completed **serial-reads-counts**
 mixed campaign favors Honua in all three pairs: median paired Honua/GeoServer
@@ -1531,5 +1543,14 @@ Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
 Independent raw verification SHA-256:
 `280074b970d8dabca6899d08ae675a599f48ffe0b260d67028957efa75a5152d`.
-All six attempts passed and cleaned their owned resources. The tuned campaign
-continues under the predeclared schedule; no baseline repetition was removed.
+All six baseline attempts passed and cleaned their owned resources. The tuned
+campaign subsequently completed all six attempts, also with semantic, sorting,
+configuration, raw-verification and cleanup checks passing. Its report SHA-256 is
+`3adcfe39c082598acfa46eebb7cbe839a36426c89b2a90aeae8b02f2efbcf812` and independent
+raw verification SHA-256 is
+`fcd7c7de99d112f555cf19720a71988454e4bf5c3e1bf1d50a9f970f7eb27b5a`.
+The queue finished at 17:05:07 UTC. All repetitions remain, including Honua's
+large tuned first-pair loss. The cause of that loss is not established; neither
+its removal nor attributing it to host contention is justified by these samples.
+The complete review is retained in
+`results/sorting-corrected-mixed-20260929/performance-review.json`.
