@@ -3,9 +3,8 @@
 **Decoder build update:** PR 5325 merged normally at 19:03:33 UTC as
 `e2bf1bf5e236566a056d1d078fa98f784e5df36b`. Its production web amd64 Native AOT
 image has passed build, boundary verification, GeoParquet smoke and publication,
-and has been acquired locally by digest. The new-image correctness and
-performance campaigns have started; no decoder HTTP improvement is established
-yet. The completed ratios below describe the preceding image.
+and has been acquired locally by digest. Both new-image full-corpus smoke profiles passed, and sustained performance
+campaigns have started; no decoder HTTP improvement is established yet. The completed ratios below describe the preceding image.
 
 **Comparison confound found September 29:** GeoServer sorting conformance was
 not enabled. Its retained log contains 228,000 ignored-`sortby` warnings in the
@@ -1557,8 +1556,20 @@ lock, recreates isolated stacks, verifies descending ordering and full response
 semantics, checks the live Honua process for CoreCLR/JIT mappings, and retains
 failed attempts. Independent raw recount runs between campaigns. Driver SHA-256:
 `61743a6b3b078b40b52497e932db68bc7306f01fd05cb5b2a750149c735414a7`.
-The queue is running, not complete evidence. Shared-WSL results remain diagnostic;
-there is no isolated-generator calibration or publication claim.
+Both smoke profiles completed: 12 scenarios per product per profile, for 48
+scenario results. Full response semantics, descending ordering, effective planner
+settings, runtime identity, independent raw recount and exact owned cleanup
+passed. Honua's live command is `/app/Honua.Server`, with no CoreCLR or JIT library
+mapped. SQL evidence separately confirms eligible feature and count serial
+settings execute in the tuned profile. Baseline raw-verification SHA-256:
+`aed3271a9a3447badbfa6572da0a10ea03d4fe4f891648e626f936309794ac19`;
+tuned raw-verification SHA-256:
+`af6775140fde6c65653c4231077f9bc99abf3b7dd0da785730d98079b8e4a60c`.
+
+The sustained baseline mixed campaign has started; the remaining predeclared
+schedule follows only after passing validation. These smoke results establish
+correctness, not speed. Shared-WSL results remain diagnostic; there is no
+isolated-generator calibration or publication claim.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
