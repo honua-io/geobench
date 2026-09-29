@@ -141,5 +141,10 @@ page is fetched, deletes can make the later count smaller than that page, and a
 zero count currently discards it. Six deterministic regression cases were added
 at `adddea4f8d25f575086cafbf5085f09239d67428` in
 [run 36523173989](https://github.com/honua-io/honua-server/actions/runs/36523173989).
-Their results and the correction remain pending; the prior head's passing tests
-do not establish that this finding is resolved.
+PostgreSQL 17 and 18 each reproduced exactly two failures (later counts of zero
+and one after fetching two rows), with 1,686 other tests passing. The equal and
+increasing-count controls passed. Commit
+`4a2a80544081875659b980977e0dda0983701a02` preserves the fetched page and floors
+the later total at its size. Verification is pending in
+[run 36523993300](https://github.com/honua-io/honua-server/actions/runs/36523993300);
+the review finding remains open until that evidence is available.
