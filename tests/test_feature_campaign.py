@@ -163,6 +163,9 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
             count = 'Database__DisableJitForSourceSpatialCounts'
             serial = 'Database__PreferSerialBoundedSpatialReads'
             serial_count = 'Database__PreferSerialSourceSpatialCounts'
+            baseline_env = baseline['services']['honua']['environment']
+            self.assertEqual('false', baseline_env[serial])
+            self.assertEqual('false', baseline_env[serial_count])
             fingerprints = {fingerprint(baseline)}
             for profile, keys in [('count-jit-off', [count]), ('serial-reads', [serial]),
                                   ('count-jit-off-serial-reads', [count, serial]),
@@ -174,11 +177,20 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
                     tuned = runner.make_compose('owned', 'honua', {}, profile)
                     fingerprints.add(fingerprint(tuned))
                     for key in keys:
-                        self.assertNotIn(key, baseline['services']['honua']['environment'])
                         self.assertEqual('true', tuned['services']['honua']['environment'].pop(key))
+                        if key in baseline_env:
+                            tuned['services']['honua']['environment'][key] = baseline_env[key]
                     self.assertEqual(baseline, tuned)
                     self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, profile))
-            self.assertEqual(8, len(fingerprints))
+            automatic = runner.make_compose('owned', 'honua', {}, 'automatic-bounded')
+            fingerprints.add(fingerprint(automatic))
+            for key in (count, serial, serial_count):
+                self.assertNotIn(key, automatic['services']['honua']['environment'])
+            for key in (serial, serial_count):
+                automatic['services']['honua']['environment'][key] = 'false'
+            self.assertEqual(baseline, automatic)
+            self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, 'automatic-bounded'))
+            self.assertEqual(9, len(fingerprints))
         with patch.object(runner, 'command') as command:
             with self.assertRaises(ValueError):
                 runner.make_compose('owned', 'honua', {}, 'unknown')
