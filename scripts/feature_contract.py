@@ -25,6 +25,15 @@ HONUA_PROFILES = {
         "Database__DisableJitForSourceSpatialCounts": "true",
         "Database__PreferSerialBoundedSpatialReads": "true",
     },
+    "serial-reads-counts": {
+        "Database__PreferSerialBoundedSpatialReads": "true",
+        "Database__PreferSerialSourceSpatialCounts": "true",
+    },
+    "count-jit-off-serial-reads-counts": {
+        "Database__DisableJitForSourceSpatialCounts": "true",
+        "Database__PreferSerialBoundedSpatialReads": "true",
+        "Database__PreferSerialSourceSpatialCounts": "true",
+    },
 }
 
 

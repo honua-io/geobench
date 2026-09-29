@@ -36,6 +36,8 @@ class PlannerProfileTests(unittest.TestCase):
             ('count-jit-off-serial-reads', COUNT_BATCH + READ_BATCH, (1, 1)),
             ('serial-counts', SERIAL_COUNT_BATCH + execution(READ), (1, 0)),
             ('count-jit-off-serial-counts', COMBINED_COUNT_BATCH + execution(READ), (1, 0)),
+            ('serial-reads-counts', SERIAL_COUNT_BATCH + READ_BATCH, (1, 1)),
+            ('count-jit-off-serial-reads-counts', COMBINED_COUNT_BATCH + READ_BATCH, (1, 1)),
         ]:
             with self.subTest(profile=profile):
                 result = validate_source_trace(trace, profile)['planner_profile']
@@ -47,6 +49,13 @@ class PlannerProfileTests(unittest.TestCase):
             ('serial-reads', execution(COUNT) + execution(READ)),
             ('count-jit-off-serial-reads', COUNT_BATCH + execution(READ)),
             ('count-jit-off-serial-reads', execution(COUNT) + READ_BATCH),
+            ('serial-reads-counts', SERIAL_COUNT_BATCH + execution(READ)),
+            ('serial-reads-counts', execution(COUNT) + READ_BATCH),
+            ('count-jit-off-serial-reads-counts', COMBINED_COUNT_BATCH + execution(READ)),
+            ('count-jit-off-serial-reads-counts', SERIAL_COUNT_BATCH + READ_BATCH),
+            ('count-jit-off-serial-reads-counts', COUNT_BATCH + READ_BATCH),
+            ('count-jit-off-serial-reads-counts', COUNT_BATCH + SERIAL_COUNT_BATCH + READ_BATCH),
+            ('serial-reads-counts', COMBINED_COUNT_BATCH + READ_BATCH),
             ('baseline', COUNT_BATCH + READ_BATCH),
             ('unknown', COUNT_BATCH),
         ]:
@@ -86,6 +95,17 @@ class PlannerProfileTests(unittest.TestCase):
                      execution('SELECT $$' + COUNT_SETTING + '$$')]:
             with self.subTest(fake=fake), self.assertRaises(ValueError):
                 validate_honua_planner_profile(fake + execution(COUNT), 'count-jit-off')
+
+    def test_combined_read_count_settings_stay_on_their_own_backends(self):
+        trace = execution(COMBINED_SETTING, 42) + execution(READ_SETTING, 99)
+        trace += execution(READ, 99) + execution(COMBINED_COUNT, 42)
+        result = validate_honua_planner_profile(trace, 'count-jit-off-serial-reads-counts')
+        self.assertEqual(1, result['scoped_count_queries'])
+        self.assertEqual(1, result['scoped_feature_queries'])
+        swapped = execution(COMBINED_SETTING, 42) + execution(READ_SETTING, 99)
+        swapped += execution(COMBINED_COUNT, 99) + execution(READ, 42)
+        with self.assertRaises(ValueError):
+            validate_honua_planner_profile(swapped, 'count-jit-off-serial-reads-counts')
 
     def test_serial_count_setting_cannot_be_substituted_for_feature_setting(self):
         for profile, trace in [
