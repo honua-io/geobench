@@ -20,6 +20,11 @@ COUNT = 'SELECT ALL COUNT(*)' + WHERE
 READ = 'SELECT ALL ST_AsBinary(geom)' + WHERE + ' ORDER BY id LIMIT 100'
 COUNT_BATCH = execution(COUNT_SETTING) + execution(COUNT)
 READ_BATCH = execution(READ_SETTING) + execution(READ)
+SERIAL_COUNT = COUNT.replace('SELECT ALL', 'SELECT ALL /* honua:serial-source-count */')
+SERIAL_COUNT_BATCH = execution(READ_SETTING) + execution(SERIAL_COUNT)
+COMBINED_SETTING = COUNT_SETTING + ", pg_catalog.set_config('max_parallel_workers_per_gather', '0', true)"
+COMBINED_COUNT = COUNT.replace('SELECT ALL', 'SELECT ALL /* honua:serial-jit-off-source-count */')
+COMBINED_COUNT_BATCH = execution(COMBINED_SETTING) + execution(COMBINED_COUNT)
 
 
 class PlannerProfileTests(unittest.TestCase):
@@ -29,6 +34,10 @@ class PlannerProfileTests(unittest.TestCase):
             ('count-jit-off', COUNT_BATCH + execution(READ), (1, 0)),
             ('serial-reads', execution(COUNT) + READ_BATCH, (0, 1)),
             ('count-jit-off-serial-reads', COUNT_BATCH + READ_BATCH, (1, 1)),
+            ('serial-counts', SERIAL_COUNT_BATCH + execution(READ), (1, 0)),
+            ('count-jit-off-serial-counts', COMBINED_COUNT_BATCH + execution(READ), (1, 0)),
+            ('serial-reads-counts', SERIAL_COUNT_BATCH + READ_BATCH, (1, 1)),
+            ('count-jit-off-serial-reads-counts', COMBINED_COUNT_BATCH + READ_BATCH, (1, 1)),
         ]:
             with self.subTest(profile=profile):
                 result = validate_source_trace(trace, profile)['planner_profile']
@@ -40,6 +49,13 @@ class PlannerProfileTests(unittest.TestCase):
             ('serial-reads', execution(COUNT) + execution(READ)),
             ('count-jit-off-serial-reads', COUNT_BATCH + execution(READ)),
             ('count-jit-off-serial-reads', execution(COUNT) + READ_BATCH),
+            ('serial-reads-counts', SERIAL_COUNT_BATCH + execution(READ)),
+            ('serial-reads-counts', execution(COUNT) + READ_BATCH),
+            ('count-jit-off-serial-reads-counts', COMBINED_COUNT_BATCH + execution(READ)),
+            ('count-jit-off-serial-reads-counts', SERIAL_COUNT_BATCH + READ_BATCH),
+            ('count-jit-off-serial-reads-counts', COUNT_BATCH + READ_BATCH),
+            ('count-jit-off-serial-reads-counts', COUNT_BATCH + SERIAL_COUNT_BATCH + READ_BATCH),
+            ('serial-reads-counts', COMBINED_COUNT_BATCH + READ_BATCH),
             ('baseline', COUNT_BATCH + READ_BATCH),
             ('unknown', COUNT_BATCH),
         ]:
@@ -79,6 +95,49 @@ class PlannerProfileTests(unittest.TestCase):
                      execution('SELECT $$' + COUNT_SETTING + '$$')]:
             with self.subTest(fake=fake), self.assertRaises(ValueError):
                 validate_honua_planner_profile(fake + execution(COUNT), 'count-jit-off')
+
+    def test_combined_read_count_settings_stay_on_their_own_backends(self):
+        trace = execution(COMBINED_SETTING, 42) + execution(READ_SETTING, 99)
+        trace += execution(READ, 99) + execution(COMBINED_COUNT, 42)
+        result = validate_honua_planner_profile(trace, 'count-jit-off-serial-reads-counts')
+        self.assertEqual(1, result['scoped_count_queries'])
+        self.assertEqual(1, result['scoped_feature_queries'])
+        swapped = execution(COMBINED_SETTING, 42) + execution(READ_SETTING, 99)
+        swapped += execution(COMBINED_COUNT, 99) + execution(READ, 42)
+        with self.assertRaises(ValueError):
+            validate_honua_planner_profile(swapped, 'count-jit-off-serial-reads-counts')
+
+    def test_serial_count_setting_cannot_be_substituted_for_feature_setting(self):
+        for profile, trace in [
+            ('serial-counts', READ_BATCH),
+            ('serial-reads', SERIAL_COUNT_BATCH),
+            ('count-jit-off', SERIAL_COUNT_BATCH),
+            ('count-jit-off-serial-counts', SERIAL_COUNT_BATCH),
+            ('count-jit-off-serial-counts', COUNT_BATCH),
+            ('count-jit-off-serial-counts', COUNT_BATCH + SERIAL_COUNT_BATCH),
+            ('serial-counts', COMBINED_COUNT_BATCH),
+            ('serial-counts', execution(READ_SETTING) + execution(COUNT)),
+            ('count-jit-off-serial-counts', execution(COMBINED_SETTING) + execution(SERIAL_COUNT)),
+            ('serial-counts', execution(READ_SETTING) + execution(COMBINED_COUNT)),
+            ('baseline', SERIAL_COUNT_BATCH),
+        ]:
+            with self.subTest(profile=profile, trace=trace), self.assertRaises(ValueError):
+                validate_honua_planner_profile(trace, profile)
+
+    def test_combined_count_settings_must_belong_to_the_same_executed_batch(self):
+        for trace in [
+            execution(COMBINED_SETTING, 42) + execution(COMBINED_COUNT, 99),
+            execution(COMBINED_SETTING) + execution('SELECT 1') + execution(COMBINED_COUNT),
+            execution(COMBINED_SETTING.replace('true', 'false')) + execution(COMBINED_COUNT),
+            execution(COMBINED_SETTING.replace("'0'", "'2'")) + execution(COMBINED_COUNT),
+            execution(COMBINED_SETTING + ", pg_catalog.set_config('jit', 'off', true)") + execution(COMBINED_COUNT),
+            execution(COMBINED_SETTING, phase='parse <unnamed>') + execution(COMBINED_COUNT),
+            execution(COMBINED_SETTING, phase='bind <unnamed>') + execution(COMBINED_COUNT),
+            execution(COMBINED_SETTING) + execution(COMBINED_COUNT.replace('"public"."bench_points"', 'honua.features')),
+            execution(COMBINED_SETTING),
+        ]:
+            with self.subTest(trace=trace), self.assertRaises(ValueError):
+                validate_honua_planner_profile(trace, 'count-jit-off-serial-counts')
 
     def test_report_rejects_profile_receipt_when_raw_trace_shows_ignored_option(self):
         manifest = {'mode': 'diagnostic', 'profile': 'source', 'honua_profile': 'serial-reads',

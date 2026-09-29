@@ -107,7 +107,31 @@ It does not tune counts, later pages, or custom sorting. The
 separate transaction-local settings for count and feature queries. Neither option
 changes database-wide settings or Honua's Native AOT compilation mode.
 
-All four profiles have distinct configuration fingerprints. Before timed traffic,
+Use `--honua-profile serial-counts` to enable only
+`Database__PreferSerialSourceSpatialCounts=true`. The separate
+`--honua-profile count-jit-off-serial-counts` profile combines that count-worker
+policy with PostgreSQL JIT suppression; neither enables serial feature reads.
+These profiles require a server image implementing the count option. An image
+that silently ignores it fails executed-SQL preflight.
+
+Use `--honua-profile serial-reads-counts` to combine the independent serial page
+and count options, or `--honua-profile count-jit-off-serial-reads-counts` to add
+count-specific PostgreSQL JIT suppression. These profiles require separate
+executed evidence for feature and count batches. Worker settings before a page
+query cannot substitute for count evidence, and the three-option profile must
+show both count settings before the same count. The individual profiles remain
+available to isolate each policy's effect; combined profiles imply no speed gain.
+
+Serial count proof requires a transaction-local worker setting immediately
+followed by the spatial count on the same backend. The combined profile requires
+both settings in the same setting statement before that count. Separate JIT-only
+and serial-only counts cannot establish the combined profile. Fixed count SQL
+identities distinguish serial-only and combined preparation policies. Raw SQL is
+revalidated when generating the report, and each profile has its own campaign
+fingerprint. These options do not imply a performance improvement; measure the
+production Native AOT build before drawing that conclusion.
+
+All eight profiles have distinct configuration fingerprints. Before timed traffic,
 the SQL diagnostic must show the profile's settings actually executing on the
 same database backend immediately before their eligible source queries. Report
 generation independently checks this raw trace. An ignored or unsupported option,
@@ -126,6 +150,7 @@ uses monotonic elapsed time. Negative wall-clock timings in k6's auxiliary HTTP 
 anomalies and block publication. Warmup,
 late completions, invalid responses, cancellations and dropped iterations are
 retained separately. See [k6 graceful stop](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/).
+
 
 ## Evidence and resumption
 

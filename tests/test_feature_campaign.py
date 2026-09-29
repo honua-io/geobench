@@ -162,9 +162,14 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
             geo = runner.make_compose('owned', 'geoserver', {})
             count = 'Database__DisableJitForSourceSpatialCounts'
             serial = 'Database__PreferSerialBoundedSpatialReads'
+            serial_count = 'Database__PreferSerialSourceSpatialCounts'
             fingerprints = {fingerprint(baseline)}
             for profile, keys in [('count-jit-off', [count]), ('serial-reads', [serial]),
-                                  ('count-jit-off-serial-reads', [count, serial])]:
+                                  ('count-jit-off-serial-reads', [count, serial]),
+                                  ('serial-counts', [serial_count]),
+                                  ('count-jit-off-serial-counts', [count, serial_count]),
+                                  ('serial-reads-counts', [serial, serial_count]),
+                                  ('count-jit-off-serial-reads-counts', [count, serial, serial_count])]:
                 with self.subTest(profile=profile):
                     tuned = runner.make_compose('owned', 'honua', {}, profile)
                     fingerprints.add(fingerprint(tuned))
@@ -173,7 +178,7 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
                         self.assertEqual('true', tuned['services']['honua']['environment'].pop(key))
                     self.assertEqual(baseline, tuned)
                     self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, profile))
-            self.assertEqual(4, len(fingerprints))
+            self.assertEqual(8, len(fingerprints))
         with patch.object(runner, 'command') as command:
             with self.assertRaises(ValueError):
                 runner.make_compose('owned', 'honua', {}, 'unknown')
