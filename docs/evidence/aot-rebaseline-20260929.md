@@ -1393,9 +1393,13 @@ projection, masking, excluded attributes and numeric distinct text ordering.
 [Hosted implementation validation](https://github.com/honua-io/honua-server/actions/runs/36587027449)
 passed all 1,740 provider tests on each of PostgreSQL 16, 17 and 18 (5,220 total),
 including the previously failing wire-type regressions and the added semantic
-coverage. PR formatting passed. AOT and remaining PR gates are pending; the PR
-remains draft. Local pre-PR inspection was dry-run only (nine affected projects,
-ten selected server shards and AOT verification).
+coverage. PR Gate, formatting and [Native AOT compilation verification](https://github.com/honua-io/honua-server/actions/runs/36587027449/job/109476003900)
+passed on this head. The compile job produced a 269MB native binary using its
+standard admin-client/Oracle/Snowflake exclusions; it does not replace full
+production-image boundary/runtime verification. The overall CI run remains
+failed for the two unrelated issues recorded below. The decoder PR remains
+draft pending integrated verification. Local pre-PR inspection was dry-run only
+(nine affected projects, ten selected server shards and AOT verification).
 
 The run's Docker job failed its filesystem security scan on the unchanged OGC
 conformance tooling's fast-uri 3.1.6 dependency (CVE-2026-84292 and
@@ -1403,7 +1407,9 @@ CVE-2026-84394). [Separate PR 5327](https://github.com/honua-io/honua-server/pul
 updates the existing override and lockfile to registry-verified 3.1.7, without
 adding ignores or changing the gate. Its filesystem security scan, NuGet scan,
 clean npm installation, OGC conformance run and PR build/tests passed. Review
-Gate is green; the final PR Gate summary is queued on a hosted runner. The
+Gate and final PR Gate passed, and the normal lander merged it as
+`c419f6fd13289ddf56ec3c663295f6dcc6723159`; the patched override was verified in
+trunk. The
 [wider security workflow](https://github.com/honua-io/honua-server/actions/runs/36588528189)
 is not fully green: its JIT runtime probe rejects the unchanged fixture's
 placeholder database password, tracked in [issue 5328](https://github.com/honua-io/honua-server/issues/5328).
