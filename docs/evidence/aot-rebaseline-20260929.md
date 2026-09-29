@@ -871,9 +871,9 @@ campaigns. Full attribute, ID, ordering, count and geometry validation must rema
 The standalone `phase-pressure.py` analysis verifies each retained telemetry hash
 and writes `<campaign>-phase-pressure.json` beside the campaigns. The validator
 source findings are retained in `validator-cost-review.json` under
-`results/serial-read-first-page-aot-20260929/`. No microbenchmark or causal
-attribution of generator CPU has been performed. Publication calibration remains
-outstanding.
+`results/serial-read-first-page-aot-20260929/`. A subsequent synthetic validator
+experiment is recorded below. It does not establish causal attribution of the
+HTTP generator's CPU or satisfy publication calibration.
 
 ## Completed serial-read and count-JIT-off mixed comparison
 
@@ -913,3 +913,40 @@ Artifacts under `results/serial-read-first-page-aot-20260929/` include
 `-raw-verification.json`, `-request-breakdown.json` and `-phase-pressure.json`.
 The completed report SHA-256 is
 `c2850fe38895a4e4e24fdca254a37e5a2ea5d13b5532b575dea15fadffd6b7ac`.
+
+## Synthetic validator overhead experiment
+
+The pinned campaign validator repeats parsing of oracle dates, construction of
+the allowed-field list and, for features without a property ID, feature-ID
+parsing. An isolated prototype prepares the invariant oracle data once and
+reuses parsed feature IDs. This prototype has not changed the campaign harness.
+The current and prepared validators returned identical results for 3,372 cases
+across both protocols and all eleven oracle requests, including valid, empty and
+adversarial payloads.
+
+Twelve short synthetic k6 trials compared JSON parsing plus full response
+validation, with no HTTP or database traffic. Both variants used the same
+100-feature equality fixture, pinned k6 image, four VUs and four CPU / four GiB
+budget. Three pairs per ID representation used seed 42 for variant order, with
+two seconds of warmup, a separate one-second drain allowance, then four seconds
+of measurement. Throughput counts completed validations within those four
+seconds, excluding late completions.
+
+| Synthetic payload representation | Prepared/current validation throughput, median [range] |
+|---|---:|
+| Numeric feature ID with property ID | 1.004 [0.972–1.252] |
+| Prefixed feature ID without property ID | 1.126 [1.044–1.217] |
+
+All 14,461 measured completions were valid; 48 late completions were retained
+separately. Independent verification checked source and result hashes, paired
+ratios, completion accounting and removal of every owned container. These short
+shared-host trials show no consistent gain for the first representation and a
+possible improvement for the second. They do not prove adequate generator
+headroom, server speed, or an HTTP throughput improvement. The queued serial-count
+campaign retains its original validator and harness fingerprint. Any validator
+change needs separate validation and a fresh comparison of both products.
+
+Artifacts are retained in `results/validator-overhead-20260929/`, including
+`parity-result.json`, `experiment-receipt.json`, per-trial summaries and logs,
+`verification.json`, and the experimental source. Receipt SHA-256:
+`fc7d79672c8023ecf6bcc30cf202bb0dd85677c0ae4bf37b0b431f9c86a8a196`.
