@@ -192,8 +192,8 @@ priority. `mixed-request-breakdown.json` retains all per-repetition counts,
 percentiles, latency shares, paired ratios and raw hashes; the adjacent
 `geobench-mixed-request-breakdown.py` reproduces the breakdown.
 
-The individual-query baseline has completed its first matched pair. The table
-below retains all eleven rows, including losses; two more pairs are scheduled.
+The individual-query baseline has completed two matched pairs. The tables
+below retain all eleven rows, including losses; the third pair is pending.
 These use the default Honua planner profile, not the count-tuned profile above,
 and do not establish a completed campaign result.
 
@@ -211,10 +211,27 @@ and do not establish a completed campaign result.
 | Empty query | 336.63 | 451.20 | 63.50 | 54.30 |
 | Bbox boundary | 202.40 | 398.87 | 102.43 | 53.93 |
 
-Both attempts passed all eleven semantic and fairness checks. Honua leads both
-metrics for equality, the tested prefix and deep pagination in this pair. Range,
-small bbox and medium-page throughput are close; broad bboxes, shallow pagination,
-empty queries and the boundary case remain optimization targets. The unmerged
+| Request, pair 2 only | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| Equality | 52.03 | 61.37 | 347.75 | 292.22 |
+| Numeric range | 49.40 | 59.97 | 338.19 | 304.53 |
+| Tested prefix | 61.60 | 54.83 | 290.50 | 301.94 |
+| Small bbox | 100.93 | 152.97 | 200.90 | 132.22 |
+| Medium bbox | 6.83 | 33.73 | 2079.86 | 459.48 |
+| Large bbox | 5.87 | 15.20 | 2345.62 | 902.05 |
+| Shallow page | 49.87 | 72.93 | 357.30 | 250.65 |
+| Medium page | 50.00 | 69.67 | 373.36 | 257.40 |
+| Deep page | 31.37 | 32.20 | 542.62 | 482.40 |
+| Empty query | 222.97 | 346.83 | 95.16 | 69.24 |
+| Bbox boundary | 202.47 | 280.07 | 98.04 | 76.89 |
+
+All four attempts passed all eleven semantic and fairness checks. Honua leads
+both metrics for the tested prefix in both pairs. Equality and deep pagination
+lead in the first pair but not the second; the first pair's near throughput
+parity for small bbox and medium pagination also does not repeat. Broad bboxes,
+shallow pagination, empty queries and the boundary case favor GeoServer in both
+pairs. Shared-host variation remains substantial, and no completed-campaign
+summary or general parity claim follows from these two pairs. The unmerged
 first-page reuse change is not in this image. Remaining repetitions, the spatial
 count-tuned campaign and the separately queued serial profiles must complete
 before a profile-level conclusion.
@@ -291,9 +308,11 @@ passed all 1,688 tests on PostgreSQL 16, 17 and 18 at this reconciled revision,
 plus the full solution build and formatting verification. Both required gates
 are green at `f4265d5`: [PR Gate run 36529753831](https://github.com/honua-io/honua-server/actions/runs/36529753831)
 and Review Gate. The separate [hosting rollback PR 5317](https://github.com/honua-io/honua-server/pull/5317)
-remains pending. That repair now has ten new regression cases and a candidate
-retaining externally supplied mount paths; its baseline and candidate validation
-are still in progress. No whole-workflow pass is claimed. Future AOT images must be checked
+remains pending. The repair candidate `768c934d5` retains externally supplied mount paths.
+Its [PR Gate catalog shard](https://github.com/honua-io/honua-server/actions/runs/36532952643/job/109291815080)
+passed all 266 tests, including all ten new mounted-host cases confirmed from
+the named TRX results. Full solution build and formatting also passed.
+The tests-first baseline and remaining required gate checks are still in progress. No whole-workflow pass is claimed. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
