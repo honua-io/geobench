@@ -1,25 +1,25 @@
 # AOT feature rebaseline — September 29, 2026
 
-This campaign measures the merged source-query optimizations against GeoServer
-on the shared WSL development host. It is diagnostic evidence for optimization,
-not a publishable performance comparison. The production amd64 Native AOT image has now passed its hosted-CI verification
-and local identity checks. Both products passed the 20-scenario baseline smoke
-campaign with no invalid responses. The paired tuned smoke campaign also passed.
-All three baseline mixed-workload pairs are complete and favor GeoServer: median
-paired Honua/GeoServer throughput is 0.576 and p95 latency is 2.054. The sustained
-count-tuned campaign is also complete: its paired throughput ratio is 0.809 and
-p95 ratio is 1.339. Neither profile has established parity on this mixed workload.
-The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
-roughly 2× on mixed-workload throughput; source-level improvements do not replace
-a fresh measurement.
+The latest production Native AOT image includes the merged first-page count
+optimization. Its three paired baseline mixed-workload repetitions are complete:
+median paired Honua/GeoServer throughput is **0.531** (range **0.407–0.555**) and
+p95 latency is **2.445** (range **2.239–3.389**). GeoServer leads both metrics in
+every pair. All semantic checks passed. The separate count-JIT-off campaign is
+still running; its completed smoke is correctness evidence only.
+
+These are optimization diagnostics on the shared WSL development host, not
+publishable comparisons. The original image's results below remain identified
+separately; the latest image and results are in the final section. Neither a
+cross-build improvement nor parity follows from measurements taken at different
+times on this shared host.
 
 ## Changes and source identity
 
 These server changes reached trunk through the normal PR lander and are present
 in the measured image. The count-tuning change was subsequently reverted by
-PR 5318 and restored with the first-page optimization in PR 5315. The newer
-image and count-planner work described at the end have not produced HTTP results
-yet; the tables below still describe the original measured image.
+PR 5318 and restored with the first-page optimization in PR 5315. The tables in
+the original campaign sections below describe that original image. The final section records the subsequent first-page image and its separate
+HTTP results; the serial-count implementation still awaits merge and measurement.
 
 | Change | PR | Merge revision |
 |---|---|---|
@@ -599,7 +599,7 @@ does not establish a Honua-versus-GeoServer speedup.
 Summary SHA-256: `11f0b4e12ff4ce6d9c5dd3434911645ba01c43cea272726dc64f9c4cec0c75cd`.
 `verification.json` retains the independent sample-accounting checks.
 
-## Implementation follow-up at 11:27 UTC
+## First-page AOT rebaseline and serial-count follow-up
 
 [PR 5315](https://github.com/honua-io/honua-server/pull/5315) merged into trunk
 at `f34496e1893e17f974b4e5e330043078f8355b42`. It reuses exact totals from short
@@ -612,11 +612,10 @@ boundary check, GeoParquet smoke and image publication. Its immutable reference 
 `ghcr.io/honua-io/honua-server@sha256:cbb62cbc230af7d07afd53ac5ab658300b9c249cc7e2bd656a0c478cbb764d39`.
 The build log confirms the full production profile and speed-optimized Native
 AOT publish; local runtime inspection records `/app/Honua.Server` with no CoreCLR
-mapping. Other architecture jobs in the workflow are independent and still running.
+mapping. The complete workflow subsequently finished successfully.
 This image includes PR 5315 but does not include the serial-count candidate below.
 
-[Server PR 5323](https://github.com/honua-io/honua-server/pull/5323), head
-`c57159360d48a587bef413fb538a953727a85243`, implements the default-off
+[Server PR 5323](https://github.com/honua-io/honua-server/pull/5323) implements the default-off
 `Database:PreferSerialSourceSpatialCounts` option. Eligible source-backed point
 envelope counts receive transaction-local zero parallel workers, independently
 or together with JIT suppression. Four distinct prepared-statement identities
@@ -627,7 +626,8 @@ are preserved; borrowed explicit and ambient transactions remain excluded.
 The serial-only negative control failed in the ten expected cases before the
 implementation. A combined-policy negative control then demonstrated that
 enabling both flags still left JIT on; the final implementation fixes that
-interaction. All 72 targeted regression cases now pass, including pooling
+interaction. At implementation revision `c57159360d48a587bef413fb538a953727a85243`,
+all 72 targeted regression cases passed, including pooling
 restoration after errors/cancellation, actual generic parallel/serial plans,
 boundary and empty counts, and existing first-page/JIT coverage. Formatting
 verification passed. The complete unchanged provider suite passed all 1,724
@@ -636,9 +636,16 @@ all 72 targeted regression cases present in every leg. Independent checks
 verified all six retained log/TRX hashes and individual test outcomes. Earlier
 candidate failures remain in `results/source-serial-count-5322/`, alongside
 the red/green TRX files, matrix receipts and logs. All three owned fixtures were
-cleaned. The server PR is ready for review. Its Review Gate, formatting, main
-build/unit/architecture step and all six affected integration groups have passed;
-the encompassing build/test job still has native-tool execution smokes to finish.
+cleaned. That revision's full hosted PR Gate subsequently passed.
+
+The current head, `02c3968117b62b1ab8cb920773da031330ad7fe7`, adds an assertion to
+the cancellation test's cleanup handler in response to review. Production source
+and documentation are byte-identical to the implementation revision. Both focused
+cancellation cases passed after this test-only change. Its Review Gate and format
+check passed; build and affected integration checks are still running as of
+11:52 UTC. The 5,172 provider executions above belong to the implementation
+revision, not a repeat of the full matrix at the test-only follow-up head. The PR
+has not merged and is absent from the measured first-page AOT image.
 
 [GeoBench PR 26](https://github.com/honua-io/geobench/pull/26) adds separate
 serial-count and combined count profiles. All 58 harness tests and CI lint/syntax
@@ -648,21 +655,44 @@ It remains draft pending a retained smoke campaign against a production AOT
 image that contains the server change.
 
 These implementation checks establish behavior, not a performance gain. The
-latest completed mixed HTTP results remain 0.809 throughput and 1.339 p95 for
-the count-JIT-off profile relative to GeoServer. A fresh first-page rebaseline,
-followed by a separately identified serial-count comparison after its merge
-and production AOT build, is still required. No parity or broader protocol
-performance claim follows from the SQL-only diagnostic.
+serial-count candidate requires its own merged production AOT image and full
+feature/mixed comparison. No broader protocol claim follows from the SQL-only
+diagnostic.
 
-The first-page campaign queue has verified and pulled that candidate digest and
-acquired a shared build slot. The baseline smoke passed all 12 selected scenarios
-on both products with zero invalid responses; both owned stacks were cleaned.
-Independent verification checked every retained raw artifact hash and all scenario
-outcomes. This smoke uses two-second warmup and three-second measurement windows,
-so it establishes correctness rather than a sustained speed ratio. The separate
-count-JIT-off smoke is now running, followed by three-pair baseline and count-JIT-off
-mixed diagnostics.
-Completed attempts, including failed attempts, are copied outside the worktree
-to `results/first-page-aot-rebaseline-20260929/`. No sustained paired result exists
-for this new image yet. The serial-count candidate still requires its own
-merged production AOT image and full feature/mixed comparison.
+Both first-page smoke profiles passed all twelve selected scenarios on both
+products with zero invalid responses. Their two-second warmup and three-second
+measurement establish correctness only. All three baseline mixed pairs also
+completed, with 30-second warmup, 30-second measurement, ten VUs and seed 42.
+Each attempt passed semantic and fairness checks and cleaned its owned resources.
+An independent raw-sample recount verified artifact hashes, warmup separation,
+measurement/drain completion accounting, request counts, throughput and
+nearest-rank p50/p95/p99 for both smokes and the completed baseline campaign.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 73.70 | 181.07 | 292.24 | 86.23 |
+| 2 | 98.73 | 177.97 | 204.82 | 91.47 |
+| 3 | 96.83 | 182.30 | 208.88 | 85.42 |
+
+The median paired Honua/GeoServer throughput ratio is **0.531**, range
+**0.407–0.555**; paired p95 is **2.445**, range **2.239–3.389**. GeoServer leads
+both metrics in all three pairs. Measurement had zero invalid responses and
+cancellations; 10–11 late completions per attempt were excluded and retained
+separately. Auxiliary clock anomalies, shared-host contention, diagnostic mode
+and missing isolated-generator calibration prevent publication.
+
+Within this mixed traffic, median paired p95 ratios are 1.890 for equality,
+1.520 for numeric range, 1.074 for the tested prefix and 2.890 for medium bbox.
+Medium bbox accounts for a median 61.7% of Honua's summed response latency while
+representing 40% of the request sequence. This is response latency including
+waiting and validation, not CPU attribution or standalone per-query throughput.
+It keeps spatial count/page planning as the next optimization target.
+
+Artifacts are retained outside the harness worktree under
+`results/first-page-aot-rebaseline-20260929/`, including
+`mixed-baseline/report.json`, `mixed-baseline-raw-verification.json` and
+`mixed-baseline-request-breakdown.json`. The baseline report SHA-256 is
+`12950ef80ef8fb334ddffea568ecfca777d78734d02a5fba7a939480bc1f6785`.
+The first-page count-JIT-off mixed campaign remains incomplete and has no
+three-pair summary yet. The earlier 0.809 throughput ratio belongs to the old
+image; it must not be presented as a result from this image.
