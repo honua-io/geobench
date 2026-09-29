@@ -1,6 +1,6 @@
 # AOT feature rebaseline — September 29, 2026
 
-The latest completed tuned mixed campaign combines serial feature reads with
+The earlier first-page image's best completed tuned mixed campaign combines serial feature reads with
 count-specific PostgreSQL JIT suppression on the production Native AOT first-page
 image. Median paired Honua/GeoServer throughput is **0.946** (range
 **0.846–1.110**) and p95 latency is **1.073** (range **0.858–1.168**). Honua wins
@@ -12,8 +12,9 @@ and image checks. All six scheduled smoke profiles passed on both products;
 its untuned mixed baseline completed at throughput H/G **0.532** and p95 H/G
 **2.471**. On the new image, count-JIT-off alone completed at throughput H/G
 **0.598** and p95 H/G **1.768**. Serial counts alone completed at throughput H/G
-**0.859** and p95 H/G **1.471**, with GeoServer leading all three pairs;
-combined-policy comparisons are running.
+**0.859** and p95 H/G **1.471**. Serial counts plus count-JIT suppression completed
+at throughput H/G **0.887** and p95 H/G **1.236**; GeoServer leads all three pairs
+for both count profiles. Combined read/count comparisons are running.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -1157,3 +1158,72 @@ Completed report SHA-256:
 `00972fbb71efd3c35c0c57b623239590ca3b77436f1d9476707097a594c14e2c`.
 The independent recount used 4.87 CPU seconds over 52.33 wall seconds with the
 previously described cooperative analysis controls. Publication remains disabled.
+
+
+## New serial-count image: completed count-JIT-off plus serial-count comparison
+
+This profile combines serial spatial counts with count-specific PostgreSQL JIT
+suppression; feature-read planning remains unchanged. All three paired mixed
+repetitions passed independent raw verification, with zero invalid responses or
+cancellations. Each attempt used ten VUs, 30 seconds of warmup and 30 seconds of
+measurement. Five measurement attempts have ten late completions each; GeoServer
+repetition three has eleven. All late completions are retained outside measured
+throughput and latency. Runtime/source checks retain the disclosed planner
+environment capture gap.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 148.33 | 191.63 | 103.87 | 81.01 |
+| 2 | 165.73 | 174.97 | 101.45 | 87.07 |
+| 3 | 169.10 | 190.60 | 98.36 | 79.57 |
+
+Median paired throughput H/G is **0.887**, range **0.774–0.947**; p95 H/G is
+**1.236**, range **1.165–1.282**. GeoServer leads both metrics in all three pairs.
+This result does not establish parity or quantify a causal improvement over the
+separately timed profiles. Serial feature reads together with serial counts, with
+and without count-JIT suppression, have not completed for this image.
+
+Within mixed traffic, median paired p95 H/G is 1.202 for medium bbox, 1.136 for
+equality, 1.126 for range and 0.853 for the tested prefix. Prefix spans parity
+(0.821–1.030); the other three request types favor GeoServer in every pair.
+Medium bbox accounts for a median 56.7% of Honua's summed response latency.
+These are mixed-traffic latency observations, not standalone throughput or CPU
+attribution.
+
+Honua database CPU sample medians during measurement-and-drain are
+397.40–403.33%, with up to three or four sampled parallel workers per attempt.
+Honua server medians are 172.42–200.28%, and GeoServer generator medians are
+376.56–397.07%. The generator is still close to its four-core limit. These phase
+samples include drain and do not attribute worker use to individual queries or
+establish exact-window utilization.
+
+Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
+`mixed-count-jit-off-serial-counts/report.json` and its `-raw-verification.json`,
+`-profile-verification.json`, `-request-breakdown.json` and `-phase-pressure.json`.
+Report SHA-256:
+`4277ed0445317abf35184d4be53f44b6dd832d14895c401f58b5e045a7cb801d`.
+Independent recount CPU/wall time was 5.65/56.46 seconds. These remain shared-host
+diagnostics with publication disabled.
+
+
+## Generator headroom follow-up
+
+[GeoBench PR 31](https://github.com/honua-io/geobench/pull/31) merged as
+`23fb387efd077beeaff74612d4007f862b9e0867`. New campaigns can select
+`--generator-cpus 8` while retaining four CPUs and 4 GiB for each server/database,
+six source connections and 4 GiB generator memory. Both products receive the same
+generator CPU budget. Manifests, profile names, reports, effective runtime checks
+and resume/calibration bindings record the distinction. Observer CPU warnings use
+the inspected quota for each container.
+
+Exact-head [CI 36581545372](https://github.com/honua-io/geobench/actions/runs/36581545372)
+passed 69 tests, Ruff, compilation, JavaScript syntax and ShellCheck; CodeQL also
+passed. The tests-only predecessor recorded the missing APIs/CLI and CPU receipt
+failures before implementation. Receipts and logs are retained under
+`results/generator-cpu-budget-20260929/`.
+
+No new-budget HTTP smoke or headroom comparison has run yet: the existing queue
+retains harness `d4a2009`, its original schedule and four-core generator. Future
+generator-budget comparisons require separate campaigns and cannot be pooled with
+these results. Extra local CPU does not replace isolated-generator or observer
+calibration for publication.
