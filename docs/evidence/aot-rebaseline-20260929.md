@@ -3,8 +3,13 @@
 **Decoder build update:** PR 5325 merged normally at 19:03:33 UTC as
 `e2bf1bf5e236566a056d1d078fa98f784e5df36b`. Its production web amd64 Native AOT
 image has passed build, boundary verification, GeoParquet smoke and publication,
-and has been acquired locally by digest. Both new-image full-corpus smoke profiles passed, and sustained performance
-campaigns have started; no decoder HTTP improvement is established yet. The completed ratios below describe the preceding image.
+and has been acquired locally by digest. Both new-image full-corpus smoke profiles passed. The sustained baseline mixed
+campaign is now complete and independently raw-verified: GeoServer wins all three
+pairs, with median throughput H/G **0.482** (range **0.442–0.548**) and p95 H/G
+**2.486** (range **1.715–3.083**). The tuned campaign is running. No decoder HTTP
+improvement or baseline parity is established. The sorting-correction results
+immediately below describe the preceding image; the new-image table appears in
+the decoder section.
 
 **Comparison confound found September 29:** GeoServer sorting conformance was
 not enabled. Its retained log contains 228,000 ignored-`sortby` warnings in the
@@ -1566,10 +1571,34 @@ settings execute in the tuned profile. Baseline raw-verification SHA-256:
 tuned raw-verification SHA-256:
 `af6775140fde6c65653c4231077f9bc99abf3b7dd0da785730d98079b8e4a60c`.
 
-The sustained baseline mixed campaign has started; the remaining predeclared
-schedule follows only after passing validation. These smoke results establish
-correctness, not speed. Shared-WSL results remain diagnostic; there is no
-isolated-generator calibration or publication claim.
+The sustained baseline mixed campaign completed all six attempts with full
+semantic, sorting, runtime/fairness, raw-accounting and owned-cleanup checks passing.
+It does not meet the speed goal:
+
+| New decoder AOT baseline pair | Throughput H/G | p95 H/G |
+|---|---:|---:|
+| 1 | 0.482 | 2.486 |
+| 2 | 0.548 | 1.715 |
+| 3 | 0.442 | 3.083 |
+| Median paired ratio | 0.482 | 2.486 |
+
+Each ratio uses its own paired repetition; no percentiles were averaged or pooled.
+All three Honua attempts sampled PostgreSQL at at least 90% of its four-core CPU
+budget and reached six active source-query connections. This supports prioritizing
+spatial query planning, but is not a causal attribution of every millisecond.
+Report SHA-256:
+`3078bb15833ca81d4d2d42196182d9727f979429d0bc08be40918d84dde914f1`.
+Independent raw-verification SHA-256:
+`637a3c0b5523335c96429312ecd2bab60cd6adfeb612533eeca904768b7f2f0a`.
+The review is retained as `baseline-performance-review.json`. Its source is the
+merged decoder image, separate from the previous image's results. Different run
+times and shared-host conditions prevent treating their difference as a controlled
+before/after decoder experiment.
+
+The tuned mixed campaign is running; the remaining predeclared schedule follows
+only after passing validation. Shared-WSL results remain diagnostic. The report
+retains negative wall-clock auxiliary HTTP timings and lacks isolated-generator
+calibration, so it is not publishable.
 
 Corrected baseline report SHA-256:
 `82578dc13fbe7c215ff6f86feeffa15fca384a8b07efc940bc2261b23d2a5f38`.
