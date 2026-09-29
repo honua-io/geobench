@@ -1391,7 +1391,19 @@ ordering. Added coverage exercises buffered/streamed reads, physical/JSONB field
 mappings, scalar types, Unicode, nested values larger than the read buffer,
 projection, masking, excluded attributes and numeric distinct text ordering.
 [Hosted implementation validation](https://github.com/honua-io/honua-server/actions/runs/36587027449)
-is running; the PR remains draft. Local pre-PR inspection was dry-run only
-(nine affected projects, ten selected server shards and AOT verification).
+passed all 1,740 provider tests on each of PostgreSQL 16, 17 and 18 (5,220 total),
+including the previously failing wire-type regressions and the added semantic
+coverage. PR formatting passed. AOT and remaining PR gates are pending; the PR
+remains draft. Local pre-PR inspection was dry-run only (nine affected projects,
+ten selected server shards and AOT verification).
+
+The run's Docker job failed its filesystem security scan on the unchanged OGC
+conformance tooling's fast-uri 3.1.6 dependency (CVE-2026-84292 and
+CVE-2026-84394). [Separate PR 5327](https://github.com/honua-io/honua-server/pull/5327)
+updates the existing override and lockfile to registry-verified 3.1.7, without
+adding ignores or changing the gate. Its [security validation](https://github.com/honua-io/honua-server/actions/runs/36588528189)
+and conformance verification are running. The failed Docker attempt and provider
+logs remain retained; integrated validation will follow the dependency repair.
+
 No production image contains this candidate yet, no HTTP gain is claimed, and
 none of the running campaigns have changed.
