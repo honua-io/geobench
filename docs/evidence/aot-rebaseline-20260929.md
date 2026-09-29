@@ -109,8 +109,9 @@ smoke coverage only at this stage.
 All three baseline mixed-workload pairs completed at 10 VUs, with 30 seconds
 of warmup and 30 seconds of measurement. All six attempts passed their correctness
 and fairness checks, with no invalid responses, cancellations or dropped
-iterations. Each attempt had ten late completions, reported separately from
-measurement. The count-tuned campaign remains pending.
+iterations. Each measurement phase had ten late completions, reported separately
+from measured completions. Warmup has its own drain accounting. The count-tuned
+campaign remains pending.
 
 | Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
 |---|---:|---:|---:|---:|
