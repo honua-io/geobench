@@ -455,8 +455,14 @@ known-flake instructions. Those instructions call for a failed-shard rerun;
 they do not establish that this attempt passed or prove the underlying cause.
 The raw job log is retained as `repaired-trunk-core-cloud.log`, SHA-256
 `972b11e42e6cdc560159563475b3640925dd42363d61cbea0d892053c026f81d`.
-The full matrix is still running, so its final verdict and any subsequent retry
-remain pending. The server failure brake stays in place.
+The first matrix attempt finished with 100 successful jobs, two skipped jobs,
+and four failures: this shard, Catalog and ImageServer Support, and the two
+summary gates. The catalog shard exhausted its 18-minute test budget while still
+producing output four seconds earlier; no test assertion failure was reported
+before termination. Both previously failing hosting shards passed. The normal
+watcher issued its failed-job retry, now queued as attempt 2 of the same run.
+The original failed attempt and raw catalog log remain retained; a queued retry
+does not clear the server failure brake.
 
 An isolated Git-index rehearsal confirmed the modify/delete conflict in the
 count-tuning tests. Retaining the updated regression file and restoring the
@@ -498,5 +504,41 @@ hashes, cleanup and report validity pass can it start the previously scheduled
 combined-profile campaign. `recovery-receipt.json`, `recovery-driver.py` and
 `recovery-driver-provenance.json` retain this operational evidence under
 `results/serial-planner-diagnostics-20260929/` in the serial-profile worktree.
-The interruption's cause is unknown. Both sustained profiles remain incomplete;
-no capacity conclusion is drawn from partial results.
+That first supervisor interruption's cause is unknown.
+
+At approximately 09:19 UTC, the locked serial-profile worktree itself disappeared,
+terminating the surviving campaign and recovery supervisor. Five attempts had
+passed and the sixth GeoServer stack was provisioning, but the campaign never
+completed. The Git worktree registration and explicit lock remained. The mounted
+results directory was empty, and the original raw serial-profile smoke and
+sustained artifacts are no longer available. The earlier smoke checks above
+describe verification performed before the loss; they cannot substitute for
+retained raw evidence in a new campaign. No partial sustained result is promoted
+to a campaign conclusion. The completed baseline and count-tuned campaigns in
+the main evidence directory were unaffected.
+
+The cleanup script ignored worktree locks and recursively deleted a directory
+after any refusal from `git worktree remove`. Offline real-Git tests reproduced
+this deletion for locked trees, late-acquired locks and arbitrary removal
+failures. [Flow PR 99](https://github.com/honua-io/honua-flow/pull/99) removes that
+fallback, checks protection before archival and deletion, and reports refusals
+without claiming removal. Nine regression cases and the required dashboard
+checks pass. The loss receipt, surviving container logs, exact resource identities,
+original lock and cleanup-test receipts are retained outside the deleted worktree
+in `results/serial-planner-loss-20260929/`. Only the interrupted attempt's three
+containers and its owned volume/network were removed after evidence capture.
+
+A separately identified count-only diagnostic now uses a fresh harness worktree
+and stores evidence directly in `results/source-count-pressure-20260929-r2/`
+outside it. It starts only after the interrupted campaign's resources are cleaned
+and both the shared build slot and measurement lock are acquired. Its two
+PostgreSQL variants both disable JIT; they differ only in the transaction-local
+parallel-worker setting. Three paired repetitions use one and six clients, a
+small-bbox control and medium bbox, five-second warmups and ten-second measurement
+windows with fully drained phases and every scalar count validated. This tests
+a specific count-planning hypothesis, not HTTP throughput or a product winner.
+The motivating saved plans launched one worker in all 14 medium-bbox cases,
+but that worker scanned zero rows in 11 of them; all 14 saved artifact hashes
+were checked. Neither the serial-read flag nor the combined profile forces
+serial count execution, so the interrupted HTTP experiment did not test that
+hypothesis directly. New count results remain pending.
