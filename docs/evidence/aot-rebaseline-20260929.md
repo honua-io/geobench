@@ -1,0 +1,105 @@
+# AOT feature rebaseline — September 29, 2026
+
+This campaign measures the merged source-query optimizations against GeoServer
+on the shared WSL development host. It is diagnostic evidence for optimization,
+not a publishable performance comparison. At the preparation checkpoint, the
+production Native AOT build is still compiling and no new HTTP results exist.
+The [previous diagnostics](feature-followup-20260928.md) favored GeoServer by
+roughly 2× on mixed-workload throughput; source-level improvements do not replace
+a fresh measurement.
+
+## Changes and source identity
+
+The server changes have landed through the normal PR lander:
+
+| Change | PR | Merge revision |
+|---|---|---|
+| Page source rows before encoding JSON and geometry | [5299](https://github.com/honua-io/honua-server/pull/5299) | `6b55178d3b6adf04364b71dbbcfe8d21a053fe22` |
+| Resolve read security once per public operation | [5302](https://github.com/honua-io/honua-server/pull/5302) | `3db220fb4f70c0bfb7beb1d442bb13555bf23a79` |
+| Opt-in PostgreSQL JIT suppression for eligible spatial counts | [5307](https://github.com/honua-io/honua-server/pull/5307) | `6e4962be59b608ea573e098aabe3b6ae573dda91` |
+
+The image candidate is `619e6f123328994342b44a36c530641285e261e5` on
+`test/geobench-aot-rebaseline-20260929`. It uses the unchanged production
+`docker/Dockerfile.aot`, the full build profile, and Native AOT with speed
+optimization. The count change was cherry-picked while its normal merge was
+pending. After that merge, all 11 files touched by these optimizations matched
+the merged source exactly.
+
+The complete trees are different: the candidate omits the later
+[ArcGIS prefix change, PR 5308](https://github.com/honua-io/honua-server/pull/5308),
+including its global `UsePathBase` middleware. Results must retain the candidate's
+actual revision and must not identify it as an identical trunk build.
+
+The harness revision selected before the run is
+`536d5823b796e2c2ca13bf35a9bcef4ffedcc902`. Its feature-campaign implementation
+subsequently landed in [GeoBench PR 23](https://github.com/honua-io/geobench/pull/23)
+with integration fixes, at `64669b6f86f4afce635fdd4c02945719f759fc3f`.
+The running campaign keeps its original harness revision.
+
+## Comparison contract
+
+Both products read their own source-backed PostGIS copy of the deterministic
+100K-point dataset, with 100-feature pages, stable ID ordering, all ten requested
+attributes, geometry in CRS84, exact counts, anonymous reads, and identity
+compression. Every response is checked against precomputed PostGIS expectations.
+Server and database budgets are each 4 CPU / 4 GiB, with six source-query
+connections. Exact response caching and adaptive admission are disabled; normal
+metadata caches remain enabled.
+
+The baseline and tuned profiles remain separate. The tuned profile only adds
+`Database__DisableJitForSourceSpatialCounts=true`; it does not enable forced serial
+feature reads. This setting controls PostgreSQL's query JIT and does not turn the
+Honua Native AOT executable into a .NET JIT build. Executed SQL must confirm the
+scoped setting before attributing a result to it.
+
+| Component | Immutable local image identity |
+|---|---|
+| GeoServer 3.0.1 with matching OGC API extension | `sha256:a395701a5eea4884c855f136be84363d0ce05e06da1ea6c7e3b84e146279927b` |
+| PostGIS | `sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6` |
+| k6 | `sha256:1f40432b1cbe7234e977f96c362c9bc550a2d2b583d014dd8669fe40d3e9e755` |
+
+The Honua image ID is recorded after successful build completion and verified
+again during runtime preflight. An image tag alone is insufficient evidence.
+
+## Scheduled measurements and interpretation
+
+Initial smoke campaigns check both products and the separate tuned profile.
+Their two-second warmup and three-second measurement establish correctness and
+runtime readiness only; they cannot support a capacity claim.
+
+Sustained diagnostics use three paired repetitions, a 30-second warmup and a
+30-second measurement per scenario, seed 42, fresh isolated stacks per pair,
+and explicit drain phases. They cover mixed load at 10 VUs in both profiles,
+all eleven individual baseline corpus requests, and medium/large bbox requests
+with count JIT disabled. Other concurrency and arrival-rate settings receive
+smoke coverage only at this stage.
+
+Report each scenario's throughput and p50/p95/p99 latency, all repetitions,
+paired ratios and ranges. Do not combine percentiles or use a single winner
+score. Near parity is an initial engineering milestone; a 10% working margin is
+not a statistical equivalence test, especially on this shared host. The longer
+term objective remains improvement across measured scenarios.
+
+The prefix corpus has a known coverage limitation: GeoServer loses the escaped
+underscore in executed SQL, but the generated feature names do not distinguish
+the two meanings. These results cannot establish general literal-prefix
+correctness. Rendering, tiles, WFS, GSR, non-point geometries and larger datasets
+remain outside this campaign.
+
+Local evidence is retained under
+`results/merged-aot-rebaseline-20260929/`: build and campaign receipts, immutable
+image metadata, source merge proof, raw observations, campaign manifests,
+per-attempt reports and failure ledgers. These generated files are gitignored.
+Shared-host observer calibration has not passed publication requirements, and
+there is no isolated-generator calibration. Diagnostic validity must not be
+reported as publication validity.
+
+## Next optimization informed by the source review
+
+A page-first strategy could avoid an exact-count query when a bounded first page
+is short. The saved oracle contains 35 matches for the small bbox and one for the
+boundary case. All mixed-workload requests exceed the 100-feature limit, so this
+strategy would still need their exact counts and would not remove a mixed-workload
+round trip. Empty queries already take one SQL statement in the count-first path.
+Prioritize fresh measured losses before implementing this candidate; preserve
+security, distinct-query semantics, offsets, and concurrent-update behavior.

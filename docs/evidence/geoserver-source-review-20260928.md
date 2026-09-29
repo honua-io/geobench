@@ -5,6 +5,11 @@ reads. It is diagnostic work on the shared development host, not a new product
 comparison. The scope is the deterministic 100K-point dataset, 100-feature pages,
 exact counts, and the OGC API Features corpus.
 
+> September 29 follow-up: all three optimization PRs have merged. See the
+> [AOT rebaseline record](aot-rebaseline-20260929.md) for the exact integration
+> candidate, separate tuning profile, and measurement status. The findings below
+> retain the identities and evidence available at the original review.
+
 ## Versions and runtime evidence
 
 The reviewed upstream tags match the versioned JARs recorded by
