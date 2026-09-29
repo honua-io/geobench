@@ -17,7 +17,9 @@ a fresh measurement.
 
 These server changes reached trunk through the normal PR lander and are present
 in the measured image. The count-tuning change was subsequently reverted by
-PR 5318; its restoration is pending as described below.
+PR 5318 and restored with the first-page optimization in PR 5315. The newer
+image and count-planner work described at the end have not produced HTTP results
+yet; the tables below still describe the original measured image.
 
 | Change | PR | Merge revision |
 |---|---|---|
@@ -596,3 +598,49 @@ does not establish a Honua-versus-GeoServer speedup.
 
 Summary SHA-256: `11f0b4e12ff4ce6d9c5dd3434911645ba01c43cea272726dc64f9c4cec0c75cd`.
 `verification.json` retains the independent sample-accounting checks.
+
+## Implementation follow-up at 10:56 UTC
+
+[PR 5315](https://github.com/honua-io/honua-server/pull/5315) merged into trunk
+at `f34496e1893e17f974b4e5e330043078f8355b42`. It reuses exact totals from short
+first pages and restores the independent count-specific PostgreSQL JIT option.
+The production amd64 Native AOT build in
+[run 36555577096](https://github.com/honua-io/honua-server/actions/runs/36555577096)
+is running from subsequent trunk revision
+`beac25991794543f96c79fac8fb9ed0745b136dd`. That image includes PR 5315 but does
+not include the serial-count candidate below. Its immutable digest and successful
+boundary/smoke verification must be captured before starting a new campaign.
+
+[Server PR 5323](https://github.com/honua-io/honua-server/pull/5323), head
+`c57159360d48a587bef413fb538a953727a85243`, implements the default-off
+`Database:PreferSerialSourceSpatialCounts` option. Eligible source-backed point
+envelope counts receive transaction-local zero parallel workers, independently
+or together with JIT suppression. Four distinct prepared-statement identities
+keep ordinary, JIT-only, serial-only and combined plans separate. The exact
+count predicate, parameters, security restrictions and feature-read planning
+are preserved; borrowed explicit and ambient transactions remain excluded.
+
+The serial-only negative control failed in the ten expected cases before the
+implementation. A combined-policy negative control then demonstrated that
+enabling both flags still left JIT on; the final implementation fixes that
+interaction. All 72 targeted regression cases now pass, including pooling
+restoration after errors/cancellation, actual generic parallel/serial plans,
+boundary and empty counts, and existing first-page/JIT coverage. Formatting
+verification passed. The complete unchanged provider suite passed all 1,724
+cases on PostgreSQL 16; PostgreSQL 17/18 verification is still running. Earlier
+candidate failures remain in `results/source-serial-count-5322/`, alongside
+the red/green TRX files, matrix receipts and logs. The server PR remains draft.
+
+[GeoBench PR 26](https://github.com/honua-io/geobench/pull/26) adds separate
+serial-count and combined count profiles. All 58 harness tests and CI lint/syntax
+checks passed. The executed-SQL check requires both settings before the same
+eligible count for the combined profile; unsupported or ignored flags fail.
+It remains draft pending a retained smoke campaign against a production AOT
+image that contains the server change.
+
+These implementation checks establish behavior, not a performance gain. The
+latest completed mixed HTTP results remain 0.809 throughput and 1.339 p95 for
+the count-JIT-off profile relative to GeoServer. A fresh first-page rebaseline,
+followed by a separately identified serial-count comparison after its merge
+and production AOT build, is still required. No parity or broader protocol
+performance claim follows from the SQL-only diagnostic.
