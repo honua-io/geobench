@@ -11,7 +11,9 @@ interpretation. The newer serial-count AOT image has passed its production build
 and image checks. All six scheduled smoke profiles passed on both products;
 its untuned mixed baseline completed at throughput H/G **0.532** and p95 H/G
 **2.471**. On the new image, count-JIT-off alone completed at throughput H/G
-**0.598** and p95 H/G **1.768**; serial-count comparisons are running.
+**0.598** and p95 H/G **1.768**. Serial counts alone completed at throughput H/G
+**0.859** and p95 H/G **1.471**, with GeoServer leading all three pairs;
+combined-policy comparisons are running.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -25,8 +27,8 @@ These server changes reached trunk through the normal PR lander and are present
 in the measured image. The count-tuning change was subsequently reverted by
 PR 5318 and restored with the first-page optimization in PR 5315. The tables in
 the original campaign sections below describe that original image. The final section records the subsequent first-page image and its separate
-HTTP results; the serial-count implementation has merged and awaits a new AOT
-image and measurement.
+HTTP results. The serial-count implementation has merged, its new AOT image has
+passed verification, and its completed and pending measurements are recorded below.
 
 | Change | PR | Merge revision |
 |---|---|---|
@@ -1106,3 +1108,52 @@ Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
 `-profile-verification.json`, `-request-breakdown.json` and `-phase-pressure.json`.
 Completed report SHA-256:
 `17f2db6bd6569ca2af69d311712ea63134501a2512be0c6b9d9edceaabca9d1e`.
+
+
+## New serial-count image: completed serial-count-only mixed comparison
+
+This profile enables serial planning for eligible source spatial counts while
+leaving count-JIT suppression and serial feature reads disabled. All three paired
+repetitions passed independent raw verification, with zero invalid responses or
+cancellations and ten late completions per measurement attempt excluded from
+measured throughput and latency. Each attempt used ten VUs, 30 seconds of warmup
+and 30 seconds of measurement. Runtime identity, database fingerprints, source
+SQL and owned cleanup checks passed; the previously disclosed missing planner
+environment capture remains an evidence gap.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 135.63 | 153.73 | 144.29 | 98.08 |
+| 2 | 141.07 | 177.07 | 138.29 | 89.12 |
+| 3 | 153.67 | 178.97 | 112.46 | 81.91 |
+
+Median paired throughput H/G is **0.859**, range **0.797–0.882**; p95 H/G is
+**1.471**, range **1.373–1.552**. GeoServer leads both metrics in every pair.
+These ratios are closer to parity than the separately timed baseline, but this
+shared-host experiment does not establish the size of a causal tuning gain.
+The earlier image's combined tuning result remains a separate comparison.
+
+Within mixed traffic, median paired p95 H/G is 1.595 for medium bbox,
+1.099 for equality, 1.137 for numeric range and 0.827 for the tested prefix.
+Prefix p95 favors Honua in each pair (range 0.762–0.900); the other three request
+types favor GeoServer in each pair. Medium bbox accounts for a median 57.5% of
+Honua's summed response latency while making up 40% of scheduled requests.
+These are latencies within mixed traffic, not standalone request throughput or
+CPU attribution.
+
+Honua database CPU sample medians during measurement-and-drain are
+399.17–403.79%, with up to four sampled parallel workers. Preflight SQL confirms
+the count-only policy and no scoped feature-read policy; the telemetry does not
+attribute workers to particular statements. Honua server CPU sample medians are
+172.51–181.12%, and GeoServer generator medians are 343.86–358.91%, with sampled
+generator peaks reaching its four-core budget. These phase samples include drain
+and do not prove exact-window utilization or true peaks. The queued combined
+read/count policies remain necessary to evaluate the remaining spatial gap.
+
+Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
+`mixed-serial-counts/report.json` and its `-raw-verification.json`,
+`-profile-verification.json`, `-request-breakdown.json` and `-phase-pressure.json`.
+Completed report SHA-256:
+`00972fbb71efd3c35c0c57b623239590ca3b77436f1d9476707097a594c14e2c`.
+The independent recount used 4.87 CPU seconds over 52.33 wall seconds with the
+previously described cooperative analysis controls. Publication remains disabled.
