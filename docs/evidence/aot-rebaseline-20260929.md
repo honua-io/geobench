@@ -312,7 +312,12 @@ remains pending. The repair candidate `768c934d5` retains externally supplied mo
 Its [PR Gate catalog shard](https://github.com/honua-io/honua-server/actions/runs/36532952643/job/109291815080)
 passed all 266 tests, including all ten new mounted-host cases confirmed from
 the named TRX results. Full solution build and formatting also passed.
-The tests-first baseline and remaining required gate checks are still in progress. No whole-workflow pass is claimed. Future AOT images must be checked
+The [tests-first baseline](https://github.com/honua-io/honua-server/actions/runs/36532387799/job/109290386798)
+reproduced exactly nine expected mounted-URL assertion failures, with 257 passes
+and no skips. The unconfigured attachment control and all existing cases passed.
+All four review findings are resolved with evidence, and PR Gate passed at the
+same candidate revision. Review Gate is being re-attested through the repository
+recovery workflow; the wider candidate CI matrix is still running. No whole-workflow pass is claimed. Future AOT images must be checked
 for that content; the current benchmark image remains the immutable `6e4962b`
 snapshot with the count-tuning option present.
 
