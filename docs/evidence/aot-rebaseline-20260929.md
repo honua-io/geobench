@@ -1,20 +1,29 @@
 # AOT feature rebaseline — September 29, 2026
 
-The earlier first-page image's best completed tuned mixed campaign combines serial feature reads with
-count-specific PostgreSQL JIT suppression on the production Native AOT first-page
-image. Median paired Honua/GeoServer throughput is **0.946** (range
-**0.846–1.110**) and p95 latency is **1.073** (range **0.858–1.168**). Honua wins
-one pair and loses two on both metrics. This is near parity in this local tuned
-mixed-workload diagnostic, not evidence of parity across all individual requests.
-All semantic checks passed. Generator headroom and shared-host variability limit
-interpretation. The newer serial-count AOT image has passed its production build
-and image checks. All six scheduled smoke profiles passed on both products;
-its untuned mixed baseline completed at throughput H/G **0.532** and p95 H/G
-**2.471**. On the new image, count-JIT-off alone completed at throughput H/G
-**0.598** and p95 H/G **1.768**. Serial counts alone completed at throughput H/G
-**0.859** and p95 H/G **1.471**. Serial counts plus count-JIT suppression completed
-at throughput H/G **0.887** and p95 H/G **1.236**; GeoServer leads all three pairs
-for both count profiles. Combined read/count comparisons are running.
+The production serial-count Native AOT image's completed **serial-reads-counts**
+mixed campaign favors Honua in all three pairs: median paired Honua/GeoServer
+throughput is **1.245** (range **1.075–1.404**) and p95 latency is **0.755**
+(range **0.662–0.942**). All semantic checks passed. This is a tuned local mixed
+workload result on 100K points; individual-query comparisons remain pending.
+Honua's generator reached its four-core cap in sampled telemetry, so the queued
+generator-headroom comparison remains necessary before inferring server capacity.
+
+Completed mixed profiles on this same production image are listed separately.
+Each value is a median of three paired ratios, not a pooled or averaged percentile.
+H/G throughput above one favors Honua; H/G p95 below one favors Honua.
+
+| Profile | Throughput H/G | p95 H/G | Pair outcomes on both metrics |
+|---|---:|---:|---|
+| Baseline | 0.532 | 2.471 | GeoServer leads all three |
+| Count-JIT-off | 0.598 | 1.768 | GeoServer leads all three |
+| Serial counts | 0.859 | 1.471 | GeoServer leads all three |
+| Count-JIT-off + serial counts | 0.887 | 1.236 | GeoServer leads all three |
+| Serial reads + serial counts | **1.245** | **0.755** | **Honua leads all three** |
+
+The count-JIT-off + serial-read/count profile is running. All six full-corpus
+smoke profiles passed, but smoke timings do not establish performance. The earlier
+first-page image's best tuned mixed result (throughput H/G 0.946, p95 H/G 1.073)
+remains separately identified below and is not a result from this newer image.
 
 These are optimization diagnostics on the shared WSL development host, not
 publishable comparisons. The original image's results below remain identified
@@ -1204,6 +1213,55 @@ Report SHA-256:
 `4277ed0445317abf35184d4be53f44b6dd832d14895c401f58b5e045a7cb801d`.
 Independent recount CPU/wall time was 5.65/56.46 seconds. These remain shared-host
 diagnostics with publication disabled.
+
+
+## New serial-count image: completed serial-read/count mixed comparison
+
+This profile enables serial planning for both eligible feature reads and spatial
+counts; count-specific PostgreSQL JIT suppression is disabled. All three paired
+repetitions passed independent raw verification, with zero invalid responses or
+cancellations and ten late completions per measurement attempt excluded from
+measured throughput and latency. Each attempt used ten VUs with 30 seconds of
+warmup and 30 seconds of measurement. The runtime planner environment capture
+limitation remains disclosed; preflight SQL confirms both scoped policies using
+the pinned harness trace recognizer, which is not an independent SQL parser.
+
+| Repetition | Honua requests/s | GeoServer requests/s | Honua p95 ms | GeoServer p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 225.60 | 160.73 | 67.67 | 102.17 |
+| 2 | 180.17 | 167.53 | 89.67 | 95.14 |
+| 3 | 214.47 | 172.30 | 70.79 | 93.74 |
+
+Median paired throughput H/G is **1.245**, range **1.075–1.404**; p95 H/G is
+**0.755**, range **0.662–0.942**. Honua leads both overall metrics in all three
+pairs. This is the first completed profile on this new AOT image with that result.
+It does not prove a causal cross-profile improvement, shipping-default parity,
+standalone-query wins or performance on other protocols/datasets.
+
+Within mixed traffic, median paired p95 H/G is 0.739 for medium bbox
+(range 0.632–0.931), 0.737 for the tested prefix (0.652–0.877), 0.963 for equality
+(0.865–1.222) and 0.949 for numeric range (0.835–1.149). Medium bbox and prefix
+favor Honua in every pair; equality and range each favor GeoServer in one pair.
+Medium bbox contributes a median 45.5% of Honua's summed response latency.
+These are mixed-traffic latencies, not standalone throughput or CPU attribution.
+
+Measurement-and-drain samples recorded zero parallel workers for both products.
+Honua database CPU sample medians are 288.44–303.23%, and server medians are
+253.52–280.59%. Honua generator medians are 397.24–401.91%, compared with
+386.27–391.30% for GeoServer's generator. Both generators approach their four-core
+budgets, so this result may understate either product's server capacity. Phase
+samples include drain and do not establish exact-window utilization or true
+concurrency peaks. The separate four/eight-core generator follow-up below is
+already queued, with no change to this campaign's configuration.
+
+Artifacts under `results/serial-count-aot-rebaseline-20260929/` include
+`mixed-serial-reads-counts/report.json` and its `-raw-verification.json`,
+`-profile-verification.json`, `-request-breakdown.json` and `-phase-pressure.json`.
+Report SHA-256:
+`9702864a1767d9c29c4a053f00f19d2d5926a8ffe41955b01f9f29e40c8320de`.
+Independent recount CPU/wall time was 6.68/63.07 seconds. Publication remains
+disabled on this shared-host diagnostic. The all-three-policy mixed campaign is
+running, followed by the full individual-query campaigns.
 
 
 ## Generator headroom follow-up
