@@ -225,6 +225,9 @@ against the landed rollback.
 fingerprinted serial spatial-read and combined count/read planner profiles. It
 requires the selected transaction-local settings to execute before their matching
 source queries on the same backend, and revalidates the raw SQL at report time.
-CI and end-to-end checks are pending. A sequential driver queues both profile
+All 56 harness tests, Ruff, Python compilation, JavaScript syntax and ShellCheck
+passed at `879b9610b0587b45916ab25b67a09403b27f731b` in
+[run 36528776047](https://github.com/honua-io/geobench/actions/runs/36528776047).
+End-to-end checks remain pending. A sequential driver queues both profile
 smokes and three-pair mixed diagnostics after the existing campaigns, using the
 same immutable AOT image. These are additional diagnostics, not measured wins.
