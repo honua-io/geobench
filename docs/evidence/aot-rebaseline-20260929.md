@@ -526,8 +526,8 @@ without claiming removal. Nine regression cases and the required dashboard
 checks pass. The fix merged as `7dca2100d81328bdd6c9e8ea362afc788544be82` after
 [hosted CI](https://github.com/honua-io/honua-flow/actions/runs/36550185095) also ran
 and passed the nine regressions at `114597ad272a70a20b5b81fe7e1f69dc7be59160`. All
-three merged paths match that tested revision. Normal fleet sync must pick up
-the repair; the merge alone does not prove the live sweeper changed.
+three merged paths match that tested revision. Normal fleet sync has picked up
+the repair, and the live sweeper's complete file matches the tested content.
 The loss receipt, surviving container logs, exact resource identities,
 original lock and cleanup-test receipts are retained outside the deleted worktree
 in `results/serial-planner-loss-20260929/`. Only the interrupted attempt's three
