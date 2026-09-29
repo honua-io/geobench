@@ -80,6 +80,18 @@ response caching and adaptive admission are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
+The default `--honua-profile baseline` preserves the server's default count
+planning. Use `--honua-profile count-jit-off` in a separate campaign to enable
+`Database__DisableJitForSourceSpatialCounts=true` on a supporting Honua image
+(server PR #5307). This suppresses PostgreSQL JIT only for eligible count queries;
+it is independent of Honua Native AOT and does not change database-wide JIT or
+parallel-worker settings. The profile name and effective environment are included
+in the campaign fingerprint, preventing resume across different tuning settings.
+GeoServer's configuration is identical in both campaigns. Keep the baseline and
+tuned rows separate; if database JIT is already off, this option adds no JIT-removal
+benefit. A supporting image and executed SQL evidence are needed to establish
+that the option was actually applied.
+
 Each scenario runs warmup and measurement in separate k6 processes, with a
 35-second graceful drain after each. The HTTP timeout is 30 seconds. No process
 starts until its predecessor exits. Only successful, semantically valid

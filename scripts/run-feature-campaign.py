@@ -24,6 +24,7 @@ from feature_contract import (
     BUDGET,
     CONCURRENCY,
     DRAIN_SECONDS,
+    HONUA_PROFILES,
     MODES,
     fingerprint,
     immutable_image,
@@ -103,7 +104,9 @@ def resolve_images(args):
     return images
 
 
-def make_compose(owner, server, images):
+def make_compose(owner, server, images, honua_profile="baseline"):
+    if honua_profile not in HONUA_PROFILES:
+        raise ValueError(f"Unknown Honua profile: {honua_profile}")
     env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
            "HONUA_ADAPTIVE_ADMISSION_ENABLED": "false", "HONUA_MAX_CONCURRENT_QUERIES": "6",
            "HONUA_MAX_CONNECTION_POOL_SIZE": "6", "HONUA_MIN_CONNECTION_POOL_SIZE": "3",
@@ -129,6 +132,7 @@ def make_compose(owner, server, images):
     # Compare the same exact count-metadata policy. Oracle preflight verifies the result.
     if server == "honua":
         services[server]["environment"]["OgcFeatures__NumberMatchedPolicy"] = "Exact"
+        services[server]["environment"].update(HONUA_PROFILES[honua_profile])
     return {"services": services,
             "volumes": {f"pgdata-{server}": {"labels": labels}},
             "networks": {"default": {"labels": labels}}}
@@ -218,7 +222,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
     path = directory / attempt["id"]
     path.mkdir()
     compose_file = path / "compose.json"
-    composition = make_compose(owner, server, manifest["images"])
+    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"))
     for volume in composition["services"]["k6"]["volumes"]:
         if volume.get("target") == "/tests":
             volume["source"] = str(directory / "harness" / "src/tests")
@@ -384,6 +388,8 @@ def main():
     parser.add_argument("--mode", choices=MODES, default="diagnostic")
     parser.add_argument("--servers", nargs="+", choices=("honua", "geoserver"), default=["honua", "geoserver"])
     parser.add_argument("--protocol", choices=("ogc", "gsr"), default="ogc")
+    parser.add_argument("--honua-profile", choices=HONUA_PROFILES, default="baseline",
+                        help="Keep query-scoped PostgreSQL tuning separate from the default baseline")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--prepare-only", action="store_true", help="Write immutable inputs and calibration binding without starting stacks")
@@ -402,6 +408,8 @@ def main():
         parser.error("Fixture reuse is diagnostic only")
     if args.smoke and args.mode != "diagnostic":
         parser.error("Smoke overrides are diagnostic only")
+    if args.honua_profile != "baseline" and "honua" not in args.servers:
+        parser.error("A tuned Honua profile requires Honua in --servers")
     os.chdir(ROOT)
     corpus = json.loads((ROOT / "config/feature-corpus-v1.json").read_text())
     scenarios = args.scenarios.split(",") if args.scenarios else [r["id"] for r in corpus["requests"]] + [f"mixed:vus:{v}" for v in CONCURRENCY]
@@ -416,6 +424,7 @@ def main():
         subprocess.run([sys.executable, "data/small/generate.py"], check=True)
     manifest = {"schema": 1, "mode": args.mode, "protocol": args.protocol,
                 "reuse_fixture": args.reuse_fixture,
+                "honua_profile": args.honua_profile,
                 "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
                 **MODES[args.mode], "scenarios": scenarios, "servers": args.servers,
                 "budget": BUDGET, "seed": args.seed, "images": images, "corpus": corpus,
@@ -423,7 +432,9 @@ def main():
                 "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
                 "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
                 "honua_compilation": images.get("honua", {}).get("labels", {}).get("honua.runtime.compilation", "unverified-diagnostic"),
-                "effective_compose": {s: make_compose("fingerprint", s, images) for s in args.servers}}
+                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile) for s in args.servers}}
+    if args.honua_profile != "baseline":
+        manifest["profile"] += "-honua-" + args.honua_profile
     if "honua" in args.servers and manifest["honua_compilation"] != "native-aot":
         manifest["profile"] += "-honua-jit-or-unverified-diagnostic"
     if args.smoke:
