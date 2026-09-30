@@ -51,7 +51,7 @@ class RuntimePlannerEvidenceTests(unittest.TestCase):
                 for variant in ('missing', 'wrong', 'duplicate'):
                     changed = [entry for entry in actual if not entry.startswith(key + '=')]
                     if variant == 'wrong':
-                        changed.append(key + '=false')
+                        changed.append(key + '=' + ('false' if options[key] == 'true' else 'true'))
                     if variant == 'duplicate':
                         changed.extend([key + '=true', key + '=false'])
                     with self.subTest(profile=profile, key=key, variant=variant), self.assertRaisesRegex(ValueError, 'planner.*drift'):

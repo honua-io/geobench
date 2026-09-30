@@ -111,8 +111,23 @@ calibration for publication. Compare the same server image/workload under each
 generator budget and retain every repetition. Do not change a running campaign's
 budget or combine rows across generator configurations.
 
-The default `--honua-profile baseline` preserves the server's default count
-planning. Use `--honua-profile count-jit-off` in a separate campaign to enable
+The default `--honua-profile baseline` explicitly disables Honua's serial-read
+and serial-count options, providing a database-planner control even when server
+defaults change. Each explicitly tuned profile pins the other serial option off
+unless that option is named in the profile. These controls preserve the earlier
+untuned/tuned behavior; they are not evidence of a newer server's shipping defaults.
+
+Use `--honua-profile automatic-bounded` for a server implementing automatic
+bounded planning ([server issue #5338](https://github.com/honua-io/honua-server/issues/5338)). It leaves all planner flags absent and
+requires the SQL diagnostic to prove transaction-local serial feature reads and
+associated exact counts on the existing point/bbox requests. An older image that
+keeps database planning, an injected explicit option, missing read/count tuning,
+or unexpected count-JIT suppression fails validation. This is a separate,
+fingerprinted profile using the same workload and resource budgets. Keep its
+results distinct from explicitly tuned profiles. Its name does not establish a
+performance gain or a publication claim.
+
+Use `--honua-profile count-jit-off` in a separate campaign to enable
 `Database__DisableJitForSourceSpatialCounts=true` on a supporting Honua image
 (server PR #5307). This suppresses PostgreSQL JIT only for eligible count queries;
 it is independent of Honua Native AOT and does not change database-wide JIT or
@@ -156,7 +171,7 @@ revalidated when generating the report, and each profile has its own campaign
 fingerprint. These options do not imply a performance improvement; measure the
 production Native AOT build before drawing that conclusion.
 
-All eight profiles have distinct configuration fingerprints. Before timed traffic,
+All nine profiles have distinct configuration fingerprints. Before timed traffic,
 the SQL diagnostic must show the profile's settings actually executing on the
 same database backend immediately before their eligible source queries. Report
 generation independently checks this raw trace. An ignored or unsupported option,

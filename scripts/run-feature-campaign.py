@@ -425,7 +425,7 @@ def main():
     parser.add_argument("--servers", nargs="+", choices=("honua", "geoserver"), default=["honua", "geoserver"])
     parser.add_argument("--protocol", choices=("ogc", "gsr"), default="ogc")
     parser.add_argument("--honua-profile", choices=HONUA_PROFILES, default="baseline",
-                        help="Keep query-scoped PostgreSQL tuning separate from the default baseline")
+                        help="Separate explicit database-planner controls from automatic bounded planning")
     parser.add_argument("--generator-cpus", type=int, default=BUDGET["cpus"],
                         help="Positive integer k6 CPU budget, equal for both products; server/database budgets stay fixed")
     parser.add_argument("--output", type=Path)

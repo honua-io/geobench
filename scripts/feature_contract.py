@@ -12,7 +12,7 @@ ARRIVAL_RATES = (10, 30, 60, 120, 240)
 CONCURRENCY = (1, 10, 50, 100)
 DRAIN_SECONDS = 35
 BUDGET = {"cpus": 4, "memory_bytes": 4 * 1024**3, "source_connections": 6}
-HONUA_PROFILES = {
+_EXPLICIT_HONUA_PROFILES = {
     "baseline": {},
     "count-jit-off": {"Database__DisableJitForSourceSpatialCounts": "true"},
     "serial-counts": {"Database__PreferSerialSourceSpatialCounts": "true"},
@@ -35,6 +35,33 @@ HONUA_PROFILES = {
         "Database__PreferSerialSourceSpatialCounts": "true",
     },
 }
+_SERIAL_DATABASE_DEFAULTS = {
+    "Database__PreferSerialBoundedSpatialReads": "false",
+    "Database__PreferSerialSourceSpatialCounts": "false",
+}
+# Keep each explicit policy isolated when a newer server changes its defaults.
+# Automatic planning is deliberately exercised with no environment overrides.
+HONUA_PROFILES = {
+    **{name: {**_SERIAL_DATABASE_DEFAULTS, **flags}
+       for name, flags in _EXPLICIT_HONUA_PROFILES.items()},
+    "automatic-bounded": {},
+}
+
+
+def honua_planner_settings(profile):
+    """Expected executed policies for the pinned source-query diagnostic."""
+    if profile not in HONUA_PROFILES:
+        raise ValueError(f"Unknown Honua planner profile: {profile}")
+    flags = ({key: "true" for key in _SERIAL_DATABASE_DEFAULTS}
+             if profile == "automatic-bounded" else HONUA_PROFILES[profile])
+    return {
+        "count": {name for key, name in (
+            ("Database__DisableJitForSourceSpatialCounts", "jit"),
+            ("Database__PreferSerialSourceSpatialCounts", "max_parallel_workers_per_gather"),
+        ) if flags.get(key) == "true"},
+        "feature": ({"max_parallel_workers_per_gather"}
+                    if flags.get("Database__PreferSerialBoundedSpatialReads") == "true" else set()),
+    }
 
 
 def fingerprint(value):
