@@ -1,5 +1,7 @@
 # AOT feature rebaseline — September 29, 2026
 
+**Current optimization status:** the [September 30 JIT qualification](jit-optimization-batch-20260930.md) records the combined candidate’s passing provider/HTTP checks and running paired diagnostics. The measurements below are historical AOT snapshots; final AOT is deferred until optimization is complete.
+
 **Decoder build update:** PR 5325 merged normally at 19:03:33 UTC as
 `e2bf1bf5e236566a056d1d078fa98f784e5df36b`. Its production web amd64 Native AOT
 image has passed build, boundary verification, GeoParquet smoke and publication,
