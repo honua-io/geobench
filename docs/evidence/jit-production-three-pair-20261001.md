@@ -119,9 +119,7 @@ Current combined source `cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` adds stable
 canonical projections inside caller-owned/ambient transactions before execution,
 so source DDL cannot introduce the native descriptor failure into those scopes.
 Current PR5349 head is `12fd21ba528057f90845484f90ef435aaa731d69`.
-The seventh attempt is running the same six selections and format verification;
-source68's 519-case pass does not cover this supplemental change. PostgreSQL16/18
-compatibility and HTTP oracle/performance remain pending. No HTTP gain is claimed.
+The seventh attempt passed fresh JIT compilation, changed-file format and all519selectedtests with no failures/skips and exact owned cleanup. PostgreSQL16/18 compatibility is queued using hash-verified identical assemblies and fresh fixtures. HTTP oracle/performance remain pending; no HTTP gain is claimed.
 
 [Policy batching #5352](https://github.com/honua-io/honua-server/issues/5352) is the
 next fixed-overhead opportunity, with fresh policy/principal evaluation, strict custom

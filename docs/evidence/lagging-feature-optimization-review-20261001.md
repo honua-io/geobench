@@ -15,8 +15,7 @@ fifth qualification failed six PostgreSQL cases. After fixes, source
 `68a6c0de2b152128c5ccdc037f686bcc2ac36c35` passed fresh Release JIT build,
 format and all 519 selected tests with zero failures/skips and complete owned cleanup.
 Supplemental caller-transaction stability source
-`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` is undergoing the same qualification
-in a separate seventh attempt. The previous-source pass is not a current-source claim. Production
+`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` passed the same519tests, fresh JIT build and changed-file format verification in the seventh attempt. All11fixtures and its terminal coordinator were cleaned; PostgreSQL16/18 compatibility is queued. Production
 schema-header correction is already delivered. The earlier range-tail deficit did
 not recur in the current three pairs, so it is not the primary target.
 
@@ -29,13 +28,12 @@ not recur in the current three pairs, so it is not the primary target.
 | 3 | Remove redundant ID delegates and array copies | `OgcGeoJsonFeatureBuilder.cs:32,75` captures feature IDs in a delegate and copies the collection array; identifier resolution repeats the primary-ID lookup. Source reader materialization grows an empty builder and copies its contents. | Preserve configured public IDs, string/numeric IDs and fallback behavior. Reuse prepared schema data; reserve only bounded capacities; transfer only if capacity equals count. Verify sparse/empty/full pages and allocations. |
 | 4 | Resolve the attribute projection once per SQL build | `PostgresStorageMappedFeatureReader.NativeAttributes.cs:25`, `.Paging.cs:32` and JSON fallback revisit field resolution; `PostgresStorageMappedFeatureReader.cs:685–706` scans schema/builds collections. Applies to page and tiny-response fixed overhead. | Carry a request-local field list; preserve masks, requested order, case collisions, DISTINCT, excluded attributes, identifier checks and stale-type fallback. Existing projection/mask/wide-field tests. |
 | 5 | Remove the Point geometry text/DOM round trip | `OgcFeaturesGeometryServices.cs:313–338` applies limits, writes NTS geometry to JSON, parses it, extracts coordinates, then final output writes them again. | Point-only output after existing limits; preserve empty points, Z/M, precision/rounding, axis order and nonfinite behavior. Compare complete parsed responses and existing geometry cases before timing. |
-| Later, outside current measured page path | Reuse/batch exact count and page source leases | `PostgresStorageMappedFeatureReader.cs:163–179` issues count/page separately; each opens a lease. Exact-count consumers may benefit. The current benchmark uses `OmitWhenExpensive`; mapped `IPagedFeatureReader.QueryPageAsync` executes one SELECT without COUNT. This does not target its shallow/medium deficit. | Preserve transaction ownership, planner-setting scope, security once, count/order behavior, errors/cancellation and lease cleanup. Keep short-first-page count elision; do not add unconditional counts to empty first pages. |
+| Deferred after current release | Reuse/batch exact count and page source leases | `PostgresStorageMappedFeatureReader.cs:163–179` issues count/page separately; each opens a lease. The actual runner overrides the Compose default with `Exact`; mapped `QueryAsync` executes COUNT and SELECT separately. This is relevant to the measured page rows, but not part of the release-frozen batch. | Preserve transaction ownership, planner-setting scope, security once, count/order behavior, errors/cancellation and lease cleanup. Keep short-first-page count elision; do not add unconditional counts to empty first pages. |
 | 7 | Write buffered GeoJSON directly to UTF-8 with prepared schema | The source-backed reader implements generic reader interfaces (`PostgresStorageMappedFeatureReader.cs:32`), so measured reads reach `OgcFeaturesQueryHandler.cs:416–438`. Other store's native/raw GeoJSON interfaces do not accelerate this provider automatically. | Consume authorized materialized features without changing database work. Preserve exact counts, fields/types/dates, IDs, masks, links, CRS and geometry. Oracle and 100-feature allocation checks before HTTP timing. |
 
 The next small batch should combine reader reuse, ID/allocation cleanup and projection
 reuse, alongside the separately tracked security-policy batching. Geometry and direct
-output rewrites need more parity testing. Count/page batching does not apply to the current measured page path and also changes
-transaction/planner scope, so it is deferred to exact-count consumers. None of these pending changes
+output rewrites need more parity testing. Count/page batching applies to the actual exact-count workload but changes transaction/planner scope; it is deferred under the release freeze. None of these pending changes
 is counted in the existing 72-row result or described as a measured improvement.
 
 No reviewer edits, builds or traffic were performed. Current optimization remains
@@ -45,10 +43,15 @@ and paired remeasurement of the completed optimizations.
 ## Focused pagination follow-up
 
 A new read-only reviewer examined source
-`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` and verified the current benchmark
-path: `OmitWhenExpensive`, feature links disabled, mapped `IPagedFeatureReader`,
-`QueryPageAsync` with one SELECT and a limit-plus-one probe, followed by WKB/DTO
-conversion. The recommended immediate page batch is:
+`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61`. Its first path conclusion was
+incorrect: it inspected the Compose `OmitWhenExpensive` default and missed the
+campaign's explicit `Exact` override. Corrected review verifies `Exact` in all three
+Honua compose/runtime receipts, numeric-count preflight checks and actual COUNTs
+against `public.bench_points` in every pair's source trace. Pagination requests
+limit100 and offsets0/1000/50000 with100000matches. The actual path is mapped
+`QueryAsync`/`QueryCoreAsync` with COUNT+SELECT, followed by WKB/DTO conversion.
+This correction affects optimization applicability, not the measured samples,
+validation or ratios. The recommended response-allocation candidates still apply:
 
 1. Remove the second properties dictionary only in the internal OGC builder's
    response-owned path. `GeoJsonFeatureBaseBuilder.cs:84` already creates the
@@ -65,19 +68,19 @@ conversion. The recommended immediate page batch is:
    case-collision behavior.
 4. Add ownership-aware array transfer for the exact array created by the handler.
    A page-specific materializer can also avoid decoding the extra probe feature and
-   copying the immutable array to remove it. Preserve public query/stream behavior,
+   copying the immutable array to remove it for omitted-count consumers only; this probe change does not apply to the measured exact-count rows. Preserve public query/stream behavior,
    result ordering, page lengths and general callers' array isolation.
 5. Reuse query-local projection decisions, preserving masks, hidden fields,
    declaration order, case handling and retry fallback. This ranks lower for the
    current small all-field schema.
 
 The strongest immediate page candidates are dictionary-copy removal, WKB reuse,
-and prepared IDs. Fresh policy batching remains the separate fixed-overhead target.
+and prepared IDs. Fresh policy batching remains a future fixed-overhead target.
 The first allocation batch is now implemented in independent trunk-based
 [draft PR5354](https://github.com/honua-io/honua-server/pull/5354), closing
 [issue5353](https://github.com/honua-io/honua-server/issues/5353): response-owned
 properties transfer, scoped sequential WKB reader reuse, and explicit handler-owned
-array transfer. Source `c3f597df357978b120a90fea23f61aaa05ca92ef` is queued for
+array transfer. Source `c3f597df357978b120a90fea23f61aaa05ca92ef` is running
 fresh JIT compilation, changed-file format verification and expanded OGC GeoJSON,
 query, geometry and identifier regressions. New tests cover canonical/encoded response
 isolation, public/arbitrary detached copies, empty/full collections and fresh-versus-reused
@@ -95,3 +98,16 @@ a credential revision. Existing reader string memoization already avoids repeate
 per-reader decryption. Keep the first authoritative lookup. Batching live registry and
 policy reads, or reusing a freshly resolved connection within one authorized multi-layer
 request, remains a future possibility. Neither is an implemented or measured gain.
+
+## Release freeze
+
+The user accepted wrapping the current batch and proceeding to final AOT readiness.
+Policy batching is checkpointed unqualified at server branch
+`perf/fresh-policy-batch-20261001`, head `6df177022`, with an honest released claim
+on issue5352. It is excluded from release candidates and measured results. Prepared
+IDs/projection/probe and count/lease batching are also deferred. PR5354's first
+hosted build/test gate found two new geometry methods missing tier-bearing attributes;
+a tests-only correction is in preparation outside the frozen local candidate.
+Final AOT, oracle qualification, source SQL proof, calibration and strict timed runs
+remain required. Notify the user when the concrete image/setup is ready; do not
+start final measurement before the user quiets the machine.
