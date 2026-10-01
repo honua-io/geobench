@@ -105,6 +105,13 @@ values before and after traffic. Older campaigns retain their original
 configuration and results; this change requires a new fingerprint-bound campaign
 and cannot be resumed into an earlier test-schema-enabled run.
 
+A persistent coordinator container on Docker Desktop can use
+`--control-host host.docker.internal` to reach the private published ports for
+provisioning and configuration checks. The default is `localhost`. The manifest
+records this address and binds it to resume/calibration; measured k6 requests
+continue to use each product's private Compose-network address. This option does
+not enable host networking or change the server/database/generator budgets.
+
 Use `--generator-cpus 8` in a new diagnostic campaign to investigate generator
 headroom. The option accepts positive integers and applies the same k6 CPU budget
 to both products; server/database CPU, memory and source-connection limits remain

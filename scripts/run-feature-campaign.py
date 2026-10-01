@@ -282,7 +282,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
             if fixture and (runtime != fixture["runtime"] or fingerprint(sql(ids["postgis-" + server], DB_FINGERPRINT_SQL)) != fixture["database_fingerprint"]):
                 raise ValueError("Reused fixture runtime/database fingerprint changed")
             port = inspect(ids[server])["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
-            base = f"http://localhost:{port}"
+            base = f"http://{manifest.get('control_host', 'localhost')}:{port}"
             env = {**os.environ, "COMPOSE_PROJECT_NAME": owner, "COMPOSE_FILE": str(compose_file),
                    "HONUA_URL": base, "GS_URL": base, "HONUA_STORAGE_PROFILE": "source",
                    "HONUA_API_KEY": composition["services"][server]["environment"].get("HONUA_ADMIN_PASSWORD", "GeoBench-Admin-Key-2026!"),
@@ -434,6 +434,8 @@ def main():
                         help="Separate explicit database-planner controls from automatic bounded planning")
     parser.add_argument("--generator-cpus", type=int, default=BUDGET["cpus"],
                         help="Positive integer k6 CPU budget, equal for both products; server/database budgets stay fixed")
+    parser.add_argument("--control-host", choices=("localhost", "host.docker.internal"), default="localhost",
+                        help="Host for provisioning HTTP only; Docker Desktop coordinators use host.docker.internal")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--prepare-only", action="store_true", help="Write immutable inputs and calibration binding without starting stacks")
@@ -471,7 +473,7 @@ def main():
     if not dataset.exists():
         subprocess.run([sys.executable, "data/small/generate.py"], check=True)
     manifest = {"schema": 1, "mode": args.mode, "protocol": args.protocol,
-                "reuse_fixture": args.reuse_fixture,
+                "reuse_fixture": args.reuse_fixture, "control_host": args.control_host,
                 "honua_profile": args.honua_profile,
                 "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
                 **MODES[args.mode], "scenarios": scenarios, "servers": args.servers,

@@ -108,11 +108,17 @@ class GeneratorBudgetTests(unittest.TestCase):
                     manifest = json.loads(original)
                     self.assertEqual({'cpus': 8, 'memory_bytes': 4 * 1024**3}, manifest['generator_budget'])
                     self.assertEqual(BUDGET, manifest['budget'])
+                    self.assertEqual('localhost', manifest['control_host'])
                     self.assertIn('generator-8cpu', manifest['profile'])
                     for server in ('honua', 'geoserver'):
                         self.assertEqual('8', manifest['effective_compose'][server]['services']['k6']['deploy']['resources']['limits']['cpus'])
                     argv.append('--resume')
                     self.assertEqual(0, runner.main())
+                    argv.extend(['--control-host', 'host.docker.internal'])
+                    with self.assertRaisesRegex(ValueError, 'Resume refused'):
+                        runner.main()
+                    self.assertEqual(original, (output / 'campaign.json').read_bytes())
+                    del argv[-2:]
                     argv[argv.index('8')] = '4'
                     with self.assertRaisesRegex(ValueError, 'Resume refused'):
                         runner.main()
