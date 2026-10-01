@@ -205,3 +205,27 @@ Receipt paths under `results/jit-optimization-batch-20260929/`:
 The replacement image/source needs a new campaign and calibration binding.
 No final timed traffic has started; publication calibration and the user's
 quiet-machine confirmation remain required.
+
+## Replacement qualification outcome
+
+[Cloud run36830715665](https://github.com/honua-io/honua-server/actions/runs/36830715665)
+completed successfully at2026-10-01T08:24:42Z: production full-profile Native AOT
+build, native serving boundary, executable startup smoke and candidate export all
+passed for application source `f0ba192135bfbeae7881fbde3a6640aa56d9d533`.
+This does not establish complete release correctness or benchmark readiness.
+
+Fresh source qualification failed: core27/27, security58/58 and PostgreSQL265/265
+passed; OGC API58/66 passed with eight failures. All eight exercise fractional
+GeoJSON timestamps: expected `1970-01-01T00:00:00.1234567Z`, actual
+`1970-01-01T00:00:00Z`. The current trunk revert changed the shared feature
+builder back to whole-second formatting. The prepared-schema regression tests
+retain the full timestamp requirement; they were not weakened. Later selections
+were not executed after this failure. The receipt and failed TRX are retained,
+and the driver cleaned all nine owned resources. This candidate cannot be called
+qualified or used for final results until the precision regression is repaired
+and the replacement source is verified.
+
+At the subsequent live check, all five release/repair PRs remained open and
+mergeable with both required gates successful. The fleet lander timestamp still
+had not advanced. No new AOT performance result exists, and the user should not
+quiet the machine for final timing yet.
