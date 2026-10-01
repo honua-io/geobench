@@ -74,15 +74,38 @@ remain. Repetitions recreate isolated stacks and reverse server order.
 
 The earlier [single-pair ratios](jit-optimization-batch-20260930.md) belong to the
 test-schema-enabled configuration. They cannot be treated as results of this
-production-settings campaign. Empty/boundary fixed overhead, range tails and
-medium-page tails remain the targeted weak cases until repetition evidence says
-otherwise.
+production-settings campaign. The first corrected pair passed all 24 rows and completed owned cleanup.
+Honua led throughput in 10 of 12 rows. These are provisional ratios recalculated
+from retained attempt summaries; the remaining repetitions and independent raw
+sample verification are still required. They do not establish repeatable gains
+or attribute changes to the test-hook correction.
+
+| Existing scenario | Honua / GeoServer throughput | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: | ---: |
+| page-shallow | 0.970 | 1.020 | 1.064 | 1.105 |
+| page-medium | 0.978 | 1.024 | 1.038 | 1.044 |
+| empty | 1.336 | 1.185 | 0.270 | 0.309 |
+| bbox-boundary | 1.274 | 1.075 | 0.369 | 0.414 |
+| range | 1.077 | 0.931 | 0.931 | 0.914 |
+
+Higher throughput ratios favor Honua; lower latency ratios favor Honua. Shallow
+and medium pages trail slightly across these metrics. Empty and boundary reads
+lead throughput and tail latency but trail median latency. The earlier range
+tail deficit does not appear in this pair; repeatability remains unproven.
+
+The independent code review prioritizes batching RLS and field-mask reads on one
+catalog lease, followed by reuse of the already authorized request metadata
+snapshot. These target fixed overhead in empty, boundary and cheap page reads.
+Anonymous wildcard policies, publication/service scopes, cancellation and
+fail-closed behavior must remain unchanged. Native decoding targets nonempty
+page allocation; range planner changes require separate bottleneck evidence.
 
 Native primitive attribute decoding is now
 [draft PR #5349](https://github.com/honua-io/honua-server/pull/5349), current source
-`eed286504f26c4b20ee279f7d3e0a9a0033d1a73`. Its compilation/formatting fixture
-errors were fixed and the latest format gate passed; build/test and protocol
-gates remain in progress. No allocation or HTTP improvement is claimed. It is
+`7f9a4aa8f` (branch head at this checkpoint). The prior head passed format and
+affected server shards but failed build on two CA1859 warnings in the new
+test helper. The concrete collection signatures were corrected and pushed;
+exact-head build/test qualification is pending. No allocation or HTTP improvement is claimed. It is
 not included in the frozen comparison image. Policy-read batching, reuse of the
 authorized metadata snapshot and direct UTF8 output remain follow-up candidates;
 security policy/credential caches based only on TTL are not proposed.
@@ -107,3 +130,7 @@ Under `results/jit-optimization-batch-20260929/`:
 - `harness-control-checkout/results/integrated-production-smoke-v2-20261001/`
   contains the complete corrected smoke; the comparison is separately retained
   at `integrated-production-comparison-v2-20261001/`.
+
+- `production-first-pair-provisional-20261001.json` records the preliminary
+  ratios and SHA256 of the separate passed-attempt snapshot; this checkpoint
+  does not replace the running campaign or its earlier failed attempts.
