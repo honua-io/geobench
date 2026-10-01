@@ -40,7 +40,7 @@ combined AOT oracle passed. Null-safety findings were checked against the curren
 assertion/conditional-access code, and the explicit stateful geometry loop was
 retained with rationale. Review threads were resolved with evidence. #5343 was
 already ready with green required gates. No manual/admin merge or brake bypass
-was performed. Final Review Gate/lander status remains a live prerequisite.
+was performed. All four exact-head PR Gate and Review Gate checks subsequently passed; each PR is non-draft and mergeable. All four remained open at that check. The normal lander/merge state remains a live prerequisite.
 
 ## Acquired production AOT image
 
