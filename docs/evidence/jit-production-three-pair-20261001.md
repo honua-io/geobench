@@ -118,16 +118,15 @@ but emitted 48 uncoded SourceLink warnings with SCM queries disabled.
 Current combined source `cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` adds stable
 canonical projections inside caller-owned/ambient transactions before execution,
 so source DDL cannot introduce the native descriptor failure into those scopes.
-Current PR5349 head is `12fd21ba528057f90845484f90ef435aaa731d69`.
-The seventh attempt passed fresh JIT compilation, changed-file format and all519selectedtests with no failures/skips and exact owned cleanup. PostgreSQL16/18 compatibility is queued using hash-verified identical assemblies and fresh fixtures. HTTP oracle/performance remain pending; no HTTP gain is claimed.
+The caller-transaction patch was PR5349 head `12fd21ba528057f90845484f90ef435aaa731d69`.
+The seventh attempt passed fresh JIT compilation, changed-file format and all519selectedtests with no failures/skips and exact owned cleanup. PostgreSQL18 passed all265 provider cases using hash-verified identical assemblies and fresh fixtures. PostgreSQL16 retained four volatile-policy test failures; current PR5349 head `a336794336d6a6502208afdf81a77d816dc2b165` authenticates the constrained test role directly, and the full combined release is qualifying on PG16. HTTP oracle/performance remain pending; no HTTP gain is claimed.
 
 [Policy batching #5352](https://github.com/honua-io/honua-server/issues/5352) is the
 next fixed-overhead opportunity, with fresh policy/principal evaluation, strict custom
 store/source compatibility and independent missing-table behavior required. The [refreshed source review](lagging-feature-optimization-review-20261001.md) identifies
 smaller page-allocation changes to batch before direct UTF8 writing. No policy/credential TTL cache is proposed.
 
-Final AOT, strict repetitions, calibration and publication remain after the remaining
-optimization and verification work. Earlier failed/interrupted campaigns remain visible.
+Further optimization is deferred for this release. [Production AOT acquisition](aot-release-readiness-20261001.md), strict repetitions, calibration and publication remain pending qualification. Earlier failed/interrupted campaigns remain visible.
 
 ## Retained local artifacts
 

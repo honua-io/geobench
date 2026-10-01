@@ -15,7 +15,7 @@ fifth qualification failed six PostgreSQL cases. After fixes, source
 `68a6c0de2b152128c5ccdc037f686bcc2ac36c35` passed fresh Release JIT build,
 format and all 519 selected tests with zero failures/skips and complete owned cleanup.
 Supplemental caller-transaction stability source
-`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` passed the same519tests, fresh JIT build and changed-file format verification in the seventh attempt. All11fixtures and its terminal coordinator were cleaned; PostgreSQL16/18 compatibility is queued. Production
+`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` passed the same519tests, fresh JIT build and changed-file format verification in the seventh attempt. All11fixtures and its terminal coordinator were cleaned; PostgreSQL18 passed all265 provider cases; PostgreSQL16 retained four pooled-role regression failures. The tests-only constrained-login repair and full combined release qualification are recorded in the [AOT readiness note](aot-release-readiness-20261001.md). Production
 schema-header correction is already delivered. The earlier range-tail deficit did
 not recur in the current three pairs, so it is not the primary target.
 
@@ -107,7 +107,7 @@ Policy batching is checkpointed unqualified at server branch
 on issue5352. It is excluded from release candidates and measured results. Prepared
 IDs/projection/probe and count/lease batching are also deferred. PR5354's first
 hosted build/test gate found two new geometry methods missing tier-bearing attributes;
-a tests-only correction is in preparation outside the frozen local candidate.
+current head `b71d85af6714b70a2257c807db1f0668166002f6` contains the tests-only tier correction. The independent source passed fresh JIT compilation, changed-file formatting and all55 selected OGC tests; the combined release is separately qualifying.
 Final AOT, oracle qualification, source SQL proof, calibration and strict timed runs
 remain required. Notify the user when the concrete image/setup is ready; do not
 start final measurement before the user quiets the machine.
