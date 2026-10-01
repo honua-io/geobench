@@ -42,6 +42,39 @@ No reviewer edits, builds or traffic were performed. Current optimization remain
 Release JIT; final production AOT and strict publishable evidence follow qualification
 and paired remeasurement of the completed optimizations.
 
+## Focused pagination follow-up
+
+A new read-only reviewer examined source
+`cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` and verified the current benchmark
+path: `OmitWhenExpensive`, feature links disabled, mapped `IPagedFeatureReader`,
+`QueryPageAsync` with one SELECT and a limit-plus-one probe, followed by WKB/DTO
+conversion. The recommended immediate page batch is:
+
+1. Remove the second properties dictionary only in the internal OGC builder's
+   response-owned path. `GeoJsonFeatureBaseBuilder.cs:84` already creates the
+   dictionary; `OgcExtensions.cs:72` copies it again. Preserve the public conversion
+   helper's detached-copy semantics for arbitrary callers.
+2. Reuse WKB decoding within the sequential response scope, preserving NTS output
+   and testing mixed endian/SRID/Z/M/empty/malformed inputs and recovery after an
+   invalid read. Local GeoTools35.1 `PostGISDialect.java:296,358–367` and
+   `WKBAttributeIO.java:40–41,77–84` reuse their decoder/reader, a source precedent
+   rather than evidence of a Honua speed gain.
+3. Prepare public-ID field resolution once; avoid per-feature closures and schema
+   scans. Use direct lookup only for known canonical case-insensitive dictionaries;
+   retain configured-ID, fallback-id, internal-ID ordering and general dictionaries'
+   case-collision behavior.
+4. Add ownership-aware array transfer for the exact array created by the handler.
+   A page-specific materializer can also avoid decoding the extra probe feature and
+   copying the immutable array to remove it. Preserve public query/stream behavior,
+   result ordering, page lengths and general callers' array isolation.
+5. Reuse query-local projection decisions, preserving masks, hidden fields,
+   declaration order, case handling and retry fallback. This ranks lower for the
+   current small all-field schema.
+
+The strongest immediate page candidates are dictionary-copy removal, WKB reuse,
+and prepared IDs. Fresh policy batching remains the separate fixed-overhead target.
+No changes from this follow-up are implemented or included in measured results.
+
 ## Credential freshness review
 
 A separate registry-cache shortcut was rejected: the metadata graph has no authoritative
