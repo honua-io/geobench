@@ -89,8 +89,8 @@ Raw receipts retain each measured p50/p95/p99 and all corresponding paired ratio
 
 [Native decoding #5349](https://github.com/honua-io/honua-server/pull/5349) and
 [authorized metadata reuse #5351](https://github.com/honua-io/honua-server/pull/5351)
-have exact-head PR Gate success. A clean combined checkout at
-`e110a28cb4b3b5a64fd3b0e4c279a2099fb35f06` is undergoing local JIT qualification.
+are undergoing combined local JIT qualification; hosted gate success must be checked at each current head. The original combined source was
+`e110a28cb4b3b5a64fd3b0e4c279a2099fb35f06`.
 The first launcher exited before the driver because of a duplicated Python entrypoint;
 its exact terminal log and cleanup are retained. The next build failed on an SDK static-assets
 shared file lock before tests; all its owned fixtures were cleaned. The subsequent
@@ -104,9 +104,24 @@ attempt completed 27 core and 58 security tests successfully, then stopped after
 247 PostgreSQL tests with six failures and no skips. Five failures are older smallint
 SQL assertions now seeing the native projection's type guard; one is a real prepared
 query result-type regression after a physical column type changes. All five attempts,
-test results and exact owned cleanup remain retained. The failed candidate has not
-advanced to HTTP benchmarking. These partial passes do not establish complete
-native-decoder/metadata qualification or HTTP gains.
+test results and exact owned cleanup remain retained. The failed candidate did not
+advance to HTTP benchmarking.
+
+The sixth attempt, source `68a6c0de2b152128c5ccdc037f686bcc2ac36c35`, repaired
+prepared native-result descriptor drift and the five predicate assertions. It passed a
+fresh Release JIT build with analyzers/warnings-as-errors, changed-file format check,
+and all 519 selected tests: core27, security58, PostgreSQL265, OGC API49,
+GeoServices108, WFS12. No failures/skips; all 11 fixtures and its exact terminal
+coordinator were cleaned with receipts. Compilation had no errors/coded warnings,
+but emitted 48 uncoded SourceLink warnings with SCM queries disabled.
+
+Current combined source `cf49cb77d31e7a56ed81870b8e10ab6e7a427a61` adds stable
+canonical projections inside caller-owned/ambient transactions before execution,
+so source DDL cannot introduce the native descriptor failure into those scopes.
+Current PR5349 head is `12fd21ba528057f90845484f90ef435aaa731d69`.
+The seventh attempt is running the same six selections and format verification;
+source68's 519-case pass does not cover this supplemental change. PostgreSQL16/18
+compatibility and HTTP oracle/performance remain pending. No HTTP gain is claimed.
 
 [Policy batching #5352](https://github.com/honua-io/honua-server/issues/5352) is the
 next fixed-overhead opportunity, with fresh policy/principal evaluation, strict custom
@@ -129,4 +144,6 @@ Under `results/jit-optimization-batch-20260929/`:
 - `native-metadata-integration-preparation-20261001.json` and versioned preparations
   bind current source and qualification recipes; compilation/tests remain separately recorded.
 - `durable-native-metadata-pg17-20261001/` and `native-metadata-pg17-v2-20261001/`
-  retain the failed launcher/build and cleanup. The current attempt uses a fresh v3 directory.
+  retain the failed launcher/build and cleanup. Subsequent v3–v5 failures remain visible;
+  `native-metadata-pg17-v6-20261001/` contains the 519-case pass, hashes and cleanup;
+  current `native-metadata-pg17-v7-20261001/` is separate.
