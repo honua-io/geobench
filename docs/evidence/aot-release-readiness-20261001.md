@@ -1,6 +1,8 @@
 # Frozen release and Native AOT readiness — October 1, 2026 (UTC)
 
-**The production-recipe AOT candidate is built, acquired and oracle-qualified.**
+**The earlier production-recipe AOT candidate is built, acquired and oracle-qualified.**
+A replacement incorporating current trunk and the CI repair is building; the
+older qualification below applies only to source `da06c51`.
 The final timed comparison has not started and no AOT speed claim is made.
 Normal merges and publication calibration remain pending; the user has not yet
 quieted the machine for final timing. The latest performance evidence remains
@@ -147,7 +149,9 @@ package-refresh default are now published in
 `4573567358a2ec2951be5bbb6abc468475d394f0`. All three findings were replied to
 with source/validation evidence and resolved. The exact-head Review Gate passed;
 [PR Gate run36828755759](https://github.com/honua-io/honua-server/actions/runs/36828755759)
-is live and its final outcome is still pending.
+completed successfully, including both affected GeoServices shards. The fresh
+[canonical Native AOT serving-image check](https://github.com/honua-io/honua-server/actions/runs/36828755888/job/110260373857)
+also passed.
 
 The non-comment C# source is byte-identical to the previous remote head. The only
 AOT recipe change sets its default revision to20261001, matching the explicit
@@ -158,3 +162,46 @@ original sources; neither is relabelled as a full test run of this repair.
 `git diff --check` and the pre-PR selection dry run passed. Normal fleet admission,
 any required repair matrix, trunk verification and calibration remain pending.
 No merge brake was overridden and no final timed campaign started.
+
+## Current trunk and merge admission checkpoint
+
+The unchanged-trunk Core/Cloud rerun at
+`4fa28024a99db339161328ecd65d31307eaa1797` passed all373 tests, including the
+previously failing client-compatibility count request:
+[job110264085750](https://github.com/honua-io/honua-server/actions/runs/36758108272/job/110264085750).
+The original372/373 attempt remains retained. A single successful retry does
+not establish the underlying failure's cause or make the whole matrix green.
+The repair's COVERS declaration remains limited to its original two families.
+
+Current trunk, the exact four frozen PR heads and CI repair5345 merge cleanly
+into candidate `f0ba192135bfbeae7881fbde3a6640aa56d9d533`, pushed on
+`qualification/current-trunk-release-20261001`. This candidate includes the
+current trunk revert absent from the older qualified candidate. Fresh locked
+local source qualification is underway; the old536-case result is not evidence
+for this replacement source. A separate production full-profile Native AOT
+build is running in
+[run36830715665](https://github.com/honua-io/honua-server/actions/runs/36830715665).
+Its application source is fixed to `f0ba192`; its workflow-only branch is
+`qualification/aot-export-current-trunk-20261001`. No shipping alias was moved.
+The replacement still needs acquired-image and HTTP oracle validation.
+
+All five PRs remain open. The four optimization PRs and CI repair5345 have
+successful exact-head PR Gate and Review Gate, zero unresolved threads, and
+are non-draft/mergeable against trunk. A
+[normal-admission handoff](https://github.com/honua-io/honua-server/pull/5345#issuecomment-5927249301)
+records the repair evidence. The fleet's last recorded lander pass remains
+2026-09-30T18:36:07Z, and its trunk verdict still references an older failed run.
+The current session cannot connect to the host's user systemd bus, so it cannot
+verify or restore that service here. Stale files alone do not prove the daemon
+is stopped. The server's normal serialized lander remains the merge authority;
+no second caller, manual/admin merge or brake-state edit was used.
+
+Receipt paths under `results/jit-optimization-batch-20260929/`:
+`trunk-core-cloud-rerun-artifact-20261001/verification.json`,
+`current-trunk-release-integration-preparation-20261001.json`,
+`current-trunk-aot-cloud-launch-20261001.json`,
+`release-current-trunk-preparation-20261001.json`, and
+`release-current-trunk-pg17-v1-20261001/receipt.json`.
+The replacement image/source needs a new campaign and calibration binding.
+No final timed traffic has started; publication calibration and the user's
+quiet-machine confirmation remain required.
