@@ -96,6 +96,25 @@ response caching and adaptive admission are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
+Honua's test-schema headers are disabled (`HONUA_TEST_SCHEMA_HEADERS=false`).
+Each attempt already owns an isolated database, and workloads do not send
+per-request schema overrides. This retains the shipping connection reset policy;
+turning test-schema isolation on adds resets of pooled catalog connections.
+Runtime receipts record the flag and reject missing, conflicting or enabled
+values before and after traffic. Older campaigns retain their original
+configuration and results; this change requires a new fingerprint-bound campaign
+and cannot be resumed into an earlier test-schema-enabled run.
+
+A persistent coordinator container on Docker Desktop can use
+`--control-host host.docker.internal` to reach the private published ports for
+provisioning and configuration checks. The default is `localhost`. The manifest
+records this address and binds it to resume/calibration; measured k6 requests
+continue to use each product's private Compose-network address. This option does
+not enable host networking or change the server/database/generator budgets.
+The container-coordinator option explicitly adds `host.docker.internal` to
+Honua's allowed-host list for provisioning; host validation remains enabled, and
+the effective list is captured in runtime receipts.
+
 Use `--generator-cpus 8` in a new diagnostic campaign to investigate generator
 headroom. The option accepts positive integers and applies the same k6 CPU budget
 to both products; server/database CPU, memory and source-connection limits remain
