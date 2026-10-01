@@ -135,3 +135,26 @@ The final campaign remains held. The user should quiet the machine only after
 merged-source/image proof and publication calibration are ready; explicit user
 confirmation is still required before final timing starts. Preparation receipt:
 `results/jit-optimization-batch-20260929/strict-candidate-preparation-20261001/receipt.json`.
+
+## CI repair follow-up checkpoint
+
+The stalled repair lease was adopted with a recorded takeover comment under the
+server repository's three-hour rule for unresolved repair work. The existing
+owner's commit was preserved and fast-forwarded from an owned checkout; its
+original worktree remains unchanged. The two XML summaries and production AOT
+package-refresh default are now published in
+[#5345](https://github.com/honua-io/honua-server/pull/5345) at
+`4573567358a2ec2951be5bbb6abc468475d394f0`. All three findings were replied to
+with source/validation evidence and resolved. The exact-head Review Gate passed;
+[PR Gate run36828755759](https://github.com/honua-io/honua-server/actions/runs/36828755759)
+is live and its final outcome is still pending.
+
+The non-comment C# source is byte-identical to the previous remote head. The only
+AOT recipe change sets its default revision to20261001, matching the explicit
+argument used by the already-executed cloud qualification build. The pre-change
+Dockerfile blob exactly matches that build's retained recipe receipt. Existing
+hosted266-case and qualification536-case results remain attributed to their
+original sources; neither is relabelled as a full test run of this repair.
+`git diff --check` and the pre-PR selection dry run passed. Normal fleet admission,
+any required repair matrix, trunk verification and calibration remain pending.
+No merge brake was overridden and no final timed campaign started.
