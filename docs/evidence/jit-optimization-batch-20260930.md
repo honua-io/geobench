@@ -80,7 +80,7 @@ semantic failures, warmup/drain traffic and observed resource pressure are retai
 separately. No averaged percentile or cross-protocol winner score is used. This
 shared WSL run cannot satisfy isolated-generator calibration for publication.
 
-The first completed pair produced these throughput ratios (Honua / GeoServer):
+The earlier test-schema-enabled pair produced these throughput ratios (Honua / GeoServer):
 
 | Existing row | Throughput ratio |
 |---|---:|
@@ -110,7 +110,9 @@ that attempt are counted. Its three exact owned containers, volume and network
 were verified and cleaned; other resources were untouched. A new complete
 campaign is required to qualify three passing pairs. Failed attempts will not be
 overwritten or silently substituted. Durable coordination is being addressed
-before another long run.
+before another long run. The [production-settings rebaseline](jit-production-settings-20261001.md)
+records the merged harness correction, durable coordinator, new passing smoke
+and fresh repeated diagnostic campaign.
 
 Typed native-column decoding is in implementation; direct UTF8 output remains
 planned work. The
