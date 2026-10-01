@@ -197,6 +197,23 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
                 runner.make_compose('owned', 'honua', {}, 'unknown')
             command.assert_not_called()
 
+    def test_coordinator_host_is_explicitly_allowed_without_changing_measured_stack(self):
+        runner = load('run-feature-campaign')
+        original = {'services': {name: {'environment': {'keep': 'value'}} for name in
+                    ('honua', 'geoserver', 'postgis-honua', 'postgis-geoserver', 'k6')}}
+        with patch.object(runner, 'command', return_value=json.dumps(original)):
+            normal = runner.make_compose('owned', 'honua', {})
+            controller = runner.make_compose('owned', 'honua', {}, control_host='host.docker.internal')
+            env = controller['services']['honua']['environment']
+            self.assertEqual('host.docker.internal', env.pop('HostValidation__AllowedHosts__2'))
+            self.assertEqual(normal, controller)
+            geo = runner.make_compose('owned', 'geoserver', {})
+            self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, control_host='host.docker.internal'))
+        with patch.object(runner, 'command') as command:
+            with self.assertRaisesRegex(ValueError, 'Unknown control host'):
+                runner.make_compose('owned', 'honua', {}, control_host='unrecorded.invalid')
+            command.assert_not_called()
+
     def test_cleanup_discovers_stopped_owned_containers(self):
         with patch('feature_runtime.command', return_value='owned') as mocked:
             self.assertEqual(['owned'], owned_ids('mine'))

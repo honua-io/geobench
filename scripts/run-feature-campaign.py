@@ -48,6 +48,7 @@ from feature_runtime import (
 from feature_sql_evidence import validate_source_trace
 
 ROOT = Path(__file__).resolve().parents[1]
+CONTROL_HOSTS = ("localhost", "host.docker.internal")
 
 
 def write(path, data):
@@ -106,8 +107,10 @@ def resolve_images(args):
     return images
 
 
-def make_compose(owner, server, images, honua_profile="baseline", generator_cpus=BUDGET["cpus"]):
+def make_compose(owner, server, images, honua_profile="baseline", generator_cpus=BUDGET["cpus"], control_host="localhost"):
     load_budget = generator_budget(generator_cpus)
+    if control_host not in CONTROL_HOSTS:
+        raise ValueError(f"Unknown control host: {control_host}")
     if honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
@@ -138,6 +141,8 @@ def make_compose(owner, server, images, honua_profile="baseline", generator_cpus
         services[server]["environment"]["OgcFeatures__NumberMatchedPolicy"] = "Exact"
         # Owned, isolated databases use production connection reset behavior.
         services[server]["environment"]["HONUA_TEST_SCHEMA_HEADERS"] = "false"
+        if control_host == "host.docker.internal":
+            services[server]["environment"]["HostValidation__AllowedHosts__2"] = control_host
         services[server]["environment"].update(HONUA_PROFILES[honua_profile])
     return {"services": services,
             "volumes": {f"pgdata-{server}": {"labels": labels}},
@@ -162,7 +167,7 @@ def runtime_receipt(ids, images, honua_profile=None, generator_cpus=BUDGET["cpus
                         "cpus": info["HostConfig"]["NanoCpus"] / 1e9,
                         "memory": info["HostConfig"]["Memory"],
                         "environment": [e for e in info["Config"].get("Env", [])
-                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT=", "HONUA_TEST_SCHEMA_HEADERS="))]}
+                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT=", "HONUA_TEST_SCHEMA_HEADERS=", "HostValidation__AllowedHosts__"))]}
         if name == "honua":
             schema_entries = [e for e in result[name]["environment"]
                               if e.partition("=")[0] == "HONUA_TEST_SCHEMA_HEADERS"]
@@ -250,7 +255,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
     path = directory / attempt["id"]
     path.mkdir()
     compose_file = path / "compose.json"
-    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus)
+    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus, manifest.get("control_host", "localhost"))
     for volume in composition["services"]["k6"]["volumes"]:
         if volume.get("target") == "/tests":
             volume["source"] = str(directory / "harness" / "src/tests")
@@ -434,7 +439,7 @@ def main():
                         help="Separate explicit database-planner controls from automatic bounded planning")
     parser.add_argument("--generator-cpus", type=int, default=BUDGET["cpus"],
                         help="Positive integer k6 CPU budget, equal for both products; server/database budgets stay fixed")
-    parser.add_argument("--control-host", choices=("localhost", "host.docker.internal"), default="localhost",
+    parser.add_argument("--control-host", choices=CONTROL_HOSTS, default="localhost",
                         help="Host for provisioning HTTP only; Docker Desktop coordinators use host.docker.internal")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true")
@@ -483,7 +488,7 @@ def main():
                 "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
                 "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
                 "honua_compilation": images.get("honua", {}).get("labels", {}).get("honua.runtime.compilation", "unverified-diagnostic"),
-                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile, args.generator_cpus) for s in args.servers}}
+                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile, args.generator_cpus, args.control_host) for s in args.servers}}
     if args.honua_profile != "baseline":
         manifest["profile"] += "-honua-" + args.honua_profile
     if args.generator_cpus != BUDGET["cpus"]:
