@@ -229,3 +229,44 @@ At the subsequent live check, all five release/repair PRs remained open and
 mergeable with both required gates successful. The fleet lander timestamp still
 had not advanced. No new AOT performance result exists, and the user should not
 quiet the machine for final timing yet.
+
+## Timestamp integration repair and shepherding checkpoint
+
+PR5343 now integrates current trunk at head
+`d283abbcb0741b224327aac80e9fa1d14840803a`. Its shared GeoJSON builder explicitly
+retains `TemporalExtentHelpers.FormatOgcTemporalValue`, so whole-second output
+keeps its shape while fractional timestamps retain seven digits. The eight
+existing failing regression assertions were not changed. No other reverted
+contract was restored by this repair. A temporary hold prevents admission before
+the combined-source regression passes.
+
+[Fresh PR Gate36897330107](https://github.com/honua-io/honua-server/actions/runs/36897330107)
+completed successfully, including all six affected server shards and the full
+required build/test execution proofs. A requested Codex review reported account
+quota exhaustion. The repository's independent
+[Claude review36901046350](https://github.com/honua-io/honua-server/actions/runs/36901046350)
+then passed and posted a clean attestation at the exact repaired head. The trusted
+Review Gate remains red while the deliberate hold remains; it was not overridden.
+
+The repaired frozen combined source is
+`f1f040344cfd25986dc1bf6044b23a795053eaee`, branch
+`qualification/release-timestamp-repair-20261001`. It differs from failed
+candidate `f0ba192` in only the shared builder (two insertions, one deletion).
+Its fresh Release compilation finished in33m30s with zero errors and48 uncoded
+SourceLink warnings. Changed-file formatting and the same six selected test
+projects are being verified under the shared lock. All earlier passes/failures
+remain attributed to their own sources. A corrected production full-profile AOT
+export is live in
+[run36898796298](https://github.com/honua-io/honua-server/actions/runs/36898796298),
+with no shipping aliases moved. Immutable image acquisition and a both-product
+HTTP oracle driver are prepared but not executed for this source yet.
+
+The prior failed qualification's nine resources were cleaned, and its exact
+terminal controller was removed after retaining its logs and failure receipt.
+The new qualification controller is live and must not be reclaimed prematurely.
+All five release/repair PRs remain open. The four unchanged PRs still have both
+required gates green and zero unresolved threads. The host lander timestamp has
+not advanced; this session still cannot connect to its user systemd bus. Normal
+serialized admission remains pending, with no manual/admin merge or state edit.
+The user was asked whether the WSL service restart succeeded; no answer was yet
+received at this checkpoint. No final timing or new speed claim was made.
