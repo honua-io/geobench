@@ -1,8 +1,9 @@
 # Production-settings JIT rebaseline — October 1, 2026 (UTC)
 
 Both products passed all 12 existing oracle scenarios in a fresh semantic smoke
-run. The three paired diagnostic repetitions are running; no new repeated speed
-ratio or publication claim is available. This remains the deterministic
+run. The three paired diagnostic repetitions passed all 72 measured rows; the
+[complete results and independent raw verification](jit-production-three-pair-20261001.md)
+are now available. No publication claim is made. This remains the deterministic
 100K-point workload on shared WSL/Docker Desktop, using Release JIT.
 
 ## What changed
@@ -65,7 +66,7 @@ older interrupted campaign was replaced with a passing attempt.
 
 ## Performance and remaining work
 
-The running comparison schedules three paired repetitions, seed 42, all 12
+The completed comparison ran three paired repetitions, seed 42, all 12
 existing rows, 30-second warmup and 30-second measurement with explicit drain.
 Server/database budgets remain 4 CPUs / 4 GiB each, source pools remain six,
 and the generator has the same eight-CPU budget for both products. Exact
