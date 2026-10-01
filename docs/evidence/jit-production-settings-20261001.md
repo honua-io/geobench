@@ -106,9 +106,26 @@ Native primitive attribute decoding is now
 affected server shards but failed build on two CA1859 warnings in the new
 test helper. The concrete collection signatures were corrected and pushed;
 exact-head build/test qualification is pending. No allocation or HTTP improvement is claimed. It is
-not included in the frozen comparison image. Policy-read batching, reuse of the
-authorized metadata snapshot and direct UTF8 output remain follow-up candidates;
-security policy/credential caches based only on TTL are not proposed.
+not included in the frozen comparison image. Authorized metadata reuse is now [draft PR #5351](https://github.com/honua-io/honua-server/pull/5351),
+source `259c4cad6c462dc1c35b0290f0cd23fe1e2e2af5`. Both OGC item handlers use the
+validation snapshot. Security sources reuse it only for the identical canonical
+resource in the same request and use immutable service-name scopes built from
+first-wins publication/service IDs. Tests were added for graph revisions, failed
+authorization, duplicate IDs/names, principal changes, anonymous wildcard roles,
+fresh policies and request/resource isolation. Its exact-head format gate passed;
+compilation and semantic gates remain pending. No speed gain is claimed.
+
+An isolated integration checkout at `e110a28cb4b3b5a64fd3b0e4c279a2099fb35f06`
+combines both drafts with the already qualified bounded-planning/shared-GeoJSON
+batch. It is clean and pushed to `qualification/native-metadata-20261001`. Its
+qualification driver was syntax checked and its selection recipe inspected; no
+build/test was executed during current timed traffic. The driver requires actual
+terminal-success of the prior Docker coordinator, the passed comparison receipt,
+and both shared locks before heavy work. All previous WFS selection cases remain
+in the new recipe. Fresh compilation will stamp the actual integration source.
+
+Policy-read batching and direct UTF8 output remain follow-up candidates; security
+policy/credential caches based only on TTL are not proposed.
 
 Final production AOT and strict feature publication remain deferred until all
 optimization and required correctness, fairness, calibration and performance
@@ -134,3 +151,7 @@ Under `results/jit-optimization-batch-20260929/`:
 - `production-first-pair-provisional-20261001.json` records the preliminary
   ratios and SHA256 of the separate passed-attempt snapshot; this checkpoint
   does not replace the running campaign or its earlier failed attempts.
+
+- `native-metadata-integration-preparation-20261001.json` binds both candidate
+  heads, applied commits, changed input hashes and the checked qualification
+  recipe. Its explicit status is prepared, not built or tested.
