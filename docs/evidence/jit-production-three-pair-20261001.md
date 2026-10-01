@@ -94,13 +94,19 @@ have exact-head PR Gate success. A clean combined checkout at
 The first launcher exited before the driver because of a duplicated Python entrypoint;
 its exact terminal log and cleanup are retained. The next build failed on an SDK static-assets
 shared file lock before tests; all its owned fixtures were cleaned. The subsequent
-attempt serializes MSBuild without weakening analyzers or selections. None is counted
-as a native-decoder/metadata semantic pass yet.
+attempt serializes MSBuild without weakening analyzers or selections. That build
+passed, followed by 27 passing core tests, before the qualification driver rejected
+formatted xUnit display names. A fourth attempt passed all 27 core and 58 security
+tests before another driver assertion exposed an omitted method-name prefix. Both
+attempts and exact owned cleanup are retained. The driver now joins passed TRX results
+to exact method definitions and verifies the required names against source. The fifth
+attempt reruns the full six selections from the unchanged clean source. These partial
+passes do not establish complete native-decoder/metadata qualification or HTTP gains.
 
 [Policy batching #5352](https://github.com/honua-io/honua-server/issues/5352) is the
 next fixed-overhead opportunity, with fresh policy/principal evaluation, strict custom
-store/source compatibility and independent missing-table behavior required. Direct UTF8
-writing remains a later nonempty-page opportunity. No policy/credential TTL cache is proposed.
+store/source compatibility and independent missing-table behavior required. The [refreshed source review](lagging-feature-optimization-review-20261001.md) identifies
+smaller page-allocation changes to batch before direct UTF8 writing. No policy/credential TTL cache is proposed.
 
 Final AOT, strict repetitions, calibration and publication remain after the remaining
 optimization and verification work. Earlier failed/interrupted campaigns remain visible.
