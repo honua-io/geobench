@@ -2,10 +2,12 @@
 
 **The corrected production AOT candidate is built, acquired and oracle-qualified.**
 Source `f1f040344cfd25986dc1bf6044b23a795053eaee` passed536 selected tests on
-PostgreSQL17 and all24 both-product oracle smoke rows. All five release/repair
-PRs have both required gates green and zero unresolved threads, but remain
-unmerged: normal host merge admission is still blocked by the inaccessible
-coordinator. No final timed comparison or new AOT speed claim has been made.
+PostgreSQL17 and all24 both-product oracle smoke rows. Fleet watch restarted
+and CI repair #5345 merged through normal admission. The four optimization PRs
+retain both required gates green and zero unresolved threads; they remain open
+behind the trunk CI brake. A new narrowly scoped CI repair #5358 addresses a
+client-tooling vulnerability scan failure and provisional test-shard headroom.
+No final timed comparison or new AOT speed claim has been made.
 Merged-content proof, publication calibration and the user's quiet-machine
 confirmation remain pending. The historical qualification below retains its
 own sources; the latest corrected-source evidence is recorded at the end.
@@ -313,12 +315,48 @@ coordinator remains for existing prerequisites.
 
 [Final normal-admission handoff](https://github.com/honua-io/honua-server/pull/5345#issuecomment-5937948231)
 records the repaired heads and evidence without changing the CI repair's COVERS.
-The coordinator's last recorded lander pass remains2026-09-30T18:36:07Z. A fresh
-attempt to query the host user systemd bus still failed with `No data available`.
-This does not establish daemon process state from stale files. The current
-sandbox cannot restore that host service, and no manual/admin merge, second
-lander caller or brake-state override was used. Host-side restoration is needed
-to progress normal merges.
+The user restarted fleet watch. Its watcher resumed at2026-10-01T19:07:52Z
+and its normal serialized lander resumed at19:08:21Z. CI repair
+[#5345](https://github.com/honua-io/honua-server/pull/5345) merged at19:09:07Z
+as `22ae8be27175f733ad47b678e8ef01fbc649bedf`; ancestry in fetched trunk was
+verified. The lander also merged documentation/certification PR #5347, giving
+trunk `d2cf2fd27523494245d6ace35dc411655ae5354d`, and dispatched
+[trailing CI36912211773](https://github.com/honua-io/honua-server/actions/runs/36912211773).
+That run remains pending. The four optimization PRs retain their exact green
+heads and zero unresolved threads but are still open behind the trunk brake.
+No manual/admin merge, second lander caller or brake-state override was used.
+
+The newer pre-repair trunk run36890294472 differs from the old XML assertion
+failure: its Catalog/ImageServer support shard exhausted the18-minute budget
+while still producing output. The retained timing artifact records1081 seconds,
+exit124, `capacity_exhausted`, last output4 seconds before exit and no completed
+TRX. The Catalog/ImageServer shard passed in the subsequent unchanged-budget
+trailing run36912211773. That run's server image scan passed, but its filesystem
+scan still failed on client-tooling urllib3 2.7.0 (CVE-2026-97687/CVE-2026-97689,
+reported fixed version2.8.0).
+
+[CI follow-up #5358](https://github.com/honua-io/honua-server/pull/5358), head
+`c89c4db32f59942a47e742a7a9f019078ba01327`, closes tracking issue #5357. It changes
+only the support shard's caps18/28→30/40 minutes, the two client/conformance
+urllib3 pins2.7.0→2.8.0, and evidence documentation. Every filter/path/project,
+other dependency pin and server/Native AOT input is unchanged. Full CI router
+validation passed under the shared build semaphore:1539 test classes covered,
+21 exact declared partitions and76 populated filters. Both full requirements
+graphs resolved against PyPI (23 OWSLib packages,35 conformance packages).
+Matching Trivy0.70.0, verified against its release digests/checksums, passed a
+repository vulnerability scan over13 targets with zero fixed HIGH/CRITICAL
+advisories. This is not a secret-scan or whole-matrix proof. The initial local
+scanner database-download failure from the WSL credential helper was retained;
+the passing attempt used a temporary isolated Docker credential configuration.
+The full managed pre-PR suite was not claimed: its dry run selects FULL; these
+specific equivalent checks and their limits are disclosed in the PR. Codex
+review reported an account quota limit, and the allowed independent Claude
+review was requested at the exact head. The trusted Review Gate is green with
+description "No reviewer objections; review trails this merge (fix-forward
+admission)"; this is not claimed as a completed independent review. The PR Gate
+and requested independent review remain pending.
+The fixed source is still fully qualified, but that does not make the whole
+trailing matrix green.
 
 The new image/source requires a new campaign and calibration binding; the old
 prepared strict candidate is historical. The final comparison has not started.
