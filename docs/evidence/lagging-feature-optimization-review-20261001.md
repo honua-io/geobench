@@ -73,7 +73,17 @@ conversion. The recommended immediate page batch is:
 
 The strongest immediate page candidates are dictionary-copy removal, WKB reuse,
 and prepared IDs. Fresh policy batching remains the separate fixed-overhead target.
-No changes from this follow-up are implemented or included in measured results.
+The first allocation batch is now implemented in independent trunk-based
+[draft PR5354](https://github.com/honua-io/honua-server/pull/5354), closing
+[issue5353](https://github.com/honua-io/honua-server/issues/5353): response-owned
+properties transfer, scoped sequential WKB reader reuse, and explicit handler-owned
+array transfer. Source `c3f597df357978b120a90fea23f61aaa05ca92ef` is queued for
+fresh JIT compilation, changed-file format verification and expanded OGC GeoJSON,
+query, geometry and identifier regressions. New tests cover canonical/encoded response
+isolation, public/arbitrary detached copies, empty/full collections and fresh-versus-reused
+parsing across endian/SRID/Z/M, including invalid-then-valid input. Tests and speed gains
+are not yet claimed passing. Prepared IDs/projection/probe materialization and policy
+batching remain follow-ups. No new serving changes are included in the measured72rows.
 
 ## Credential freshness review
 
