@@ -335,7 +335,7 @@ trailing run36912211773. That run's server image scan passed, but its filesystem
 scan still failed on client-tooling urllib3 2.7.0 (CVE-2026-97687/CVE-2026-97689,
 reported fixed version2.8.0).
 
-[CI follow-up #5358](https://github.com/honua-io/honua-server/pull/5358), head
+[CI follow-up #5358](https://github.com/honua-io/honua-server/pull/5358), initial head
 `c89c4db32f59942a47e742a7a9f019078ba01327`, closes tracking issue #5357. It changes
 only the support shard's caps18/28→30/40 minutes, the two client/conformance
 urllib3 pins2.7.0→2.8.0, and evidence documentation. Every filter/path/project,
@@ -357,6 +357,26 @@ admission)"; this is not claimed as a completed independent review. The PR Gate
 and requested independent review remain pending.
 The fixed source is still fully qualified, but that does not make the whole
 trailing matrix green.
+
+The independent review at c89c4db32 did post its clean attestation and returned
+`verdict=clean`, with exactly one matching attestation. The evidence checker
+confirmed consistency and then failed because GitHub CLI rejects `--slurp`
+combined with `--jq`. That failed workflow is retained as run36915468887;
+it is not described as a successful workflow or a reviewer objection.
+
+The current repair head is `d6241371e4682245338afb674e65310fd8d014ce`. Its further
+changes pipe paginated API output to external jq, add a regression fixture in
+the existing reviewer suite and record the evidence. Trusted application ID,
+latest-result selection and fail-closed behavior are preserved. The fixture
+exercises separate pages, newer failures, foreign applications, unrelated and
+missing checks, and malformed JSON against the actual workflow expression.
+[Exact-head hosted router job110553529049](https://github.com/honua-io/honua-server/actions/runs/36917001634/job/110553529049)
+passed both that new test and the complete router suite. The redundant local
+attempt was cancelled with exit130 while still queued, before acquiring any
+shared build slot or executing tests; its receipt is retained. The temporary
+hold was removed only after this hosted proof was recorded. A new independent
+review was requested at d6241371e. The remaining build gate and whole trailing
+matrix are still pending. No application or Native AOT input changed.
 
 The new image/source requires a new campaign and calibration binding; the old
 prepared strict candidate is historical. The final comparison has not started.
