@@ -35,8 +35,11 @@ adds UnitTheory/UnitTest. Serving files are unchanged from the local pass.
 The combined frozen source is now `da06c51de0bc8579601fc86bc5ddcafabaed7a70`,
 branch `qualification/release-20261001-r2`. It includes both test-only corrections.
 A fresh six-project Release JIT qualification is running on PostgreSQL16 with
-mandatory native, metadata and page regression identities. PostgreSQL17/18 reuse
-checks and full HTTP oracle remain pending. Prior failures, logs and cleanup
+mandatory native, metadata and page regression identities. Durable PostgreSQL17/18
+workers wait for that exact passing terminal result before running provider tests
+against fresh fixtures with identical hash-verified assemblies. Full HTTP oracle
+remains pending. The current pagination head has passed its hosted PR Gate; its
+review gate still reflects draft status. Prior failures, logs and cleanup
 receipts remain retained; they were not silently replaced.
 
 ## Cloud production AOT acquisition
@@ -59,6 +62,10 @@ HTTP liveness before pushing this isolated tag:
 `ghcr.io/honua-io/honua-server:qualification-aot-da06c51de0bc8579601fc86bc5ddcafabaed7a70-36820832934`
 
 The tag is an intended output, **not yet an acquired image or successful build**.
+An owned durable acquisition worker waits for exact-source cloud success, archives
+the hash-verified receipt, and pulls the unique image under the shared build and
+measurement locks. It verifies local/cloud image IDs, native/revision labels and
+the digest. It never starts final benchmark traffic.
 The branch-only manual export workflow does not update shipping/nightly/trunk
 aliases, alter the production Dockerfile, disable gates or promote unmerged code.
 Its receipt records image ID/digest, production recipe blob, source, arguments
