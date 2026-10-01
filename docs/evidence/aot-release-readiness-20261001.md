@@ -3,10 +3,11 @@
 **The corrected production AOT candidate is built, acquired and oracle-qualified.**
 Source `f1f040344cfd25986dc1bf6044b23a795053eaee` passed536 selected tests on
 PostgreSQL17 and all24 both-product oracle smoke rows. Fleet watch restarted
-and CI repair #5345 merged through normal admission. The four optimization PRs
-retain both required gates green and zero unresolved threads; they remain open
-behind the trunk CI brake. A new narrowly scoped CI repair #5358 addresses a
-client-tooling vulnerability scan failure and provisional test-shard headroom.
+and CI repairs #5345 and #5358 merged through normal admission. All four
+optimization PRs remain open with zero unresolved threads. #5343 imported
+the actual repaired trunk and awaits fresh build/test gates; the other three
+retain green required gates. The current trunk matrix is queued behind an
+older run with the already-repaired client-tooling vulnerability scan failure.
 No final timed comparison or new AOT speed claim has been made.
 Merged-content proof, publication calibration and the user's quiet-machine
 confirmation remain pending. The historical qualification below retains its
@@ -394,3 +395,45 @@ Current receipts under `results/jit-optimization-batch-20260929/`:
 `release-ready-handoff-20261001.json`. The previous handoff was preserved before
 updating it to the corrected source; both readiness/publication flags remain
 false.
+
+## Normal merges and fresh optimization head, 20:43 UTC
+
+CI repair [#5358](https://github.com/honua-io/honua-server/pull/5358) merged through
+the fleet's serialized lander at2026-10-01T20:23:52Z, producing trunk
+`484a03baf8f0da5ce731fb2b332e2a476e6b9ea9`. Its current-head PR Gate passed;
+independent review posted a clean attestation for d6241371e. That review workflow
+still used the old default-branch CLI expression and failed after its clean
+attestation; the expression repair became available on trunk only after merging.
+No override, manual/admin merge, matrix cancellation or second lander was used.
+
+The earlier trailing run36912211773 is now terminal: all106 jobs were enumerated.
+Only Docker Build & Integration Test and its CI Gate aggregator failed. All
+server shards and AOT Build Verification passed at source d2cf2fd27. These checks
+are source-labelled and do not prove the optimization release or its performance.
+The next old-pin run36914999953 at dc7109c2f still has three active jobs and the
+same Docker failure. Repaired-trunk run36921286867 at484a03baf is queued with no
+jobs yet. Neither active nor queued run was cancelled.
+
+PR [#5343](https://github.com/honua-io/honua-server/pull/5343) now has head
+`1b2829ffff1aea96a94aae8b173817401b98b7e0`, a normal non-force merge of actual
+trunk484 into its previously qualified d283abbcb head. The entire application
+`src` tree and shared .NET build/package settings are unchanged. Its fresh
+PR Gate36921770987 has passed format, selection and router jobs; build and six
+affected application shards remain active. Independent review posted
+[a clean exact-head attestation](https://github.com/honua-io/honua-server/pull/5343#issuecomment-5940149397)
+at20:41:26Z; workflow completion remains a separate check. #5349, #5351 and
+#5354 retain their earlier green exact-head gates. No optimization PR is merged
+at this checkpoint.
+
+Generated-artifact PR #5346 changed `docs/gis/data/feature-catalog.json`, which
+Honua.Ai embeds as `Honua.Ai.Catalog.feature-catalog.json`. The existing qualified
+f1f040344 Native AOT candidate therefore cannot be labelled as the final merged
+runtime content. A fresh production AOT build and oracle smoke are required
+after all four optimization PRs land. The frozen application optimization scope
+is unchanged. Final timed traffic remains unstarted.
+
+New receipts: `trailing-ci-36912211773-terminal-jobs-20261001.json`,
+`pr5343-trunk-ci-refresh-20261001.json`,
+`fixed-trunk-ci-36921286867-jobs-2043-20261001.json` and
+`old-pin-trunk-ci-36914999953-jobs-2043-20261001.json` under the existing evidence
+root. Repeated observations and unsuccessful attempts remain retained.
