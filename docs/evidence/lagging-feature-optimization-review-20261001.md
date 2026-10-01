@@ -111,3 +111,16 @@ current head `b71d85af6714b70a2257c807db1f0668166002f6` contains the tests-only 
 Final AOT, oracle qualification, source SQL proof, calibration and strict timed runs
 remain required. Notify the user when the concrete image/setup is ready; do not
 start final measurement before the user quiets the machine.
+
+
+## Qualified release checkpoint
+
+The frozen combined source `da06c51de0bc8579601fc86bc5ddcafabaed7a70` now
+passes fresh JIT build/format and all536 selected tests on PostgreSQL16, with
+identical assemblies passing265 provider cases on17 and18. Its production-recipe
+AOT image is acquired and passed the full both-product24-row oracle smoke with
+native execution and no CoreCLR. The three remaining PRs are ready for normal
+review/landing. Further optimization remains deferred. See the
+[AOT readiness note](aot-release-readiness-20261001.md) for image identity, retained
+coordinator failures/repairs and remaining merge/calibration/quiet-window gates.
+This establishes correctness and packaging, not an HTTP performance gain.
