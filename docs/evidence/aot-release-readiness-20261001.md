@@ -103,3 +103,35 @@ Receipts under `results/jit-optimization-batch-20260929/` include full current
 qualification and provider retries, `aot-acquisition-v3-20261001/`, cloud launch/
 export receipts, `durable-aot-smoke-v2-20261001/`, and
 `harness-control-checkout/results/aot-release-smoke-v2-20261001/`.
+
+## Strict candidate preparation checkpoint
+
+The comparison manifest was prepared without starting either server stack or
+sending traffic. It pins the acquired Native AOT candidate, stable GeoServer,
+PostGIS17 and k6; records all12 scenarios, five paired repetitions,180s warmup,
+120s measurement, and seed42; and archives the harness inputs. The attempts
+ledger is empty. The preparation controller exited successfully and was removed
+by exact owned identity.
+
+Calibration binding: `1852e75e73de22ea77a34c4e33e948e52543b7ac4dc56f42e5c7fc8fd165ef2e`.
+Harness: `869d19e75bdf456c508b561d966652921cfd9dc5`.
+Coordinator hostname: `gb-aot-final-20261001`; future calibration and resume must
+use the recorded coordinator recipe and host identity. This is a **candidate**
+manifest. If final merged source, image, host, workload or harness differs, prepare
+a new campaign and calibration binding rather than reusing this one.
+
+The four optimization PRs remain open and mergeable. CI repair
+[#5345](https://github.com/honua-io/honua-server/pull/5345) remains review-blocked
+at `7d5700410eda9dafe7adf84fc8695ae3394e7a24`. Its owner's local commit
+`a97054564f3cb288015e79fcaba25e8f017ba17a` contains the two requested fixture XML
+summaries, but those fixes are not at the remote PR head. The production AOT
+recipe still defaults to `RUNTIME_PACKAGE_REVISION=20260905`; the review requests
+refreshing that default as well as the JIT recipe. The qualified candidate used
+an explicit20261001 refresh and contains the fixed OpenSSL packages. These
+observations do not establish that the repair or release has landed. Another
+agent's worktree and the fleet CI brake were left intact.
+
+The final campaign remains held. The user should quiet the machine only after
+merged-source/image proof and publication calibration are ready; explicit user
+confirmation is still required before final timing starts. Preparation receipt:
+`results/jit-optimization-batch-20260929/strict-candidate-preparation-20261001/receipt.json`.
