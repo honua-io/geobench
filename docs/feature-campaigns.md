@@ -96,6 +96,15 @@ response caching and adaptive admission are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
+Honua's test-schema headers are disabled (`HONUA_TEST_SCHEMA_HEADERS=false`).
+Each attempt already owns an isolated database, and workloads do not send
+per-request schema overrides. This retains the shipping connection reset policy;
+turning test-schema isolation on adds resets of pooled catalog connections.
+Runtime receipts record the flag and reject missing, conflicting or enabled
+values before and after traffic. Older campaigns retain their original
+configuration and results; this change requires a new fingerprint-bound campaign
+and cannot be resumed into an earlier test-schema-enabled run.
+
 Use `--generator-cpus 8` in a new diagnostic campaign to investigate generator
 headroom. The option accepts positive integers and applies the same k6 CPU budget
 to both products; server/database CPU, memory and source-connection limits remain

@@ -16,7 +16,10 @@ def runner_module():
 
 
 class RuntimePlannerEvidenceTests(unittest.TestCase):
-    def receipt(self, runner, environment, profile=None):
+    def receipt(self, runner, environment, profile=None, schema_entries=None):
+        if schema_entries is None:
+            schema_entries = ["HONUA_TEST_SCHEMA_HEADERS=false"]
+        environment = environment + schema_entries
         info = {'Image': 'sha256:pinned', 'HostConfig': {'NanoCpus': 4_000_000_000, 'Memory': 4 * 1024**3},
                 'Config': {'Env': environment}}
         images = {'honua': {'id': 'sha256:pinned', 'labels': {'honua.runtime.compilation': 'native-aot'}}}
@@ -38,7 +41,7 @@ class RuntimePlannerEvidenceTests(unittest.TestCase):
                     'Database__DisableJitForSourceSpatialCountsPassword=secret']
         with patch.object(runner, 'HONUA_PROFILES', profiles):
             result = self.receipt(runner, expected + excluded + ['OgcFeatures__NumberMatchedPolicy=Exact'])
-        self.assertEqual(expected + ['OgcFeatures__NumberMatchedPolicy=Exact'], result['honua']['environment'])
+        self.assertEqual(expected + ['OgcFeatures__NumberMatchedPolicy=Exact', 'HONUA_TEST_SCHEMA_HEADERS=false'], result['honua']['environment'])
 
     def test_runtime_rejects_missing_wrong_and_unrequested_planner_options(self):
         runner = runner_module()
@@ -46,7 +49,7 @@ class RuntimePlannerEvidenceTests(unittest.TestCase):
             actual = [key + '=' + value for key, value in options.items()]
             with self.subTest(profile=profile, variant='matching'):
                 result = self.receipt(runner, actual, profile)
-                self.assertEqual(actual, result['honua']['environment'])
+                self.assertEqual(actual + ['HONUA_TEST_SCHEMA_HEADERS=false'], result['honua']['environment'])
             for key in options:
                 for variant in ('missing', 'wrong', 'duplicate'):
                     changed = [entry for entry in actual if not entry.startswith(key + '=')]
@@ -60,6 +63,16 @@ class RuntimePlannerEvidenceTests(unittest.TestCase):
             for key in extras:
                 with self.subTest(profile=profile, extra=key), self.assertRaisesRegex(ValueError, 'planner.*drift'):
                     self.receipt(runner, actual + [key + '=true'], profile)
+
+    def test_runtime_rejects_test_schema_mode_missing_or_conflicting_evidence(self):
+        runner = runner_module()
+        options = runner.HONUA_PROFILES['baseline']
+        environment = [key + '=' + value for key, value in options.items()]
+        for entries in ([], ['HONUA_TEST_SCHEMA_HEADERS=true'],
+                        ['HONUA_TEST_SCHEMA_HEADERS=false', 'HONUA_TEST_SCHEMA_HEADERS=true'],
+                        ['HONUA_TEST_SCHEMA_HEADERS=false', 'HONUA_TEST_SCHEMA_HEADERS=false']):
+            with self.subTest(entries=entries), self.assertRaisesRegex(ValueError, 'test-schema.*drift'):
+                self.receipt(runner, environment, 'baseline', entries)
 
     def test_unknown_profile_fails_before_docker_inspection(self):
         runner = runner_module()

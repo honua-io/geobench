@@ -164,6 +164,7 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
             serial = 'Database__PreferSerialBoundedSpatialReads'
             serial_count = 'Database__PreferSerialSourceSpatialCounts'
             baseline_env = baseline['services']['honua']['environment']
+            self.assertEqual('false', baseline_env['HONUA_TEST_SCHEMA_HEADERS'])
             self.assertEqual('false', baseline_env[serial])
             self.assertEqual('false', baseline_env[serial_count])
             fingerprints = {fingerprint(baseline)}

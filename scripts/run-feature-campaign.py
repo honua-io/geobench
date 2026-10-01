@@ -136,6 +136,8 @@ def make_compose(owner, server, images, honua_profile="baseline", generator_cpus
     # Compare the same exact count-metadata policy. Oracle preflight verifies the result.
     if server == "honua":
         services[server]["environment"]["OgcFeatures__NumberMatchedPolicy"] = "Exact"
+        # Owned, isolated databases use production connection reset behavior.
+        services[server]["environment"]["HONUA_TEST_SCHEMA_HEADERS"] = "false"
         services[server]["environment"].update(HONUA_PROFILES[honua_profile])
     return {"services": services,
             "volumes": {f"pgdata-{server}": {"labels": labels}},
@@ -160,8 +162,12 @@ def runtime_receipt(ids, images, honua_profile=None, generator_cpus=BUDGET["cpus
                         "cpus": info["HostConfig"]["NanoCpus"] / 1e9,
                         "memory": info["HostConfig"]["Memory"],
                         "environment": [e for e in info["Config"].get("Env", [])
-                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT="))]}
+                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT=", "HONUA_TEST_SCHEMA_HEADERS="))]}
         if name == "honua":
+            schema_entries = [e for e in result[name]["environment"]
+                              if e.partition("=")[0] == "HONUA_TEST_SCHEMA_HEADERS"]
+            if schema_entries != ["HONUA_TEST_SCHEMA_HEADERS=false"]:
+                raise ValueError("Honua test-schema configuration drift: production setting required")
             planner_entries = [e.split("=", 1) for e in result[name]["environment"]
                                if e.partition("=")[0] in planner_keys]
             if honua_profile is not None and (len(planner_entries) != len(dict(planner_entries)) or
