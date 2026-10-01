@@ -1,15 +1,16 @@
 # Frozen release and Native AOT readiness — October 1, 2026 (UTC)
 
-**The earlier production-recipe AOT candidate is built, acquired and oracle-qualified.**
-A replacement incorporating current trunk and the CI repair is building; the
-older qualification below applies only to source `da06c51`.
-The final timed comparison has not started and no AOT speed claim is made.
-Normal merges and publication calibration remain pending; the user has not yet
-quieted the machine for final timing. The latest performance evidence remains
-the [three-pair JIT diagnostic](jit-production-three-pair-20261001.md), which
-excludes the final native/metadata and pagination patches.
+**The corrected production AOT candidate is built, acquired and oracle-qualified.**
+Source `f1f040344cfd25986dc1bf6044b23a795053eaee` passed536 selected tests on
+PostgreSQL17 and all24 both-product oracle smoke rows. All five release/repair
+PRs have both required gates green and zero unresolved threads, but remain
+unmerged: normal host merge admission is still blocked by the inaccessible
+coordinator. No final timed comparison or new AOT speed claim has been made.
+Merged-content proof, publication calibration and the user's quiet-machine
+confirmation remain pending. The historical qualification below retains its
+own sources; the latest corrected-source evidence is recorded at the end.
 
-## Frozen release and verification
+## Earlier frozen candidate and verification
 
 Source `da06c51de0bc8579601fc86bc5ddcafabaed7a70`, branch
 `qualification/release-20261001-r2`, combines
@@ -270,3 +271,68 @@ not advanced; this session still cannot connect to its user systemd bus. Normal
 serialized admission remains pending, with no manual/admin merge or state edit.
 The user was asked whether the WSL service restart succeeded; no answer was yet
 received at this checkpoint. No final timing or new speed claim was made.
+
+## Corrected AOT qualification and final admission handoff
+
+The complete fresh-source PostgreSQL17 qualification passed536/536, with zero
+failures/skips: core27, security58, provider265, OGC API66, GeoServices108 and
+WFS12. The OGC TRX independently contains all eight passing precision variants.
+All11 owned fixtures were cleaned. Older PostgreSQL16/18 compatibility receipts
+still apply only to their recorded previous source; they were not relabelled.
+The temporary PR5343 hold was removed and trusted Review Gate refreshed to
+success. All five current PR heads have green required gates, no holds and zero
+unresolved threads, but none has merged.
+
+Corrected production AOT image:
+`ghcr.io/honua-io/honua-server@sha256:842bf147f3f7884159983719e1db60bf013413781a77e0947899a78710df0018`.
+Source: `f1f040344cfd25986dc1bf6044b23a795053eaee`.
+Cloud export: [36898796298](https://github.com/honua-io/honua-server/actions/runs/36898796298).
+The raw registry manifest hashes to842bf147; its configuration digest matches
+the hosted Docker image ID. Filesystem diffIDs, architecture, actual runtime
+configuration and source/native labels match the local image. Inspection-only
+missing versus empty/false legacy fields and missing versus null `Cmd`,
+`OnBuild`, `Volumes` were recorded explicitly; non-null runtime differences
+would still fail the gate.
+
+Image acquisition retained a WSL Windows credential-helper failure, then
+configuration-identity assertion failures. An isolated empty Docker configuration
+resolved the credential helper. Read-only diagnosis proved that Buildx was
+available: the later failures were omitted versus null inspection fields, not
+a missing plugin. The final raw-manifest/configuration/layer proof passed.
+These attempts remain under `timestamp-repair-aot-acquisition-v{1,2,3,4}-20261001/`.
+
+The corrected Native AOT HTTP smoke passed24/24 rows,12 per product, with valid
+semantic/fairness checks, production test-schema headers disabled and native
+executable/CoreCLR absence verified. Its2s warmup/3s measurement is correctness
+smoke, not publishable performance evidence. Both owned attempts cleaned their
+resources. Report SHA256:
+`491a5caa3df628a30af1168b27840f02884c705c58324d3310274af5ccc04c87`.
+The exact terminal qualification and oracle controllers were removed only after
+dependencies completed and logs/receipts were retained. The older measured-JIT
+coordinator remains for existing prerequisites.
+
+[Final normal-admission handoff](https://github.com/honua-io/honua-server/pull/5345#issuecomment-5937948231)
+records the repaired heads and evidence without changing the CI repair's COVERS.
+The coordinator's last recorded lander pass remains2026-09-30T18:36:07Z. A fresh
+attempt to query the host user systemd bus still failed with `No data available`.
+This does not establish daemon process state from stale files. The current
+sandbox cannot restore that host service, and no manual/admin merge, second
+lander caller or brake-state override was used. Host-side restoration is needed
+to progress normal merges.
+
+The new image/source requires a new campaign and calibration binding; the old
+prepared strict candidate is historical. The final comparison has not started.
+The user should not quiet the machine yet: normal merges/final serving-content
+proof and mandatory calibration must be ready first. There is still no isolated
+load-generator endpoint or valid calibration evidence.
+
+Current receipts under `results/jit-optimization-batch-20260929/`:
+`release-timestamp-repair-pg17-v1-20261001/receipt.json`,
+`timestamp-integration-repair-proof-20261001.json`,
+`timestamp-repair-aot-cloud-success-20261001.json`,
+`timestamp-repair-aot-acquisition-v4-20261001/receipt.json`,
+`durable-timestamp-repair-aot-smoke-v1-20261001/receipt.json`,
+`harness-control-checkout/results/timestamp-repair-aot-smoke-v1-20261001/`, and
+`release-ready-handoff-20261001.json`. The previous handoff was preserved before
+updating it to the corrected source; both readiness/publication flags remain
+false.
