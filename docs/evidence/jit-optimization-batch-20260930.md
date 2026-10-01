@@ -2,8 +2,10 @@
 
 The combined automatic-planning and shared-GeoJSON-preparation candidate passed
 local correctness qualification and all 12 existing HTTP oracle scenarios. The
-three paired diagnostic repetitions are running; there is no new speed ratio or
-claim of parity yet. These checks cover the deterministic 100K-point dataset.
+first paired diagnostic repetition completed with no semantic failures. The
+second repetition was interrupted during GeoServer warmup; the attempt and raw
+artifacts are retained. These preliminary checks cover the deterministic
+100K-point dataset and do not establish repeatable parity.
 
 Optimization uses Release JIT by user instruction. Final production AOT and
 strict GeoBench publication remain deferred until the remaining optimizations and
@@ -17,7 +19,7 @@ all final correctness, fairness, calibration and performance gates pass.
 - Frozen harness `fc1a35e4809ab9fa948700630fc80ba17442e91e`.
   [GeoBench PR #33](https://github.com/honua-io/geobench/pull/33) merged as
   `1aff0b7079a26ee370569b2728e705365f2b3679`; its complete patch was verified
-  present on fetched trunk. Running inputs remain frozen at the pre-merge hash.
+  present on fetched trunk. Comparison inputs remain frozen at the pre-merge hash.
 - Historical seed-42 dataset artifact SHA-256
   `2ca9025b025361a85e7e0866a80748d29dacd44d27987ce75631a7473189a525`.
 - GeoServer image `sha256:32b61aed98bca6cc0821fbcdab9dbc5b9b22b6fa1af6d51d396fb64e63dac491`. It was rebuilt
@@ -67,7 +69,7 @@ semantics; see the [source-review limitation](geoserver-source-review-20260928.m
 
 ## Paired comparison and remaining work
 
-The running comparison uses the same 12 rows, three paired repetitions, seed 42,
+The scheduled comparison uses the same 12 rows, three paired repetitions, seed 42,
 30-second warmup, 30-second measurement, explicit drain, fresh owned stacks and
 separate 4-CPU/4-GiB server/database budgets. The generator has an equal eight-CPU
 budget for both products; source pools remain six connections. Exact response
@@ -78,7 +80,40 @@ semantic failures, warmup/drain traffic and observed resource pressure are retai
 separately. No averaged percentile or cross-protocol winner score is used. This
 shared WSL run cannot satisfy isolated-generator calibration for publication.
 
-Typed native-column decoding and direct UTF8 output remain planned work. The
+The first completed pair produced these throughput ratios (Honua / GeoServer):
+
+| Existing row | Throughput ratio |
+|---|---:|
+| Equality | 1.352 |
+| Range | 1.145 |
+| Prefix | 1.922 |
+| Small bbox | 1.061 |
+| Medium bbox | 1.963 |
+| Large bbox | 3.560 |
+| Shallow page | 1.075 |
+| Medium page | 1.108 |
+| Deep page | 1.500 |
+| Empty | 0.960 |
+| Bbox boundary | 1.010 |
+| Mixed, 10 VUs | 1.386 |
+
+Both completed server attempts passed every measured response check and reported
+no fairness failures. This is one pair on shared WSL, not a repeatable or
+publishable result. Mixed-workload p95 was 0.645 times GeoServer's. Range p95 and
+p99 were worse at 1.118 and 1.418 times GeoServer's; empty-query and bbox-boundary
+medians were also worse at 1.567 and 1.311 times GeoServer's. Empty throughput,
+range tails and empty/boundary request overhead are the next diagnostic targets.
+Medium-page p99 was effectively tied at 1.008 times GeoServer's.
+
+The coordinator stopped during the second GeoServer warmup. No measured rows from
+that attempt are counted. Its three exact owned containers, volume and network
+were verified and cleaned; other resources were untouched. A new complete
+campaign is required to qualify three passing pairs. Failed attempts will not be
+overwritten or silently substituted. Durable coordination is being addressed
+before another long run.
+
+Typed native-column decoding is in implementation; direct UTF8 output remains
+planned work. The
 combined candidate must first complete its paired qualification; final AOT is
 not requested during this optimization cycle. Existing WFS/rendering/tile tracks
 follow the feature foundation, as described in the original plan.
@@ -94,7 +129,9 @@ All current receipts and earlier failed/interrupted attempts are retained under
 - `restored-images-r2/receipt.json`, including the unchanged-JAR comparison.
 - `smoke-integrated-receipt.json` and its recorded raw output directory.
 - `integrated-contained-campaign-receipt.json` and its recorded raw output
-  directory, currently running.
+  directory, interrupted after the first complete pair.
+- `campaign-interruption-cleanup-20260930.json` and the retained pre-interruption
+  receipt and attempt snapshots.
 - `pr-33-landed.json`, recording content verification on trunk.
 
 The interrupted compilation attempt is recorded as interrupted after a
