@@ -10,7 +10,10 @@ An independent read-only review inspected the combined checkout
 `e110a28cb4b3b5a64fd3b0e4c279a2099fb35f06`. Native decoding
 ([#5349](https://github.com/honua-io/honua-server/pull/5349)) and authorized metadata
 reuse ([#5351](https://github.com/honua-io/honua-server/pull/5351)) are implemented
-but still awaiting full local qualification and HTTP measurements. Production
+but still awaiting full local qualification and HTTP measurements. Qualification passed 27 core and 58 security tests, then failed six of
+247 PostgreSQL cases: five SQL assertion conflicts and one prepared result-type drift
+regression after a physical column type change. Repair that candidate before adding
+further serving changes or claiming its speed gains. Production
 schema-header correction is already delivered. The earlier range-tail deficit did
 not recur in the current three pairs, so it is not the primary target.
 

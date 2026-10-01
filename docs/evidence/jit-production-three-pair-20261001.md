@@ -100,8 +100,13 @@ formatted xUnit display names. A fourth attempt passed all 27 core and 58 securi
 tests before another driver assertion exposed an omitted method-name prefix. Both
 attempts and exact owned cleanup are retained. The driver now joins passed TRX results
 to exact method definitions and verifies the required names against source. The fifth
-attempt reruns the full six selections from the unchanged clean source. These partial
-passes do not establish complete native-decoder/metadata qualification or HTTP gains.
+attempt completed 27 core and 58 security tests successfully, then stopped after
+247 PostgreSQL tests with six failures and no skips. Five failures are older smallint
+SQL assertions now seeing the native projection's type guard; one is a real prepared
+query result-type regression after a physical column type changes. All five attempts,
+test results and exact owned cleanup remain retained. The failed candidate has not
+advanced to HTTP benchmarking. These partial passes do not establish complete
+native-decoder/metadata qualification or HTTP gains.
 
 [Policy batching #5352](https://github.com/honua-io/honua-server/issues/5352) is the
 next fixed-overhead opportunity, with fresh policy/principal evaluation, strict custom
