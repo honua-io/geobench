@@ -567,3 +567,28 @@ Receipts: `final-merged-source-proof-20261002.json`,
 `durable-merged-release-candidate-pg17-v2-20261002/interruption-and-cleanup.json`
 and the current release PR snapshot. The previous handoff is archived as
 `release-ready-handoff-before-final-merge-20261002.json`.
+
+
+## Final image acquisition and oracle prepared, 17:40 UTC October2
+
+The hosted managed-correctness job is actually running and passed checkout,
+service readiness and exact merged-input verification. Native export remains
+queued. The prepared acquisition verifies whole-workflow success, both artifact
+digests, all seven TRX files and required methods, the pinned SDK/spec, source,
+all15 build-input objects, recipe, registry manifest, runtime configuration and
+layer identities. The independent TRX join was checked against retained
+historical fixtures; this does not claim any final-source test pass.
+
+The final-image both-product diagnostic oracle driver and owned launcher are
+prepared with the same immutable harness/dataset/server pins and all12 rows
+per product. They require successful final-source acquisition and managed
+verification. No acquisition, oracle traffic or final timing has started.
+Recipe hashes are recorded in `final-aot-postrun-preparation-20261002.json`.
+
+WSL had again recreated the shared measurement bind as an empty root-owned
+directory at reboot. A read-only Docker probe confirmed its actual type.
+There was no measurement-lock holder or active GeoBench controller. The exact
+empty invalid node was replaced by an owned helper with inode/mtime checks;
+the regular lock was verified and that helper removed by exact identity.
+Receipt: `measurement-lock-repair-v3-20261002.json`. No active regular lock,
+foreign container or fleet setting was changed.
