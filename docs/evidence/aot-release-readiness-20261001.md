@@ -494,3 +494,35 @@ Receipts: `fleet-recovery-and-green-trunk-20261002.json`,
 Final timing and publication flags remain false. Once #5354 lands, final
 application/build content must match the qualified candidate or be requalified;
 the production Native AOT build will use the actual merged source.
+
+## Final merged-source export prepared, 07:37 UTC
+
+An isolated manual export is prepared and pushed at workflow commit
+`a86701f87f06df617cfa710ae6ee75549f648149`, branch
+`qualification/aot-export-final-20261002`. It has not been dispatched and is
+not a PR against trunk. The production Dockerfile, full build profile, SDK and
+runtime image pins remain unchanged. It uses the same production boundary
+verifier, native liveness check and uniquely tagged export as the successful
+earlier qualification; no shipping alias is moved.
+
+The manual input must be an exact40-hex commit, equal the checkout and be a
+real trunk ancestor. Before compilation/export,15 Git tree/blob identities must
+match the candidate53fbe4359: application source, build settings, restore helper,
+production recipe/context filter, certification data, both AI contract fixtures
+and embedded API/catalog content. `global.json` is absent in the qualified
+source; its continued absence is checked explicitly. The workflow also requires
+the exact owned qualification branch. Shell syntax checks passed for every run
+block; the installed YAML parser checked the workflow/input structure. Local
+content verification matched all15 candidate identities and rejected current
+trunk67cf3e12c for its missing page optimization. The unmerged candidate also
+fails the trunk-ancestor requirement. No positive final-source hosted execution
+is claimed before #5354 merges.
+
+At this observation, the same qualification controller2350be47b is still
+actually running in its fresh build phase with current heartbeats, no errors,
+and no completed tests yet. The two actual trunk runs36976906927 and36977326611
+remain queued/pending. Active shadow-batch run36976867238 belongs to the lander
+and is not a trunk verdict; its observed jobs contain no failures. No run was
+cancelled or restarted. The prepared export receipt is
+`final-aot-export-preparation-20261002.json`; immutable workflow/content hashes
+and the limits of validation are retained there.
