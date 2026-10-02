@@ -11,9 +11,9 @@ All owned smoke/preparation resources and controllers are cleaned up.
 
 A new immutable five-pair comparison manifest is prepared for this exact image
 and source, with180s warmup/120s measurement and seed42. Its attempt ledger is
-empty. The setup is ready for the user's quiet-machine window; final timing
-requires that confirmation and matching isolated-generator/observer calibration.
-The latter remains missing, so strict comparison/publication must fail closed.
+empty. The user confirmed the machine is quiet on October2. Local observer
+calibration is running against the final AOT image; matching isolated-generator
+calibration remains missing, so strict comparison/publication must fail closed.
 Final-source trailing CI passed, with all106 jobs accounted for and no failed
 jobs. No final measured comparison or new AOT speed claim exists.
 Chronological checkpoints below retain their original sources and timestamps.
@@ -692,3 +692,40 @@ contains no final-source AOT speed claim. Final timing still requires the
 pending user quiet-machine status and source-bound isolated-generator/observer
 calibration. The five paired measured repetitions and publishable report have
 not been produced. Missing calibration keeps strict launch/publication closed.
+
+## Quiet-machine calibration started, October2
+
+The user confirmed "the machine is quiet" before local calibration. WSL had
+restarted with approximately40GiB available, compared with24GiB in the previous
+manifest. The first collector's host-fingerprint preflight rejected that drift
+before any server stack or traffic started. Its failure and terminal controller
+identity were retained, and only that verified owned controller was removed.
+
+A fresh manifest preserves the pinned source, images, dataset, harness, resource
+budgets, scenarios and paired order while recording the actual current host.
+Directory: `harness-control-checkout/results/aot-final-merged-comparison-v2-20261002`.
+Calibration binding:
+`5926851b4d2a4bf3881e9f4c6836902a3d92227f9e7c6ad46ad75bc286e34444`.
+The previous manifest remains intact and cannot supply calibration for this
+changed configuration. The shared measurement lock had been restored as an
+empty root-owned directory after restart; an exact inode/mtime guard, no-holder
+check and empty active-container inventory preceded replacement of that invalid
+node. No active regular lock or foreign resource was changed.
+
+Owned controller `gb-local-observer-final-aot-v2-20261002` started three local
+observer-off/on pairs for each product, restricted to `mixed:vus:10`, using
+180s warmup and120s measurement per treatment. It holds shared build slot1,
+uses the normal measurement lock, checks all immutable inputs and performs
+fresh-fixture oracle/pressure preflights. Failed/interrupted runs and all raw
+samples remain visible in separate calibration ledgers. This collector does
+not populate the final comparison attempt ledger or approve publication.
+
+Local calibration takes roughly one hour plus provisioning and drain. Its
+results and overhead checks are pending; no final AOT speed ratio is claimed.
+A separate load-generator calibration still must pass before the five paired
+strict comparison repetitions can start. The current host being quiet does
+not substitute for that evidence.
+
+Receipts: `measurement-lock-repair-v4-20261002.json`,
+`final-strict-campaign-preparation-v2-20261002/receipt.json` and
+`local-observer-final-aot-v{1,2}-20261002/{launch-receipt,receipt}.json`.
