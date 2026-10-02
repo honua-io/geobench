@@ -1,18 +1,21 @@
 # Frozen release and Native AOT readiness — October 1, 2026 (UTC)
 
-**The corrected production AOT candidate is built, acquired and oracle-qualified.**
-Source `f1f040344cfd25986dc1bf6044b23a795053eaee` passed536 selected tests on
-PostgreSQL17 and all24 both-product oracle smoke rows. Fleet watch restarted
-and CI repairs #5345 and #5358 merged through normal admission. Optimization
-PRs #5343, #5349 and #5351 are now merged. #5354 remains open with green
-required gates and no unresolved threads; the normal four-commit verification
-budget holds it until a newer trunk matrix passes. The repaired full trunk
-matrix passed, with all106 jobs accounted for. Fresh qualification of the expected release code
-is running; final merged-source AOT and its oracle smoke remain required.
-No final timed comparison or new AOT speed claim has been made.
-Merged-content proof, publication calibration and the user's quiet-machine
-confirmation remain pending. The historical qualification below retains its
-own sources; the latest corrected-source evidence is recorded at the end.
+**All four frozen performance PRs are now merged through the normal fleet lander.**
+#5343, #5349, #5351 and #5354 are merged. Final source
+`36581bd29870101d103ea16e3ba215a2a98811fe` includes the last page optimization
+and matches all15 guarded runtime/build identities of candidate53fbe4359.
+The subsequent generated examples manifest change does not alter those inputs.
+The fresh production Native AOT export and seven selected managed correctness
+suites are dispatched together on hosted runners. Results remain pending.
+
+The historical candidatef1f040344 passed536 selected PostgreSQL17 tests and
+all24 both-product Native AOT oracle smoke rows. That image is not the final
+merged-source image. The latest local qualification was interrupted by a WSL
+restart during compilation, with zero completed tests; its logs, terminal state
+and exact owned cleanup are retained. No final timed comparison or new AOT
+speed claim has been made. Final image/oracle verification, publication
+calibration and the user's quiet-machine confirmation remain pending.
+The chronological checkpoints below retain their own sources and timestamps.
 
 ## Earlier frozen candidate and verification
 
@@ -526,3 +529,41 @@ and is not a trunk verdict; its observed jobs contain no failures. No run was
 cancelled or restarted. The prepared export receipt is
 `final-aot-export-preparation-20261002.json`; immutable workflow/content hashes
 and the limits of validation are retained there.
+
+
+## All performance merges and hosted final verification, 17:30 UTC October2
+
+The normal lander merged [#5354](https://github.com/honua-io/honua-server/pull/5354)
+as `6e574b5158c3f8bd48f35c93ff57ee231f818732`. The resulting actual trunk
+source36581bd298 includes all four frozen optimizations. Exact Git ancestry
+and15 runtime/build objects match the expected candidate; `global.json`
+remains absent. No application source or production Dockerfile was modified
+for the qualification workflow.
+
+Before that merge, the full matrix at67cf3e12cb passed, with106 of106 jobs
+accounted for and Docker/AOT/CI Gate successful. It covers the first three
+performance merges; it is not claimed as final-source verification. A second
+actual WSL restart interrupted the local53fbe4359 qualification at07:47 UTC
+(exit255, OOMKilledfalse, no completed tests). All four owned child resources
+and the terminal controller were removed by verified exact identities, with
+logs and the interruption/cleanup receipt retained. The existing fleet watch
+service was verified inactive and started at17:06 UTC. No autostart setting,
+merge brake, fleet budget or shipping alias was changed.
+
+[Hosted final qualification37041193232](https://github.com/honua-io/honua-server/actions/runs/37041193232)
+uses isolated workflow commit `87a6d0663b38e2eeba84b4eb071e878b46a9faca`
+and checks out exact merged source36581bd298. Native export and seven selected
+managed suites run on separate hosted machines. The managed driver uses the
+pinned SDK/PostGIS17/Redis fixtures, source-stamped fresh compilation,
+nonempty TRX results with zero failures/skips, required method coverage,
+and all eight fractional timestamp variants. It retains failed attempts.
+Workflow YAML, Bash syntax, Python compilation and diff checks passed;
+hosted execution remains the actual correctness proof. Both jobs were queued
+at dispatch. No final timing is authorized by this dispatch.
+
+Receipts: `final-merged-source-proof-20261002.json`,
+`final-hosted-qualification-dispatch-20261002.json`,
+`trunk-three-optimization-ci-36977326611-terminal-jobs-20261002.json`,
+`durable-merged-release-candidate-pg17-v2-20261002/interruption-and-cleanup.json`
+and the current release PR snapshot. The previous handoff is archived as
+`release-ready-handoff-before-final-merge-20261002.json`.
