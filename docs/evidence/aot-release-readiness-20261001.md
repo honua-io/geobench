@@ -11,9 +11,12 @@ All owned smoke/preparation resources and controllers are cleaned up.
 
 A new immutable five-pair comparison manifest is prepared for this exact image
 and source, with180s warmup/120s measurement and seed42. Its attempt ledger is
-empty. The user confirmed the machine is quiet on October2. Local observer
-calibration is running against the final AOT image; matching isolated-generator
-calibration remains missing, so strict comparison/publication must fail closed.
+empty. The user confirmed the machine is quiet on October2. All six local
+observer-calibration pairs passed correctness, pressure and integrity checks,
+but GeoServer's median observer-off/on variation exceeded the5% publication
+limit. Matching isolated-generator calibration also remains missing. Strict
+comparison/publication therefore stays closed. A separate three-pair local
+AOT diagnostic campaign is running across all twelve point scenarios.
 Final-source trailing CI passed, with all106 jobs accounted for and no failed
 jobs. No final measured comparison or new AOT speed claim exists.
 Chronological checkpoints below retain their original sources and timestamps.
@@ -729,3 +732,45 @@ not substitute for that evidence.
 Receipts: `measurement-lock-repair-v4-20261002.json`,
 `final-strict-campaign-preparation-v2-20261002/receipt.json` and
 `local-observer-final-aot-v{1,2}-20261002/{launch-receipt,receipt}.json`.
+
+## Local calibration complete; full AOT diagnostics started, October2
+
+All six scheduled local calibration pairs completed: three fresh owned
+fixtures per product, each with180s warmup and120s measurement for both
+observer treatments. All measured responses passed the precomputed oracle;
+late completions were counted separately. Every attempt passed pressure and
+postrun configuration checks and was cleaned up. The controller exited0.
+An independent pass recomputed the complete report, rechecked every retained
+artifact hash, validated runtime image/CPU/memory identities, confirmed Native
+AOT without CoreCLR, and verified that all six fixture owners had no resources
+remaining. The publication gate was kept separate from these correctness checks.
+
+| Product | Median throughput change, observer on/off | Median p95 change | Within5% |
+| --- | ---: | ---: | --- |
+| Honua | -2.28% | +2.00% | Yes |
+| GeoServer | -11.33% | +17.03% | No |
+
+These are calibration deltas for `mixed:vus:10`, not product speed ratios.
+Every repetition, including the earlier large variation, remains in the report.
+The local WSL setup fails the publication overhead gate, and separate-generator
+calibration remains absent. Quiet-machine confirmation alone did not satisfy
+the comparison contract. The strict comparison attempt ledger remains empty.
+Calibration report SHA256:
+`38d19d9f023192412bd531a06f5b9161dc15e807a89aef12ce29f161c219522a`.
+Independent verification: `local-observer-final-aot-v2-20261002/independent-verification.json`.
+
+After calibration fully drained, owned controller
+`gb-final-aot-local-diagnostic-v1-20261002` started a separately labelled
+**local diagnostic** campaign at
+`harness-control-checkout/results/final-aot-local-diagnostic-v1-20261002`.
+It uses the same final production Native AOT image/source and frozen harness,
+all twelve point scenarios, three alternating paired repetitions,30s warmup
+and30s measurement, fresh isolated fixtures, and shared build/measurement locks.
+Expected coverage is72 measured scenario rows. Its binding is
+`3e79999300883a942a361e3e3e36d1597ee59961b2101eaa5af8e8d4dd9693ac`.
+The launcher checks the terminal calibration controller, independent verification,
+complete cleanup, and exact fingerprints before starting traffic. This campaign
+can provide current diagnostic throughput/latency figures; it cannot substitute
+for five strict repetitions or authorize publication. Results are pending.
+
+Driver/launcher receipts: `final-aot-local-diagnostic-v1-20261002/`.
