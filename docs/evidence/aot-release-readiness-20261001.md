@@ -14,8 +14,8 @@ and source, with180s warmup/120s measurement and seed42. Its attempt ledger is
 empty. The setup is ready for the user's quiet-machine window; final timing
 requires that confirmation and matching isolated-generator/observer calibration.
 The latter remains missing, so strict comparison/publication must fail closed.
-Final-source trailing CI remains live in its AOT verification job, with no
-failures reported. No final measured comparison or new AOT speed claim exists.
+Final-source trailing CI passed, with all106 jobs accounted for and no failed
+jobs. No final measured comparison or new AOT speed claim exists.
 Chronological checkpoints below retain their original sources and timestamps.
 
 ## Earlier frozen candidate and verification
@@ -674,3 +674,21 @@ Receipts: `final-hosted-qualification-terminal-20261002.json`,
 `final-strict-campaign-preparation-20261002/receipt.json` and the current handoff.
 The previous handoff is preserved as
 `release-ready-handoff-before-final-aot-ready-20261002.json`.
+
+
+## Final-source CI passed and evidence ready for review, October2
+
+[Final-source trunk CI37040748373](https://github.com/honua-io/honua-server/actions/runs/37040748373)
+completed successfully at exact merged source36581bd298. All106 paginated job
+records were accounted for, with unique IDs and terminal success/skipped
+conclusions; AOT Build Verification and CI Gate explicitly succeeded. Earlier
+live snapshots remain observations rather than terminal verdicts. Terminal
+run/job receipts are retained as
+`final-trunk-ci-37040748373-terminal-{run,jobs}-20261002.json`.
+
+The Native AOT image,558-test managed verification,24-row both-product oracle
+and fresh comparison manifest are complete and verified. The documentation
+contains no final-source AOT speed claim. Final timing still requires the
+pending user quiet-machine status and source-bound isolated-generator/observer
+calibration. The five paired measured repetitions and publishable report have
+not been produced. Missing calibration keeps strict launch/publication closed.
