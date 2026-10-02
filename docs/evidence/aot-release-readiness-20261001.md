@@ -1,4 +1,4 @@
-# Frozen release and Native AOT readiness — October 1, 2026 (UTC)
+# Frozen release, Native AOT readiness and local diagnostics — October 2, 2026 (UTC)
 
 **The final merged-source production Native AOT image is built, verified and oracle-qualified.**
 Source `36581bd29870101d103ea16e3ba215a2a98811fe` includes all six performance
@@ -16,9 +16,14 @@ observer-calibration pairs passed correctness, pressure and integrity checks,
 but GeoServer's median observer-off/on variation exceeded the5% publication
 limit. Matching isolated-generator calibration also remains missing. Strict
 comparison/publication therefore stays closed. A separate three-pair local
-AOT diagnostic campaign is running across all twelve point scenarios.
+AOT diagnostic campaign completed across all twelve point scenarios: all72
+measured rows passed and were independently verified. Its paired median
+throughput ratios were1.55 for mixed traffic and3.52 for large bbox reads;
+small bbox and boundary reads lagged at0.78 and0.88. These are local diagnostic
+figures with wide repetition ranges, not publishable comparison claims.
 Final-source trailing CI passed, with all106 jobs accounted for and no failed
-jobs. No final measured comparison or new AOT speed claim exists.
+jobs. No strict measured comparison exists. The quiet window is complete and
+the machine no longer needs to remain quiet for this diagnostic campaign.
 Chronological checkpoints below retain their original sources and timestamps.
 
 ## Earlier frozen candidate and verification
@@ -774,3 +779,86 @@ can provide current diagnostic throughput/latency figures; it cannot substitute
 for five strict repetitions or authorize publication. Results are pending.
 
 Driver/launcher receipts: `final-aot-local-diagnostic-v1-20261002/`.
+
+## Final production Native AOT diagnostics complete, October2
+
+All six scheduled product runs finished and cleaned up: three fresh paired
+repetitions, with seed42 alternating Honua/GeoServer, GeoServer/Honua,
+Honua/GeoServer. Each of the twelve scenarios used30s warmup and30s measurement.
+Warmup, measured and drain traffic remained separate. All72 measured rows
+passed, with470,043 semantically valid completions, zero invalid responses or
+cancellations, and724 late completions excluded from measured throughput.
+Every measured response was validated against precomputed PostGIS expectations;
+no oracle database queries ran during measurement.
+
+This is **local diagnostic evidence only**, covering OGC API feature queries
+on the deterministic100K-point dataset. It does not cover WFS, rendering, tiles,
+GeoServices REST, larger datasets, lines or polygons. Literal-prefix coverage
+does not establish escaped-underscore behavior. Honua's `automatic-bounded`
+profile used six source-query connections, with4CPU/4GiB for each server and
+database. The generator had8CPU/4GiB. No exact response cache or adaptive
+admission was enabled. The host was the same40GiB WSL configuration recorded
+for the local calibration.
+
+Final source: `36581bd29870101d103ea16e3ba215a2a98811fe`.
+Production full-profile Native AOT image:
+`ghcr.io/honua-io/honua-server@sha256:b2549f8d3d1e6eac54d697d45de31e0f8b921accb34f083eda44612e72ac1f66`.
+GeoServer3.0.1 plus matching OGC extension used local immutable image ID
+`sha256:32b61aed98bca6cc0821fbcdab9dbc5b9b22b6fa1af6d51d396fb64e63dac491`;
+this image has no registry RepoDigest. Harness:
+`869d19e75bdf456c508b561d966652921cfd9dc5`.
+Dataset SQL SHA256:
+`2ca9025b025361a85e7e0866a80748d29dacd44d27987ce75631a7473189a525`.
+
+Ratios below are **Honua / GeoServer within each paired repetition**. The table
+reports the median of three paired ratios and their complete range. Throughput
+above1 favors Honua; p95 below1 favors Honua. These paired medians can differ
+from the ratio of the separate per-product medians. Each repetition and its
+p50/p95/p99 remain in the raw report; no averaged overall percentile or winner
+score was calculated.
+
+| Scenario | Honua median req/s | GeoServer median req/s | Paired throughput ratio (range) | Paired p95 ratio (range) |
+| --- | ---: | ---: | ---: | ---: |
+| equality | 166.83 | 172.23 | 1.20 (0.75–1.27) | 0.80 (0.76–1.29) |
+| range | 135.27 | 186.37 | 0.95 (0.71–1.01) | 1.05 (0.94–1.36) |
+| prefix | 134.30 | 112.93 | 1.26 (1.06–1.46) | 0.91 (0.70–1.16) |
+| bbox-small | 315.47 | 405.60 | 0.78 (0.65–1.06) | 1.27 (0.85–1.57) |
+| bbox-medium | 107.43 | 70.80 | 1.71 (1.40–2.35) | 0.66 (0.47–0.86) |
+| bbox-large | 75.47 | 25.73 | 3.52 (2.93–3.67) | 0.31 (0.27–0.39) |
+| page-shallow | 117.57 | 155.80 | 0.97 (0.75–1.01) | 0.99 (0.96–1.40) |
+| page-medium | 119.57 | 113.70 | 0.95 (0.85–1.05) | 1.07 (0.89–1.07) |
+| page-deep | 71.77 | 50.60 | 1.62 (1.42–2.73) | 0.65 (0.39–0.71) |
+| empty | 588.07 | 765.13 | 1.03 (0.77–1.33) | 0.58 (0.38–0.64) |
+| bbox-boundary | 582.00 | 701.77 | 0.88 (0.83–1.02) | 0.67 (0.48–1.06) |
+| mixed:vus:10 | 159.17 | 110.20 | 1.55 (1.44–2.28) | 0.56 (0.40–0.59) |
+
+The measured outcome is a mixed bag. Medium/large bbox reads, deep pagination,
+prefix filtering and mixed traffic had throughput ratios above1 in every pair.
+Small bbox reads were about22% behind at the paired median, and boundary reads
+about12% behind. Wide ranges and the failed calibration make small differences
+inconclusive. These figures do not establish that Honua wins in all areas.
+
+An independent verification recomputed the full report and matched both JSON
+and Markdown byte for byte, rechecked every artifact hash and runtime budget,
+verified actual `/app/Honua.Server` execution without CoreCLR in all three
+Honua fixtures, and confirmed all six fixture owners were absent. The terminal
+diagnostic controller exited0 without OOM and was removed by exact identity.
+Failed calibration/preflight attempts and historical artifacts remain visible.
+The quiet-machine window is finished; no further quiet period is needed now.
+
+Campaign: `harness-control-checkout/results/final-aot-local-diagnostic-v1-20261002`.
+Binding: `3e79999300883a942a361e3e3e36d1597ee59961b2101eaa5af8e8d4dd9693ac`.
+JSON report SHA256:
+`1a25bc39cff0a3844b136198b526667eb55b404e6929b00b5563663ccde868f1`.
+Markdown report SHA256:
+`376c408b0ca3fb1e8acbfd6470816523da16d842e36f170d17a48c03c40f0127`.
+Independent verification and exact cleanup receipts:
+`final-aot-local-diagnostic-v1-20261002/{independent-verification,cleanup}.json`.
+
+**Strict comparison and publication remain blocked.** The local observer
+calibration failed GeoServer's5% gate, with11.33% throughput and17.03% p95
+variation. Genuine separate-generator calibration is still missing. The strict
+comparison ledger is empty; its five paired180s/120s repetitions have not run.
+The next step requires a controlled setup with passing, fingerprint-bound
+calibration before those repetitions and publication review. Repeating noisy
+local attempts until a favorable result appears would not satisfy that contract.
