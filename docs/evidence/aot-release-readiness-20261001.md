@@ -5,8 +5,10 @@
 `36581bd29870101d103ea16e3ba215a2a98811fe` includes the last page optimization
 and matches all15 guarded runtime/build identities of candidate53fbe4359.
 The subsequent generated examples manifest change does not alter those inputs.
-The fresh production Native AOT export and seven selected managed correctness
-suites are dispatched together on hosted runners. Results remain pending.
+The seven selected managed correctness suites passed558/558 tests on hosted
+runners, with zero failures/skips and independently verified TRX coverage.
+The fresh production Native AOT export is still compiling; final-image HTTP
+oracle and performance evidence remain pending.
 
 The historical candidatef1f040344 passed536 selected PostgreSQL17 tests and
 all24 both-product Native AOT oracle smoke rows. That image is not the final
@@ -592,3 +594,26 @@ empty invalid node was replaced by an owned helper with inode/mtime checks;
 the regular lock was verified and that helper removed by exact identity.
 Receipt: `measurement-lock-repair-v3-20261002.json`. No active regular lock,
 foreign container or fleet setting was changed.
+
+
+## Final merged-source managed verification passed, October2
+
+The hosted managed-correctness job110951472791 completed successfully in18m26s.
+Its artifact ZIP digest matches GitHub's recorded digest. All seven TRX files
+match their receipt hashes, all cases passed, and the requested source,
+workflow commit, pinned SDK/spec and exact owned container cleanup were checked.
+Total558: core27, security58, PostgreSQL265, OGC API66, GeoServices108, WFS12
+and cloud handoff22. The independent TRX-definition join confirms all11 required
+native-reader methods, all five page-ownership/geometry methods, the indexed
+scope and validated security snapshot methods, both cloud test classes, and
+exactly eight passing fractional timestamp variants. This is final-source
+managed correctness evidence, not Native AOT performance evidence.
+
+The two earlier foundation PRs5325 and5339, the four final performance PRs and
+both CI repair PRs are all merged and exact Git ancestors of source36581bd298.
+Receipts: `all-relevant-performance-and-ci-merges-proof-20261002.json` and
+`final-hosted-managed-qualification-v1-20261002/verification.json`, with the
+raw ZIP, all TRX/log files and terminal job JSON retained alongside them.
+The Native AOT candidate job remains live in production compilation. Final
+image acquisition, both-product oracle, quiet-machine confirmation and
+publication calibration remain pending. No final timing has started.
