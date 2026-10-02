@@ -1,23 +1,22 @@
 # Frozen release and Native AOT readiness — October 1, 2026 (UTC)
 
-**All four frozen performance PRs are now merged through the normal fleet lander.**
-#5343, #5349, #5351 and #5354 are merged. Final source
-`36581bd29870101d103ea16e3ba215a2a98811fe` includes the last page optimization
-and matches all15 guarded runtime/build identities of candidate53fbe4359.
-The subsequent generated examples manifest change does not alter those inputs.
-The seven selected managed correctness suites passed558/558 tests on hosted
-runners, with zero failures/skips and independently verified TRX coverage.
-The fresh production Native AOT export is still compiling; final-image HTTP
-oracle and performance evidence remain pending.
+**The final merged-source production Native AOT image is built, verified and oracle-qualified.**
+Source `36581bd29870101d103ea16e3ba215a2a98811fe` includes all six performance
+PRs and both CI repairs. Fresh managed verification passed558/558 tests with
+zero failures/skips. The hosted production full-profile Native AOT export
+succeeded. Its registry manifest, source/build inputs, runtime configuration
+and layers were verified, then all24 both-product oracle smoke rows passed.
+Honua executed `/app/Honua.Server` with no CoreCLR mapped, under4CPU/4GiB.
+All owned smoke/preparation resources and controllers are cleaned up.
 
-The historical candidatef1f040344 passed536 selected PostgreSQL17 tests and
-all24 both-product Native AOT oracle smoke rows. That image is not the final
-merged-source image. The latest local qualification was interrupted by a WSL
-restart during compilation, with zero completed tests; its logs, terminal state
-and exact owned cleanup are retained. No final timed comparison or new AOT
-speed claim has been made. Final image/oracle verification, publication
-calibration and the user's quiet-machine confirmation remain pending.
-The chronological checkpoints below retain their own sources and timestamps.
+A new immutable five-pair comparison manifest is prepared for this exact image
+and source, with180s warmup/120s measurement and seed42. Its attempt ledger is
+empty. The setup is ready for the user's quiet-machine window; final timing
+requires that confirmation and matching isolated-generator/observer calibration.
+The latter remains missing, so strict comparison/publication must fail closed.
+Final-source trailing CI remains live in its AOT verification job, with no
+failures reported. No final measured comparison or new AOT speed claim exists.
+Chronological checkpoints below retain their original sources and timestamps.
 
 ## Earlier frozen candidate and verification
 
@@ -617,3 +616,61 @@ raw ZIP, all TRX/log files and terminal job JSON retained alongside them.
 The Native AOT candidate job remains live in production compilation. Final
 image acquisition, both-product oracle, quiet-machine confirmation and
 publication calibration remain pending. No final timing has started.
+
+
+## Final production Native AOT ready for quiet-machine window, October2
+
+[Hosted qualification37041193232](https://github.com/honua-io/honua-server/actions/runs/37041193232)
+completed successfully: production full-profile Native AOT build, serving-image
+boundary validation, native liveness, unique image export, and the seven-suite
+558-case managed correctness job. Actual source is36581bd298; the isolated
+workflow commit is87a6d0663. No shipping alias or default workflow was changed.
+
+Final immutable image:
+`ghcr.io/honua-io/honua-server@sha256:b2549f8d3d1e6eac54d697d45de31e0f8b921accb34f083eda44612e72ac1f66`.
+Registry config digest:
+`sha256:711b3a45b42402db55498aa9aba32d967e1c6dfb20e03fc80eaa21514dfcbb5e`.
+Both artifact ZIP digests, all seven TRX files, required methods/eight timestamp
+variants, all15 build-input objects, production recipe/profile, exact source,
+registry manifest, runtime configuration and layer identities were checked.
+The historical image842bf147 remains recorded at its own source; it was not
+relabelled as final.
+
+The short both-product oracle passed24/24 rows: twelve each for Honua and stable
+GeoServer with its matching OGC extension. Each attempt is passed and cleaned,
+with no fairness failure. Honua executed the native `/app/Honua.Server`, with
+no CoreCLR mapped and production test-schema headers disabled. Its runtime
+budget is4CPU/4GiB, matching the database/server contract. This two-second
+warmup/three-second measurement smoke proves correctness only. It is valid
+and explicitly not publishable performance. Report SHA256:
+`8b83b22a3b1a995f69b09d534cbe6bf9e7e0f73b29991bb828bdd782ef1d44ea`.
+Both stacks and the terminal owned smoke controller were cleaned by exact
+identity. An initial postrun audit expected a command list; the runtime schema
+records a command string. The assertion was corrected to the exact native path,
+with no campaign rerun or cleanup before the correction; the note is retained.
+
+The fresh comparison directory is
+`harness-control-checkout/results/aot-final-merged-comparison-v1-20261002`.
+It pins the new image, stable GeoServer, PostgreSQL17 and k6; contains all12
+selected point scenarios, five alternating server pairs, seed42,180s warmup
+and120s measurement; and records an empty attempt ledger. Preparation started
+no server stack or traffic. Its terminal owned coordinator was removed.
+Coordinator hostname: `gb-aot-final-merged-20261002`.
+New calibration binding:
+`2457da4fcbde08108b4040380a6b4913a1a9d920e9fd29ab3031e1955ac315bc`.
+Older candidate/calibration bindings cannot be reused for this image.
+
+The user must confirm the machine is quiet before timing. Strict launch and
+publication also require the missing isolated generator/observer calibration
+for this binding; quiet WSL alone does not supply it. Approximately10hours are
+needed for the five paired point-feature repetitions, plus preparation/drain
+and calibration. The final-source trailing CI run37040748373 is still live in
+AOT Build Verification, with all other then-visible jobs terminal and no
+failures reported. No current AOT throughput/latency ratio is claimed.
+
+Receipts: `final-hosted-qualification-terminal-20261002.json`,
+`final-merged-aot-acquisition-v1-20261002/receipt.json`,
+`durable-final-merged-aot-smoke-v1-20261002/{receipt,cleanup}.json`,
+`final-strict-campaign-preparation-20261002/receipt.json` and the current handoff.
+The previous handoff is preserved as
+`release-ready-handoff-before-final-aot-ready-20261002.json`.
