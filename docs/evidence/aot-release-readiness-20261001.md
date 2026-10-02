@@ -3,11 +3,12 @@
 **The corrected production AOT candidate is built, acquired and oracle-qualified.**
 Source `f1f040344cfd25986dc1bf6044b23a795053eaee` passed536 selected tests on
 PostgreSQL17 and all24 both-product oracle smoke rows. Fleet watch restarted
-and CI repairs #5345 and #5358 merged through normal admission. All four
-optimization PRs remain open with zero unresolved threads. #5343 imported
-the actual repaired trunk and awaits fresh build/test gates; the other three
-retain green required gates. The current trunk matrix is queued behind an
-older run with the already-repaired client-tooling vulnerability scan failure.
+and CI repairs #5345 and #5358 merged through normal admission. Optimization
+PRs #5343, #5349 and #5351 are now merged. #5354 remains open with green
+required gates and no unresolved threads; the normal four-commit verification
+budget holds it until a newer trunk matrix passes. The repaired full trunk
+matrix passed, with all106 jobs accounted for. Fresh qualification of the expected release code
+is running; final merged-source AOT and its oracle smoke remain required.
 No final timed comparison or new AOT speed claim has been made.
 Merged-content proof, publication calibration and the user's quiet-machine
 confirmation remain pending. The historical qualification below retains its
@@ -437,3 +438,59 @@ New receipts: `trailing-ci-36912211773-terminal-jobs-20261001.json`,
 `fixed-trunk-ci-36921286867-jobs-2043-20261001.json` and
 `old-pin-trunk-ci-36914999953-jobs-2043-20261001.json` under the existing evidence
 root. Repeated observations and unsuccessful attempts remain retained.
+
+## Fleet recovery and three optimization merges, October 2, 07:21 UTC
+
+The WSL boot at20:49 UTC interrupted fleet watch after the earlier restart.
+At07:04 UTC, the actual user service was inactive and no watcher was running.
+The existing disabled service was started with `systemctl --user start
+honua-fleet-watch.service` at07:05:13 UTC. Its configuration and enablement were
+unchanged. It recognized green trunk484a03baf and resumed normal admission.
+No second lander, manual merge, brake override or matrix cancellation was used.
+
+[Repaired full trunk matrix36921286867](https://github.com/honua-io/honua-server/actions/runs/36921286867)
+is terminal success at484a03baf. Paginated enumeration confirms106/106 terminal
+jobs, all successful or deliberately skipped, including successful Docker,
+Native AOT verification and CI Gate. #5343's fresh gate36921770987 also passed
+its build and every selected application shard; independent exact-head Claude
+review workflow36922074245 passed. Both are stronger evidence than a pending
+run or attestation alone.
+
+The fleet merged #5343 as `6fb935393275f05e0416f595d4a5bd7127cc904e`, then
+#5349 as `55673ba0b79623efa07aaebdab3504f456b0f3ac` and #5351 as
+`67cf3e12cb8b707664741eb7be0d63d672f9c2d7`. Overlaps were deferred between
+passes by normal policy. Unrelated control-plane repair #5359 also landed as
+`b9311dd0c0bd541b9dc7a7f7edbc2c46911c04a6`; it must be accounted for in final
+build content and qualification. #5354 is still green and mergeable at its
+existing b71d85af6 head, but four commits now await verification since the last
+green source. Its hold is the normal budget, not a failed review or conflict.
+
+Candidate `53fbe4359aca83755bd36f52f8563e08bae9dd5f` combines the frozen, already
+qualified four-optimization source with actual landed trunk through67cf3e12c.
+Its merge was conflict-free. Compared with f1f040344, the application change is
+only the landed AWS Batch cancellation repair; its two test files and embedded
+catalog update are included. The new selected qualification retains all six
+previous suites and adds the affected AWS Batch/cancellation handoff tests.
+It uses one shared build slot and fresh PG17 fixtures. This pre-merge candidate
+is not claimed as final trunk, final image, or a performance result.
+
+The first attempt failed before building because Docker Desktop restored the
+shared `/tmp/geobench-feature-campaign-1000.lock` file bind as an empty directory
+after reboot. No tests or fixtures ran. The directory was confirmed empty and
+unused, and its exact metadata was recorded. An unprivileged repair failed and
+was retained. A separately owned helper replaced only that invalid node with a
+regular shared lock, then cleaned itself. The failed qualification controller
+was removed by exact identity after its logs and exit state were retained.
+The launcher now verifies/creates the regular lock and checks the build-slot
+file before Docker creation. Retry `merged-release-candidate-pg17-v2-20261002`
+is actually running and building, holding shared slot1. No active lock inode
+or foreign controller was replaced or removed.
+
+Receipts: `fleet-recovery-and-green-trunk-20261002.json`,
+`fixed-trunk-ci-36921286867-terminal-{run,jobs}-20261002.json`,
+`pr5343-fresh-gate-terminal-20261002.json`,
+`merged-release-candidate-preparation-20261002.json`,
+`measurement-lock-repair-v{1,2}-20261002.json` and both qualification attempts.
+Final timing and publication flags remain false. Once #5354 lands, final
+application/build content must match the qualified candidate or be requalified;
+the production Native AOT build will use the actual merged source.
