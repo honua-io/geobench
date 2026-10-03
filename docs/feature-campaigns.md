@@ -66,6 +66,49 @@ Community modules are [distributed separately from official releases](https://do
 
 ## Run
 
+### Check local repeatability before optimization timing
+
+`scripts/run-control-repeatability.py` prepares two identical Honua diagnostic
+campaigns using the same immutable image, dataset, configuration and harness.
+Preparation starts no stacks and sends no requests. The default selects
+`bbox-small,range,page-medium`, three A/A pairs in seeded alternating order,
+30-second warmup and 30-second measurement. Each of the six attempts provisions
+fresh owned storage. The plan records CPU/memory budgets, image identity, active
+traffic time and the maximum drain allowance; provisioning adds time separately.
+
+```bash
+python3 scripts/run-control-repeatability.py --output results/control-aa-v1 \
+  --honua-image 'sha256:<prepared-image-id>' \
+  --postgis-image 'postgis/postgis@sha256:<digest>' \
+  --k6-image 'grafana/k6@sha256:<digest>'
+```
+
+Review `repeatability-plan.json`, obtain explicit approval for that specific
+quiet-machine window, then execute the prepared plan:
+
+```bash
+python3 scripts/run-control-repeatability.py --output results/control-aa-v1 \
+  --execute --approval-note 'Operator approved this prepared A/A window'
+```
+
+An idle-host reading never grants approval. Execution without an approval note
+fails before loading the runner. Images, effective configuration, host, dataset,
+workload and harness are checked again before traffic. The runner shares the
+feature-campaign measurement lock and refuses concurrent campaigns. There is no
+automatic retry or resume: interrupted/failed attempts remain visible, remaining
+attempts are explicitly not run, and another execution needs a new plan and
+approval. Each stack uses the existing exact-ownership cleanup.
+
+`repeatability-report.json` passes only when all six attempts and scenarios have
+valid retained evidence and owned cleanup, matching database/response contracts,
+and no warmup or measurement clock anomalies. For every selected scenario,
+`max/min - 1` must be at most 5% across **all six** throughput and p95 values;
+equal arm medians cannot conceal an unstable repetition. The report retains
+each repetition, paired ratios, and the median/range of per-repetition
+p50/p95/p99 values. It does not average percentiles into a combined distribution.
+Passing this local diagnostic does not qualify observer overhead, an isolated
+generator, a server optimization or publication.
+
 ```bash
 export HONUA_IMAGE='ghcr.io/honua-io/honua-server@sha256:<digest>'
 export GEOSERVER_IMAGE='sha256:<prepared-image-id>'
