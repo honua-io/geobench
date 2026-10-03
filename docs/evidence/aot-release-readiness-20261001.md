@@ -21,6 +21,8 @@ measured rows passed and were independently verified. Its paired median
 throughput ratios were1.55 for mixed traffic and3.52 for large bbox reads;
 small bbox and boundary reads lagged at0.78 and0.88. These are local diagnostic
 figures with wide repetition ranges, not publishable comparison claims.
+The [small-bbox follow-up](small-bbox-investigation-20261003.md) checks the
+count shortcut, SQL plans and planner profiles without changing this baseline.
 Final-source trailing CI passed, with all106 jobs accounted for and no failed
 jobs. No strict measured comparison exists. The quiet window is complete and
 the machine no longer needs to remain quiet for this diagnostic campaign.
