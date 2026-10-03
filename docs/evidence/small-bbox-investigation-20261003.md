@@ -1,5 +1,10 @@
 # Small-bbox investigation — October 3, 2026 (UTC)
 
+Follow-up: [fresh policy batching qualification](policy-batching-qualification-20261003.md)
+now records an implemented JIT candidate and verified command reduction. Its
+timed performance screen remains pending; the original AOT findings below are
+unchanged.
+
 This investigation uses the final merged-source production Native AOT image
 from the [local diagnostic baseline](aot-release-readiness-20261001.md#final-production-native-aot-diagnostics-complete-october2).
 It is diagnostic evidence only. The publication calibration failure and missing
