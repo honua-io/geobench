@@ -9,7 +9,7 @@ work, previously enforced restrictions and caller transactions. Missing legacy
 tables fall back independently; other errors and cancellation propagate.
 
 This is an implementation checkpoint, **not a qualified speedup**. The PR stays
-draft until the remaining checks and alternating JIT performance screen pass.
+draft until the alternating JIT performance screen passes.
 Production Native AOT qualification and publication remain separate steps.
 
 ## Immutable JIT controls and live correctness
@@ -66,8 +66,10 @@ cases. Its earlier failed attempt remains recorded: twenty-eight cases passed
 and ten failed during Testcontainers fixture startup in image-name regex matching,
 before the policy test bodies ran. The unchanged-source retry does not erase it.
 Release compilation uses warnings as errors. Formatting and the exact-head PR
-Gate, including all selected affected shards, passed. Architecture validation
-is still running at this checkpoint.
+Gate, including all selected affected shards, passed. All 351 full architecture
+cases passed without skips. The six regression suites cover 498 passing cases;
+the focused ten-case PostgreSQL run is included in the full thirty-eight-case
+retry and is not counted twice.
 
 The next screen uses three alternating control/candidate pairs with fresh
 fixtures, 30-second warmup and 30-second measurement for each of the five cases.

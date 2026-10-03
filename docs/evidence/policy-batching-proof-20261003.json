@@ -1654,5 +1654,168 @@
         "response-119-bbox-boundary-c1.json": "2af534f859585cef93c156cef4708a6efd8528804f335e42b22fbd37e5c7febe"
       }
     }
-  }
+  },
+  "functional_validation": {
+    "source": "c6e4e3ec9745188ad54dd39929bd9711b962f1a1",
+    "passed_cases": 498,
+    "checks": [
+      {
+        "name": "core-security-v2",
+        "counts": {
+          "total": 16,
+          "executed": 16,
+          "passed": 16,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "trx_sha256": "1869d915edb3978c740ab2bb6333c1f9b9310d9827343e873c799ed97536db7a",
+        "log_sha256": "301ff10f2146dda002baba98dc9f642c8c7b0811f4c30b16ce0ccddb22e343b7"
+      },
+      {
+        "name": "server-security-v2",
+        "counts": {
+          "total": 50,
+          "executed": 50,
+          "passed": 50,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "trx_sha256": "5c17a7ae4345605acef2b9f2ec5e4a8071cf174c356dadc454e1281c0b7e9f71",
+        "log_sha256": "ccc6c7c2b0725c90430729e4ff95ec9066bb58c47bc518fcac72fa62b2175876"
+      },
+      {
+        "name": "http-security-v2",
+        "counts": {
+          "total": 14,
+          "executed": 14,
+          "passed": 14,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "trx_sha256": "c866c8254bc9a3aef763eaf07fb07a82898affc42c3d94643ced5447c1bebe68",
+        "log_sha256": "bf069cafd4bbe90ebad62e1ba3d1db961156fd4d108d08c37b8ba325d1f9068b"
+      },
+      {
+        "name": "postgres-security-regressions-v3",
+        "counts": {
+          "total": 38,
+          "executed": 38,
+          "passed": 38,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "trx_sha256": "38348e03382a7121808cc741de635e4bddaeb1dde0704d125ac74b492ecc8e47",
+        "log_sha256": "10d58e90e81a6734c442f185ad6529b1075e2c4631086be016b3e2c3cdae1f9c"
+      },
+      {
+        "name": "postgres-read-regressions-v3",
+        "counts": {
+          "total": 29,
+          "executed": 29,
+          "passed": 29,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "trx_sha256": "04665039b5aeb05c42ba636fea8082aad54e20ab751c76faa788b8583f76b6cc",
+        "log_sha256": "126ba4d40aca69d3f543141ed56a393bfb5652a75f995a7c8ac82ef781e60d97"
+      },
+      {
+        "name": "architecture-v3",
+        "counts": {
+          "total": 351,
+          "executed": 351,
+          "passed": 351,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "trx_sha256": "489efea99c3aaf8b9af8e96e46cce14f423df46a5f545eb5aff6dbe8dd243306",
+        "log_sha256": "a331d17c41716a2706133a3ba41a5ab42e0b8b163847026ec9f251222d680449"
+      }
+    ],
+    "earlier_failed_attempt_retained": true
+  },
+  "pre_timing_host_screen": {
+    "utc": "2026-10-03T08:35:06.011400+00:00",
+    "cpu_count": 22,
+    "load": [
+      34.4921875,
+      40.29052734375,
+      44.91748046875
+    ],
+    "cpu_utilization_fraction": 0.6723842195540308,
+    "timing_ready": false,
+    "thresholds": {
+      "load1_max": 11.0,
+      "cpu_utilization_max": 0.3
+    },
+    "publication_ready": false,
+    "scope": "Local diagnostic timing screen only; independent generator/observer calibration still required for publication"
+  },
+  "timed_attempts_started": 0
 }
