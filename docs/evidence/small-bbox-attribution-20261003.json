@@ -1,0 +1,493 @@
+{
+  "scope": "instrumented production Native AOT request attribution; no speed comparison",
+  "source": "36581bd29870101d103ea16e3ba215a2a98811fe",
+  "image": "ghcr.io/honua-io/honua-server@sha256:b2549f8d3d1e6eac54d697d45de31e0f8b921accb34f083eda44612e72ac1f66",
+  "harness": "869d19e75bdf456c508b561d966652921cfd9dc5",
+  "valid_responses": 160,
+  "nonwarm_traces": 140,
+  "benchmark_rows": 0,
+  "publication_ready": false,
+  "rows": [
+    {
+      "attempt": 1,
+      "concurrency": 1,
+      "completion": "postcapture bookkeeping failed",
+      "requests": 30,
+      "timings": {
+        "wall_ms": {
+          "median": 22.015321999999998,
+          "min": 19.572374,
+          "max": 29.400923
+        },
+        "server_ms": {
+          "median": 9.764050000000001,
+          "min": 7.9081,
+          "max": 13.2918
+        },
+        "database_ms": {
+          "median": 6.412850000000001,
+          "min": 4.7188,
+          "max": 9.3407
+        },
+        "database_fraction": {
+          "median": 0.6498269157320731,
+          "min": 0.5967046446048988,
+          "max": 0.7102005748087772
+        },
+        "before_database_ms": {
+          "median": 1.1311499999999999,
+          "min": 0.9595,
+          "max": 1.5037
+        },
+        "after_database_ms": {
+          "median": 1.36615,
+          "min": 1.1152,
+          "max": 2.6501
+        },
+        "between_database_ms": {
+          "median": 0.8081999999999996,
+          "min": 0.6478999999999995,
+          "max": 1.1306000000000005
+        },
+        "outside_database_ms": {
+          "median": 3.3838999999999992,
+          "min": 2.7818000000000005,
+          "max": 4.9254999999999995
+        },
+        "feature_batch_before_first_response_ms": {
+          "median": 2.5112,
+          "min": 1.7856,
+          "max": 4.0636
+        },
+        "feature_batch_after_first_response_ms": {
+          "median": 0.47975,
+          "min": 0.2962,
+          "max": 0.8872
+        },
+        "handler_ms": {
+          "median": 8.16535,
+          "min": 6.5359,
+          "max": 11.7547
+        },
+        "handler_after_database_ms": {
+          "median": 0.6183000000000001,
+          "min": 0.5202,
+          "max": 1.8214
+        },
+        "after_handler_ms": {
+          "median": 0.67955,
+          "min": 0.5507,
+          "max": 1.159
+        },
+        "catalog_ms": {
+          "median": 3.4324500000000002,
+          "min": 2.5914,
+          "max": 4.6898
+        },
+        "catalog_fraction": {
+          "median": 0.34580048890890563,
+          "min": 0.292211389319743,
+          "max": 0.4221930400525279
+        },
+        "policies_ms": {
+          "median": 2.301,
+          "min": 1.638,
+          "max": 3.1521
+        },
+        "policies_fraction": {
+          "median": 0.2290004779891048,
+          "min": 0.16559542621757425,
+          "max": 0.27519779841761266
+        }
+      },
+      "database_categories_ms": {
+        "connection_registry": {
+          "median": 1.12345,
+          "min": 0.8294,
+          "max": 1.977
+        },
+        "feature_query": {
+          "median": 2.9570999999999996,
+          "min": 2.1274,
+          "max": 4.6509
+        },
+        "field_masks": {
+          "median": 1.0869,
+          "min": 0.718,
+          "max": 1.5211
+        },
+        "row_security": {
+          "median": 1.1372499999999999,
+          "min": 0.7246,
+          "max": 1.7918
+        }
+      },
+      "database_command_counts": {
+        "4": 30
+      }
+    },
+    {
+      "attempt": 1,
+      "concurrency": 10,
+      "completion": "postcapture bookkeeping failed",
+      "requests": 40,
+      "timings": {
+        "wall_ms": {
+          "median": 64.5782665,
+          "min": 36.391277,
+          "max": 89.324786
+        },
+        "server_ms": {
+          "median": 18.0962,
+          "min": 12.4184,
+          "max": 45.6727
+        },
+        "database_ms": {
+          "median": 11.005949999999999,
+          "min": 6.9564,
+          "max": 34.6177
+        },
+        "database_fraction": {
+          "median": 0.6237139746258402,
+          "min": 0.35226314683659443,
+          "max": 0.7838274091072293
+        },
+        "before_database_ms": {
+          "median": 1.4854,
+          "min": 0.6509,
+          "max": 4.7618
+        },
+        "after_database_ms": {
+          "median": 1.82015,
+          "min": 1.0323,
+          "max": 18.5937
+        },
+        "between_database_ms": {
+          "median": 3.1598499999999987,
+          "min": 0.9189999999999998,
+          "max": 6.727400000000001
+        },
+        "outside_database_ms": {
+          "median": 6.66105,
+          "min": 3.2204999999999995,
+          "max": 24.355099999999997
+        },
+        "feature_batch_before_first_response_ms": {
+          "median": 4.4497,
+          "min": 2.3001,
+          "max": 24.7905
+        },
+        "feature_batch_after_first_response_ms": {
+          "median": 0.65265,
+          "min": 0.3301,
+          "max": 6.9022
+        },
+        "handler_ms": {
+          "median": 16.398600000000002,
+          "min": 11.1376,
+          "max": 43.0024
+        },
+        "handler_after_database_ms": {
+          "median": 1.03195,
+          "min": 0.6244,
+          "max": 17.9745
+        },
+        "after_handler_ms": {
+          "median": 0.76275,
+          "min": 0.3555,
+          "max": 3.5262
+        },
+        "catalog_ms": {
+          "median": 5.161899999999999,
+          "min": 3.3444,
+          "max": 20.56
+        },
+        "catalog_fraction": {
+          "median": 0.2844122389828373,
+          "min": 0.11553072185353615,
+          "max": 0.6419082408404752
+        },
+        "policies_ms": {
+          "median": 3.33655,
+          "min": 1.9887000000000001,
+          "max": 18.2087
+        },
+        "policies_fraction": {
+          "median": 0.20112302605208426,
+          "min": 0.07855458512415514,
+          "max": 0.5684977910988308
+        }
+      },
+      "database_categories_ms": {
+        "connection_registry": {
+          "median": 1.5678999999999998,
+          "min": 0.9018,
+          "max": 3.667
+        },
+        "feature_query": {
+          "median": 5.5992,
+          "min": 2.9197,
+          "max": 29.3411
+        },
+        "field_masks": {
+          "median": 1.6618499999999998,
+          "min": 0.8402,
+          "max": 5.3356
+        },
+        "row_security": {
+          "median": 1.6085,
+          "min": 0.7139,
+          "max": 16.5829
+        }
+      },
+      "database_command_counts": {
+        "4": 40
+      }
+    },
+    {
+      "attempt": 2,
+      "concurrency": 1,
+      "completion": "postrun checks passed",
+      "requests": 30,
+      "timings": {
+        "wall_ms": {
+          "median": 28.8481515,
+          "min": 26.265266,
+          "max": 59.331812
+        },
+        "server_ms": {
+          "median": 12.57685,
+          "min": 10.1595,
+          "max": 20.6725
+        },
+        "database_ms": {
+          "median": 8.2235,
+          "min": 6.471,
+          "max": 13.9411
+        },
+        "database_fraction": {
+          "median": 0.6581741060083949,
+          "min": 0.563818386177693,
+          "max": 0.724384257698249
+        },
+        "before_database_ms": {
+          "median": 1.50695,
+          "min": 1.0498,
+          "max": 2.8095
+        },
+        "after_database_ms": {
+          "median": 1.5474,
+          "min": 1.1192,
+          "max": 3.7675
+        },
+        "between_database_ms": {
+          "median": 1.0265000000000009,
+          "min": 0.7682000000000002,
+          "max": 1.486099999999999
+        },
+        "outside_database_ms": {
+          "median": 4.38115,
+          "min": 3.2244,
+          "max": 6.731399999999999
+        },
+        "feature_batch_before_first_response_ms": {
+          "median": 3.15585,
+          "min": 2.1233,
+          "max": 5.3869
+        },
+        "feature_batch_after_first_response_ms": {
+          "median": 0.6164499999999999,
+          "min": 0.3064,
+          "max": 1.7808
+        },
+        "handler_ms": {
+          "median": 10.504100000000001,
+          "min": 8.5573,
+          "max": 16.9341
+        },
+        "handler_after_database_ms": {
+          "median": 0.7424999999999999,
+          "min": 0.5393,
+          "max": 2.2272
+        },
+        "after_handler_ms": {
+          "median": 0.81325,
+          "min": 0.5799,
+          "max": 2.3003
+        },
+        "catalog_ms": {
+          "median": 4.33425,
+          "min": 3.1531,
+          "max": 8.2933
+        },
+        "catalog_fraction": {
+          "median": 0.3480153894079986,
+          "min": 0.2646142711281713,
+          "max": 0.4172772349089687
+        },
+        "policies_ms": {
+          "median": 2.78715,
+          "min": 1.9224999999999999,
+          "max": 3.5873
+        },
+        "policies_fraction": {
+          "median": 0.21353699563034614,
+          "min": 0.15566153567782043,
+          "max": 0.2776209793547219
+        }
+      },
+      "database_categories_ms": {
+        "connection_registry": {
+          "median": 1.65225,
+          "min": 1.1981,
+          "max": 4.9197
+        },
+        "feature_query": {
+          "median": 3.7969,
+          "min": 2.4551,
+          "max": 6.2453
+        },
+        "field_masks": {
+          "median": 1.47895,
+          "min": 0.8654,
+          "max": 1.8489
+        },
+        "row_security": {
+          "median": 1.35495,
+          "min": 0.8751,
+          "max": 2.0116
+        }
+      },
+      "database_command_counts": {
+        "4": 30
+      }
+    },
+    {
+      "attempt": 2,
+      "concurrency": 10,
+      "completion": "postrun checks passed",
+      "requests": 40,
+      "timings": {
+        "wall_ms": {
+          "median": 85.6040545,
+          "min": 43.802925,
+          "max": 164.211217
+        },
+        "server_ms": {
+          "median": 21.6374,
+          "min": 11.9731,
+          "max": 41.3876
+        },
+        "database_ms": {
+          "median": 16.96245,
+          "min": 8.4872,
+          "max": 30.318
+        },
+        "database_fraction": {
+          "median": 0.6919714827856163,
+          "min": 0.547662106117441,
+          "max": 0.880373169152411
+        },
+        "before_database_ms": {
+          "median": 1.3821,
+          "min": 0.725,
+          "max": 9.9497
+        },
+        "after_database_ms": {
+          "median": 2.4092000000000002,
+          "min": 0.9505,
+          "max": 7.8623
+        },
+        "between_database_ms": {
+          "median": 1.0842499999999993,
+          "min": 0.5447000000000006,
+          "max": 12.584299999999999
+        },
+        "outside_database_ms": {
+          "median": 5.403,
+          "min": 2.540800000000001,
+          "max": 17.6333
+        },
+        "feature_batch_before_first_response_ms": {
+          "median": 4.6579999999999995,
+          "min": 2.1132,
+          "max": 17.3049
+        },
+        "feature_batch_after_first_response_ms": {
+          "median": 0.61865,
+          "min": 0.323,
+          "max": 4.9046
+        },
+        "handler_ms": {
+          "median": 20.13875,
+          "min": 10.5828,
+          "max": 38.4744
+        },
+        "handler_after_database_ms": {
+          "median": 1.02375,
+          "min": 0.472,
+          "max": 7.1089
+        },
+        "after_handler_ms": {
+          "median": 0.79785,
+          "min": 0.4785,
+          "max": 3.4229
+        },
+        "catalog_ms": {
+          "median": 8.5976,
+          "min": 3.3043,
+          "max": 19.4729
+        },
+        "catalog_fraction": {
+          "median": 0.37950555256994367,
+          "min": 0.16407812968135385,
+          "max": 0.6840716587961921
+        },
+        "policies_ms": {
+          "median": 5.2816,
+          "min": 2.0552,
+          "max": 15.5394
+        },
+        "policies_fraction": {
+          "median": 0.24663377093148,
+          "min": 0.10950749902547816,
+          "max": 0.5791919646203433
+        }
+      },
+      "database_categories_ms": {
+        "connection_registry": {
+          "median": 1.97825,
+          "min": 0.749,
+          "max": 10.0391
+        },
+        "feature_query": {
+          "median": 5.950749999999999,
+          "min": 2.4584,
+          "max": 17.8894
+        },
+        "field_masks": {
+          "median": 2.1805000000000003,
+          "min": 0.8539,
+          "max": 12.2944
+        },
+        "row_security": {
+          "median": 2.1017,
+          "min": 1.063,
+          "max": 10.1651
+        }
+      },
+      "database_command_counts": {
+        "4": 40
+      }
+    }
+  ],
+  "limitations": [
+    "instrumented shared host; no new Honua/GeoServer ratio",
+    "first attempt failed after capture before postrun verification",
+    "second attempt passed postrun runtime/database checks; postcapture pressure sample only",
+    "client spans include scheduling and row handling, not pure SQL CPU",
+    "feature batch first-response event includes preceding planner-setting command",
+    "component medians do not add; fractions computed per request before median",
+    "fresh policy batching gain is unmeasured"
+  ]
+}

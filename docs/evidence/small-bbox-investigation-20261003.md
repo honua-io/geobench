@@ -134,8 +134,8 @@ There is **no demonstrated one-line fix** for the small-bbox deficit. The short
 page count optimization is already present, the serial setting does not change
 the small-bbox SQL scan, copying GeoServer's explicit predicate did not prove
 a gain, and removing type guards is unsafe without preserving schema-drift
-behavior. The unresolved fixed-overhead candidates are fresh catalog round
-trips and remaining row/response conversion.
+behavior. The attribution follow-up below now measures substantial catalog
+overhead, rather than leaving it as a source-review hypothesis.
 
 The strongest next implementation candidate is fresh row/field policy batching
 in #5352, which removes a catalog round trip without caching evaluated policy.
@@ -144,6 +144,94 @@ cancellation and transaction tests, followed by SQL round-trip proof and a
 controlled HTTP check. This investigation neither qualifies that checkpoint
 nor claims it will recover the full gap. No server code or shipping setting
 was changed, and no new AOT build is required for these findings.
+
+## Request attribution follow-up
+
+Two fresh owned fixtures ran the **unchanged production Native AOT image** with
+its existing OpenTelemetry tracing enabled at full sampling. No rebuild or
+custom instrumentation was needed. Each capture collected ten serial warmup
+responses, 30 serial diagnostic responses and 40 responses from ten Python
+client workers. These are small diagnostic bursts, not a steady k6 concurrency
+test or new benchmark campaign. The frozen oracle validator checked all
+**160 responses**, including complete ordered IDs, counts, attribute values and
+types, and geometry. The ten warmup responses in each capture are excluded from
+the attribution summaries.
+
+Every selected trace contains exactly four sequential Npgsql command spans:
+authoritative connection lookup, row-security policies, field-mask policies,
+and the feature batch. The feature batch includes the serial planner setting
+and the SELECT. No separate exact-count query appears. Span intervals are
+matched by the supplied W3C trace ID, checked against the enclosing ASP.NET
+request, and counted once; nested feature-handler/router spans are not added
+to database time. Raw OTLP protobuf batches were decoded again and checked
+against the saved spans. An independent timestamp/SQL pass recomputed request
+and catalog medians and all input hashes were verified.
+
+| Capture | Client workers | Nonwarm responses | Median server ms | Median catalog ms | Median per-request catalog share | Median feature batch ms | Median after-handler ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1, postcapture bookkeeping failed | 1 | 30 | 9.764 | 3.432 | 34.6% | 2.957 | 0.680 |
+| 1, postcapture bookkeeping failed | 10 | 40 | 18.096 | 5.162 | 28.4% | 5.599 | 0.763 |
+| 2, postrun checks passed | 1 | 30 | 12.577 | 4.334 | 34.8% | 3.797 | 0.813 |
+| 2, postrun checks passed | 10 | 40 | 21.637 | 8.598 | 38.0% | 5.951 | 0.798 |
+
+Catalog time is the sum of the three catalog spans **within each request**,
+then summarized across requests. Component medians do not add. The two policy
+reads alone take median 2.301/2.787 ms in the serial captures, corresponding to
+median per-request shares of 22.9%/21.4%. The shares in the ten-worker bursts
+are 20.1%/24.7%. Complete medians and ranges are retained in the
+[attribution summary](small-bbox-attribution-20261003.json).
+
+This establishes that fresh catalog work is a substantial part of Honua's
+small-bbox request cost in these captures. Later response execution is a
+smaller median component. GeoServer's local 3.0.1 source confirms its
+`GeoJSONFeatureWriter.writeFeatures` writes JSON while iterating features;
+Honua's source-backed `ExecuteFeatureQueryAsync` materializes feature objects
+before `OgcFeaturesQueryHandler` creates the response. That architectural
+difference remains real, but these traces give stronger reason to address
+catalog round trips first than to rewrite the response writer.
+
+Npgsql spans include driver handling, network waits, scheduling and row
+materialization; they are **not pure PostgreSQL execution times**. The driver's
+first-response event belongs to a batch that starts with `set_config`, so it
+cannot prove a first-feature-row boundary or isolate conversion CPU. Time
+between commands also includes uninstrumented connection leasing and other
+work. Time after the handler includes response execution and surrounding
+middleware, not serialization alone. The larger client wall times include
+the coordinator/Docker network path outside the ASP.NET request span.
+
+These instrumented shared-host samples do not reconstruct the original
+Honua/GeoServer latency difference or provide a new speed ratio. They rank
+Honua components. **Batching both fresh policy reads is now a measured target**:
+it removes one of four command round trips, while both policies still have to
+be read and evaluated. It cannot eliminate the entire 21–25% policy component,
+and its actual gain is unmeasured. Credential freshness, policy freshness,
+custom-provider compatibility and legacy-table behavior remain required by
+#5352. SQL round-trip proof and a controlled HTTP A/B must precede a gain claim.
+
+The first capture failed only after all responses and spans were saved: its
+pressure check referenced `PRESSURE_SQL` on the wrong Python module. Its
+postcapture runtime verification did not run, and its attempt ledger remains
+incomplete; it is not promoted to a passed campaign. Its prepared repetition
+metadata also changed without rebinding and is not comparison evidence.
+The corrected second capture imports the constant from `feature_runtime`,
+preserves the prepared benchmark schedule, and passes postrun runtime/database
+checks without producing benchmark rows. It records a postcapture pressure
+sample, not continuous measured-load telemetry. Both attempts and all raw
+responses are retained. Both fixtures and controllers were removed by exact
+identity and verified absent under the harness ownership label.
+
+Before the first fixture, the shared-slot queue was blocked by an idle Roslyn
+compiler retaining the completed test's inherited lock descriptor. No active
+build remained; normal `dotnet build-server shutdown --vbcscompiler` released
+that lock. No fleet settings or foreign containers were changed.
+
+Local artifacts: `small-bbox-attribution-v{1,2}-20261003/` beneath the same
+private optimization result root. Each contains `requests.json`, full response
+payloads, raw OTLP batches, decoded spans, semantic verification, per-request
+analysis, independent verification and exact cleanup receipts. Both Native AOT
+captures use the source/image/harness/dataset pins below. Publication remains
+blocked by the original calibration prerequisites; the final baseline is
+unchanged.
 
 Source: `36581bd29870101d103ea16e3ba215a2a98811fe`.
 Native image:

@@ -23,6 +23,12 @@ small bbox and boundary reads lagged at0.78 and0.88. These are local diagnostic
 figures with wide repetition ranges, not publishable comparison claims.
 The [small-bbox follow-up](small-bbox-investigation-20261003.md) checks the
 count shortcut, SQL plans and planner profiles without changing this baseline.
+Two subsequent instrumented Native AOT captures validated all160 responses;
+catalog command spans account for about35% of serial server request time.
+Fresh policy batching is now a measured overhead target, with no batching
+speedup demonstrated. The first capture's postcapture bookkeeping failure is
+retained; the corrected capture passed its postrun checks. These attribution
+bursts create no benchmark rows or new competitor ratios.
 Final-source trailing CI passed, with all106 jobs accounted for and no failed
 jobs. No strict measured comparison exists. The quiet window is complete and
 the machine no longer needs to remain quiet for this diagnostic campaign.
