@@ -151,7 +151,7 @@ class RepeatabilityTests(unittest.TestCase):
         runner.host_identity.assert_not_called()
 
     def test_prepared_fingerprints_reject_each_drift_before_traffic(self):
-        for drift in ("harness", "host", "dataset", "workload", "image", "configuration", "attempts"):
+        for drift in ("harness", "commit", "host", "dataset", "workload", "image", "configuration", "attempts"):
             with self.subTest(drift=drift), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 (root / "data/small").mkdir(parents=True)
@@ -159,7 +159,7 @@ class RepeatabilityTests(unittest.TestCase):
                 (root / "config").mkdir()
                 (root / "config/feature-corpus-v1.json").write_text("{}")
                 directory = root / "results/control"
-                manifest = {"binding": "identical", "harness": {"content": "harness"},
+                manifest = {"binding": "identical", "harness": {"content": "harness", "commit": "prepared-commit"},
                             "host_identity": {"host": "same"}, "corpus": {},
                             "dataset_sha256": control.digest(root / "data/small/init.sql"),
                             "images": {"honua": {"reference": "sha256:pinned"}},
@@ -174,11 +174,14 @@ class RepeatabilityTests(unittest.TestCase):
                 plan["binding"] = control.fingerprint(plan)
                 runner = Mock()
                 runner.source_fingerprint.return_value = "harness"
+                runner.command.return_value = "prepared-commit"
                 runner.host_identity.return_value = {"host": "same"}
                 runner.resolve_images.return_value = manifest["images"]
                 runner.make_compose.return_value = {"pool": 6}
                 if drift == "harness":
                     runner.source_fingerprint.return_value = "changed"
+                elif drift == "commit":
+                    runner.command.return_value = "changed"
                 elif drift == "host":
                     runner.host_identity.return_value = {"host": "different"}
                 elif drift == "dataset":

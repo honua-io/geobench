@@ -99,6 +99,8 @@ def validate_prepared(runner, directory, plan):
             raise ValueError("Prepared arms no longer match")
         if manifest["harness"]["content"] != runner.source_fingerprint():
             raise ValueError("Harness fingerprint drift; prepare a new plan")
+        if manifest["harness"]["commit"] != runner.command("git", "rev-parse", "HEAD", cwd=ROOT):
+            raise ValueError("Harness commit drift; prepare a new plan")
         if manifest["host_identity"] != runner.host_identity():
             raise ValueError("Host/Docker identity drift; prepare a new plan")
         if digest(ROOT / "data/small/init.sql") != manifest["dataset_sha256"]:
