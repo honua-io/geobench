@@ -15,6 +15,15 @@ control = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(control)
 
 
+IMAGES = {
+    "honua": {"reference": "sha256:server", "id": "sha256:server", "digests": [],
+              "labels": {"org.opencontainers.image.revision": "server-rev"}},
+    "postgis": {"reference": "postgis/postgis@sha256:db", "id": "sha256:db-id", "digests": ["postgis/postgis@sha256:db"],
+                "labels": {"org.opencontainers.image.revision": "db-rev", "org.opencontainers.image.version": "17-3.5"}},
+    "k6": {"reference": "grafana/k6@sha256:k6", "id": "sha256:k6-id", "digests": ["grafana/k6@sha256:k6"], "labels": {}},
+}
+
+
 def fixture():
     manifests = {arm: {"scenarios": ["bbox-small"]} for arm in control.ARMS}
     row = {"throughput": 100, "latency_ms": {"p50": 10, "p95": 20, "p99": 30},
@@ -51,7 +60,7 @@ class RepeatabilityTests(unittest.TestCase):
             runner = Mock()
             runner.write.side_effect = lambda path, value: path.write_text(json.dumps(value))
             manifest = {"binding": "identical", "scenarios": ["bbox-small", "range", "page-medium"],
-                        "images": {"honua": {"id": "same-image"}}, "profile": "diagnostic",
+                        "images": IMAGES, "profile": "diagnostic",
                         "budget": {"cpus": 4}, "generator_budget": {"cpus": 8}, "warmup": 30, "measurement": 30}
 
             def prepare_command(command, **kwargs):
@@ -68,8 +77,22 @@ class RepeatabilityTests(unittest.TestCase):
             for call in run.call_args_list:
                 self.assertIn("--prepare-only", call.args[0])
             runner.execute_attempt.assert_not_called()
-            self.assertEqual(1080, plan["scope"]["active_traffic_seconds"])
-            self.assertEqual(2340, plan["scope"]["traffic_and_maximum_drain_seconds"])
+            # 6 attempts x (1 s preflight + 6 s pressure probe + 3 x 60 s); drains on all 8 k6 phases.
+            self.assertEqual(1122, plan["scope"]["active_traffic_seconds"])
+            self.assertEqual(2802, plan["scope"]["traffic_and_maximum_drain_seconds"])
+            self.assertEqual({"k6_phases": 8, "probe_seconds": {"semantic_preflight": 1, "pressure_probe": 6},
+                              "active_traffic_seconds": 187, "traffic_and_maximum_drain_seconds": 467},
+                             plan["scope"]["traffic"]["per_attempt"])
+            self.assertEqual({"k6_phases": 48, "active_traffic_seconds": 1122, "traffic_and_maximum_drain_seconds": 2802},
+                             plan["scope"]["traffic"]["campaign"])
+            for text in ("48 k6 phases", "semantic preflight and pressure probes", "1122 active", "2802 seconds"):
+                self.assertIn(text, plan["authorization_required"])
+            self.assertEqual({"honua", "postgis", "k6"}, set(plan["scope"]["images"]))
+            self.assertEqual({"reference": "postgis/postgis@sha256:db", "id": "sha256:db-id",
+                              "digests": ["postgis/postgis@sha256:db"], "source_revision": "db-rev", "version": "17-3.5"},
+                             plan["scope"]["images"]["postgis"])
+            self.assertEqual("server-rev", plan["scope"]["images"]["honua"]["source_revision"])
+            self.assertIsNone(plan["scope"]["images"]["k6"]["source_revision"])
             with self.assertRaisesRegex(ValueError, "new output directory"):
                 control.prepare(runner, directory, args)
 
@@ -151,7 +174,8 @@ class RepeatabilityTests(unittest.TestCase):
         runner.host_identity.assert_not_called()
 
     def test_prepared_fingerprints_reject_each_drift_before_traffic(self):
-        for drift in ("harness", "commit", "host", "dataset", "workload", "image", "configuration", "attempts"):
+        for drift in ("harness", "commit", "host", "dataset", "workload", "image", "configuration", "attempts",
+                      "image-scope", "traffic", "approval-text"):
             with self.subTest(drift=drift), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 (root / "data/small").mkdir(parents=True)
@@ -162,15 +186,28 @@ class RepeatabilityTests(unittest.TestCase):
                 manifest = {"binding": "identical", "harness": {"content": "harness", "commit": "prepared-commit"},
                             "host_identity": {"host": "same"}, "corpus": {},
                             "dataset_sha256": control.digest(root / "data/small/init.sql"),
-                            "images": {"honua": {"reference": "sha256:pinned"}},
+                            "images": IMAGES, "scenarios": ["bbox-small"], "warmup": 30, "measurement": 30,
                             "honua_profile": "baseline", "generator_budget": {"cpus": 8},
                             "control_host": "localhost", "effective_compose": {"honua": {"pool": 6}}}
                 for arm in control.ARMS:
                     (directory / arm).mkdir(parents=True)
                     (directory / arm / "campaign.json").write_text(json.dumps(manifest))
                     (directory / arm / "attempts.json").write_text("[]")
+                budget = control.traffic_budget(manifest)
                 plan = {"seed": 42, "order": control.pair_order(42), "campaign_binding": "identical",
-                        "campaign_sha256": {arm: control.digest(directory / arm / "campaign.json") for arm in control.ARMS}}
+                        "campaign_sha256": {arm: control.digest(directory / arm / "campaign.json") for arm in control.ARMS},
+                        "scope": {"images": control.image_scope(IMAGES), "traffic": budget,
+                                  "active_traffic_seconds": budget["campaign"]["active_traffic_seconds"],
+                                  "traffic_and_maximum_drain_seconds": budget["campaign"]["traffic_and_maximum_drain_seconds"]},
+                        "authorization_required": control.approval_text(budget)}
+                if drift == "image-scope":
+                    # An approval plan that shows only the server image hides the database and generator.
+                    plan["scope"]["images"] = {"honua": plan["scope"]["images"]["honua"]}
+                elif drift == "traffic":
+                    # The pre-review budget counted only warmup and measurement, not the diagnostic probes.
+                    plan["scope"]["active_traffic_seconds"] = 6 * 60
+                elif drift == "approval-text":
+                    plan["authorization_required"] = "Fresh explicit approval before execute"
                 plan["binding"] = control.fingerprint(plan)
                 runner = Mock()
                 runner.source_fingerprint.return_value = "harness"
@@ -192,11 +229,69 @@ class RepeatabilityTests(unittest.TestCase):
                     runner.resolve_images.return_value = {"honua": {"reference": "different"}}
                 elif drift == "configuration":
                     runner.make_compose.return_value = {"pool": 7}
-                else:
+                elif drift == "attempts":
                     (directory / control.ARMS[0] / "attempts.json").write_text('[{"status":"interrupted"}]')
                 with patch.object(control, "ROOT", root), self.assertRaises(ValueError):
                     control.validate_prepared(runner, directory, plan)
                 runner.execute_attempt.assert_not_called()
+                runner.run_k6.assert_not_called()
+
+    def test_unchanged_prepared_plan_validates(self):
+        # Control for the drift cases: the same fixture without drift must pass.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "data/small").mkdir(parents=True)
+            (root / "data/small/init.sql").write_text("deterministic dataset")
+            (root / "config").mkdir()
+            (root / "config/feature-corpus-v1.json").write_text("{}")
+            directory = root / "results/control"
+            manifest = {"binding": "identical", "harness": {"content": "harness", "commit": "prepared-commit"},
+                        "host_identity": {"host": "same"}, "corpus": {},
+                        "dataset_sha256": control.digest(root / "data/small/init.sql"),
+                        "images": IMAGES, "scenarios": ["bbox-small"], "warmup": 30, "measurement": 30,
+                        "honua_profile": "baseline", "generator_budget": {"cpus": 8},
+                        "control_host": "localhost", "effective_compose": {"honua": {"pool": 6}}}
+            for arm in control.ARMS:
+                (directory / arm).mkdir(parents=True)
+                (directory / arm / "campaign.json").write_text(json.dumps(manifest))
+                (directory / arm / "attempts.json").write_text("[]")
+            budget = control.traffic_budget(manifest)
+            plan = {"seed": 42, "order": control.pair_order(42), "campaign_binding": "identical",
+                    "campaign_sha256": {arm: control.digest(directory / arm / "campaign.json") for arm in control.ARMS},
+                    "scope": {"images": control.image_scope(IMAGES), "traffic": budget,
+                              "active_traffic_seconds": budget["campaign"]["active_traffic_seconds"],
+                              "traffic_and_maximum_drain_seconds": budget["campaign"]["traffic_and_maximum_drain_seconds"]},
+                    "authorization_required": control.approval_text(budget)}
+            plan["binding"] = control.fingerprint(plan)
+            runner = Mock()
+            runner.source_fingerprint.return_value = "harness"
+            runner.command.return_value = "prepared-commit"
+            runner.host_identity.return_value = {"host": "same"}
+            runner.resolve_images.return_value = IMAGES
+            runner.make_compose.return_value = {"pool": 6}
+            with patch.object(control, "ROOT", root):
+                self.assertEqual(set(control.ARMS), set(control.validate_prepared(runner, directory, plan)))
+
+    def test_execution_refuses_any_k6_phase_beyond_the_approved_traffic_budget(self):
+        manifest = {"scenarios": ["bbox-small"], "warmup": 30, "measurement": 30}
+        approved = control.traffic_budget(manifest)["campaign"]
+        original = Mock(return_value=("output", []))
+        runner = SimpleNamespace(run_k6=original)
+        with control.TrafficBudget(runner, approved) as budget:
+            # Six attempts: preflight, pressure probe, warmup, measurement each.
+            for _ in range(control.ATTEMPTS):
+                for duration in (1, 6, 30, 30):
+                    runner.run_k6({}, Path("."), {"duration": duration}, "phase")
+            self.assertEqual(approved["active_traffic_seconds"], budget.seconds)
+            with self.assertRaisesRegex(ValueError, "exceed the approved budget"):
+                runner.run_k6({}, Path("."), {"duration": 1}, "extra-probe")
+        self.assertEqual(4 * control.ATTEMPTS, original.call_count)
+        self.assertIs(original, runner.run_k6)
+        longer = SimpleNamespace(run_k6=Mock())
+        with (control.TrafficBudget(longer, {"k6_phases": 48, "active_traffic_seconds": 10}),
+              self.assertRaisesRegex(ValueError, "exceed the approved budget")):
+            longer.run_k6({}, Path("."), {"duration": 11}, "pressure-probe")
+        longer.run_k6.assert_not_called()
 
     def test_interruption_and_failure_write_terminal_receipt_and_retain_not_run_attempts(self):
         for error, status in ((KeyboardInterrupt(), "interrupted"), (ValueError("provision failed"), "failed")):
@@ -205,11 +300,13 @@ class RepeatabilityTests(unittest.TestCase):
                 for arm in control.ARMS:
                     (directory / arm).mkdir()
                 runner = SimpleNamespace(
+                    run_k6=Mock(),
                     write=lambda path, value: path.write_text(json.dumps(value)),
                     execute_attempt=Mock(side_effect=error),
                     report=lambda path, manifest, attempts: {"valid": False, "failures": ["incomplete"]})
                 manifests = {arm: {"scenarios": ["bbox-small"]} for arm in control.ARMS}
-                plan = {"binding": "prepared", "order": control.pair_order(42)}
+                plan = {"binding": "prepared", "order": control.pair_order(42),
+                        "scope": {"traffic": control.traffic_budget({"scenarios": ["bbox-small"], "warmup": 30, "measurement": 30})}}
                 with patch.object(control, "validate_prepared", return_value=manifests):
                     with self.assertRaises(type(error)):
                         control.execute(runner, directory, plan, "Approved by operator for this window")

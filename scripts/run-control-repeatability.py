@@ -21,6 +21,9 @@ from feature_contract import DRAIN_SECONDS, HONUA_PROFILES, fingerprint
 ROOT = Path(__file__).resolve().parents[1]
 ARMS = ("control-a", "control-b")
 DEFAULT_SCENARIOS = "bbox-small,range,page-medium"
+ATTEMPTS = 6
+# Mandatory per-attempt diagnostic traffic in run-feature-campaign.py before any timed scenario.
+PROBE_SECONDS = {"semantic_preflight": 1, "pressure_probe": 6}
 
 
 def runner_module():
@@ -37,6 +40,60 @@ def digest(path):
 def pair_order(seed):
     first = random.Random(seed).randrange(2)
     return [list(ARMS[(first + rep) % 2:] + ARMS[:(first + rep) % 2]) for rep in range(3)]
+
+
+def traffic_budget(manifest):
+    """Every k6 phase an attempt sends, including the mandatory preflight and pressure probes."""
+    phases = len(PROBE_SECONDS) + 2 * len(manifest["scenarios"])
+    active = sum(PROBE_SECONDS.values()) + len(manifest["scenarios"]) * (manifest["warmup"] + manifest["measurement"])
+    per_attempt = {"k6_phases": phases, "probe_seconds": PROBE_SECONDS,
+                   "active_traffic_seconds": active, "traffic_and_maximum_drain_seconds": active + phases * DRAIN_SECONDS}
+    return {"attempts": ATTEMPTS, "per_attempt": per_attempt,
+            "campaign": {key: ATTEMPTS * per_attempt[key]
+                         for key in ("k6_phases", "active_traffic_seconds", "traffic_and_maximum_drain_seconds")}}
+
+
+def image_scope(images):
+    """Every pinned image the campaign runs, as the operator approves it."""
+    return {role: {"reference": image["reference"], "id": image["id"], "digests": image.get("digests", []),
+                   "source_revision": (image.get("labels") or {}).get("org.opencontainers.image.revision"),
+                   "version": (image.get("labels") or {}).get("org.opencontainers.image.version")}
+            for role, image in sorted(images.items())}
+
+
+def approval_text(budget):
+    campaign = budget["campaign"]
+    return (f"Fresh explicit approval before execute for {budget['attempts']} attempts, "
+            f"{campaign['k6_phases']} k6 phases including semantic preflight and pressure probes, "
+            f"{campaign['active_traffic_seconds']} active traffic seconds and at most "
+            f"{campaign['traffic_and_maximum_drain_seconds']} seconds including drains; "
+            "no automatic waiting for a quiet host")
+
+
+class TrafficBudget:
+    """Refuse any k6 phase that would take realised traffic beyond the approved budget."""
+
+    def __init__(self, runner, approved):
+        self.runner, self.approved = runner, approved
+        self.phases = self.seconds = 0
+
+    def __enter__(self):
+        self.original = self.runner.run_k6
+
+        def guarded(ids, directory, config, name):
+            if (self.phases + 1 > self.approved["k6_phases"] or
+                    self.seconds + config["duration"] > self.approved["active_traffic_seconds"]):
+                raise ValueError(f"{name}: realised traffic would exceed the approved budget; phase not started")
+            self.phases += 1
+            self.seconds += config["duration"]
+            return self.original(ids, directory, config, name)
+
+        self.runner.run_k6 = guarded
+        return self
+
+    def __exit__(self, *exc):
+        self.runner.run_k6 = self.original
+        return False
 
 
 def require_approval(execute, note):
@@ -66,19 +123,20 @@ def prepare(runner, directory, args):
     a, b = (manifests[arm] for arm in ARMS)
     if a["binding"] != b["binding"]:
         raise ValueError("A/A arms must have identical workload, images, dataset, host, configuration and harness")
-    phases = 6 * len(a["scenarios"])
+    budget = traffic_budget(a)
     plan = {"schema": 1, "kind": "same-image-repeatability", "publication_ready": False,
             "campaign_binding": a["binding"], "seed": args.seed, "order": pair_order(args.seed),
             "maximum_relative_spread": .05,
             "campaign_sha256": {arm: digest(directory / arm / "campaign.json") for arm in ARMS},
             "scope": {"dataset": "100K points", "scenarios": a["scenarios"],
-                      "honua_image": a["images"]["honua"]["id"], "profile": a["profile"],
+                      "images": image_scope(a["images"]), "profile": a["profile"],
                       "server_database_budget": a["budget"], "generator_budget": a["generator_budget"],
                       "paired_repetitions": 3, "warmup_seconds": a["warmup"],
                       "measurement_seconds": a["measurement"], "drain_seconds_per_phase": DRAIN_SECONDS,
-                      "active_traffic_seconds": phases * (a["warmup"] + a["measurement"]),
-                      "traffic_and_maximum_drain_seconds": phases * (a["warmup"] + a["measurement"] + 2 * DRAIN_SECONDS)},
-            "authorization_required": "Fresh explicit approval before execute; no automatic waiting for a quiet host"}
+                      "traffic": budget,
+                      "active_traffic_seconds": budget["campaign"]["active_traffic_seconds"],
+                      "traffic_and_maximum_drain_seconds": budget["campaign"]["traffic_and_maximum_drain_seconds"]},
+            "authorization_required": approval_text(budget)}
     plan["binding"] = fingerprint(plan)
     runner.write(directory / "repeatability-plan.json", plan)
     print(json.dumps(plan, indent=2))
@@ -89,6 +147,7 @@ def validate_prepared(runner, directory, plan):
     body = {key: value for key, value in plan.items() if key != "binding"}
     if fingerprint(body) != plan["binding"] or plan["order"] != pair_order(plan["seed"]):
         raise ValueError("Prepared plan has changed")
+    scope = plan.get("scope", {})
     manifests = {}
     for arm in ARMS:
         path = directory / arm
@@ -97,6 +156,13 @@ def validate_prepared(runner, directory, plan):
         manifest = json.loads((path / "campaign.json").read_text())
         if manifest["binding"] != plan["campaign_binding"]:
             raise ValueError("Prepared arms no longer match")
+        if scope.get("images") != image_scope(manifest["images"]):
+            raise ValueError("Approved image scope does not list every pinned campaign image; prepare a new plan")
+        budget = traffic_budget(manifest)
+        if (scope.get("traffic") != budget or plan.get("authorization_required") != approval_text(budget) or
+                scope.get("active_traffic_seconds") != budget["campaign"]["active_traffic_seconds"] or
+                scope.get("traffic_and_maximum_drain_seconds") != budget["campaign"]["traffic_and_maximum_drain_seconds"]):
+            raise ValueError("Realised traffic would exceed the approved budget; prepare a new plan")
         if manifest["harness"]["content"] != runner.source_fingerprint():
             raise ValueError("Harness fingerprint drift; prepare a new plan")
         if manifest["harness"]["commit"] != runner.command("git", "rev-parse", "HEAD", cwd=ROOT):
@@ -177,6 +243,21 @@ def repeatability_report(manifests, ledgers, reports):
             "limit": "Local diagnostic stability only; not observer/isolated-generator calibration or evidence of an optimization gain"}
 
 
+def run_schedule(runner, directory, plan, manifests, ledgers, save):
+    for rep, order in enumerate(plan["order"], 1):
+        for arm in order:
+            attempt = ledgers[arm][rep - 1]
+            attempt.update(status="scheduled")
+            attempt.pop("error", None)
+            save()
+            runner.execute_attempt(directory / arm, manifests[arm], attempt, save)
+            if attempt["status"] != "passed" or not attempt.get("cleaned") or attempt.get("fairness_failures"):
+                raise ValueError(f"{arm}/{attempt['id']}: attempt failed; remaining scheduled attempts will not run")
+            if any(part.get("counts", {}).get("clock_anomalies", 0)
+                   for row in attempt.get("rows", {}).values() for part in (row, row.get("warmup", {}))):
+                raise ValueError(f"{arm}/{attempt['id']}: clock anomalies; remaining scheduled attempts will not run")
+
+
 def execute(runner, directory, plan, approval_note):
     require_approval(True, approval_note)
     receipt_file = directory / "execution.json"
@@ -198,18 +279,8 @@ def execute(runner, directory, plan, approval_note):
 
     save()
     try:
-        for rep, order in enumerate(plan["order"], 1):
-            for arm in order:
-                attempt = ledgers[arm][rep - 1]
-                attempt.update(status="scheduled")
-                attempt.pop("error", None)
-                save()
-                runner.execute_attempt(directory / arm, manifests[arm], attempt, save)
-                if attempt["status"] != "passed" or not attempt.get("cleaned") or attempt.get("fairness_failures"):
-                    raise ValueError(f"{arm}/{attempt['id']}: attempt failed; remaining scheduled attempts will not run")
-                if any(part.get("counts", {}).get("clock_anomalies", 0)
-                       for row in attempt.get("rows", {}).values() for part in (row, row.get("warmup", {}))):
-                    raise ValueError(f"{arm}/{attempt['id']}: clock anomalies; remaining scheduled attempts will not run")
+        with TrafficBudget(runner, plan["scope"]["traffic"]["campaign"]):
+            run_schedule(runner, directory, plan, manifests, ledgers, save)
         receipt["status"] = "completed"
     except KeyboardInterrupt:
         receipt["status"] = "interrupted"

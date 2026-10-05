@@ -73,8 +73,16 @@ campaigns using the same immutable image, dataset, configuration and harness.
 Preparation starts no stacks and sends no requests. The default selects
 `bbox-small,range,page-medium`, three A/A pairs in seeded alternating order,
 30-second warmup and 30-second measurement. Each of the six attempts provisions
-fresh owned storage. The plan records CPU/memory budgets, image identity, active
-traffic time and the maximum drain allowance; provisioning adds time separately.
+fresh owned storage. The plan records CPU/memory budgets and, under
+`scope.images`, every pinned image the campaign runs (Honua server, PostGIS
+database and k6 generator) with its reference, resolved ID, repository digests
+and OCI source revision/version labels (`null` when the image carries none).
+`scope.traffic` counts every k6 phase per attempt and per campaign, including
+the mandatory 1-second semantic preflight and 6-second pressure probe: with the
+defaults, 8 phases and 187 active seconds per attempt, 48 phases and 1,122
+active seconds in total, and at most 2,802 seconds including the drain
+allowance on every phase. `authorization_required` states the same totals;
+provisioning adds time separately.
 
 ```bash
 python3 scripts/run-control-repeatability.py --output results/control-aa-v1 \
@@ -93,7 +101,11 @@ python3 scripts/run-control-repeatability.py --output results/control-aa-v1 \
 
 An idle-host reading never grants approval. Execution without an approval note
 fails before loading the runner. Images, effective configuration, host, dataset,
-workload and harness are checked again before traffic. The runner shares the
+workload and harness are checked again before traffic, and execution refuses a
+plan whose image scope or traffic budget no longer matches the prepared
+campaigns. During execution every k6 phase is metered against the approved
+campaign budget; a phase that would exceed the approved phase count or active
+seconds is refused before it starts. The runner shares the
 feature-campaign measurement lock and refuses concurrent campaigns. There is no
 automatic retry or resume: interrupted/failed attempts remain visible, remaining
 attempts are explicitly not run, and another execution needs a new plan and
