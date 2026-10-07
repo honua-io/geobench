@@ -1,11 +1,12 @@
-# Results (regenerated each run)
-results/*/
-!results/.gitkeep
-# Per-release archives and baselines are intentionally tracked.
-!results/releases/
-results/releases/*/
-!results/releases/**
-!results/baselines/
+# Raw outputs, including loose files, stay local. Existing tracked files remain tracked.
+/results/*
+!/results/.gitkeep
+# Existing tracked releases, baselines and fixtures remain tracked at their paths.
+# New output in legacy folders also requires explicit curated publication.
+
+# Approved curated packages are tracked; incomplete promotion state is local.
+/published/.*.staging-*/
+/published/.*.publishing
 
 # Python
 __pycache__/
