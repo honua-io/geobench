@@ -1,11 +1,8 @@
 # Raw outputs, including loose files, stay local. Existing tracked files remain tracked.
 /results/*
 !/results/.gitkeep
-# Legacy release archives and baselines retain their existing contracts.
-!/results/releases/
-!/results/releases/**
-!/results/baselines/
-!/results/baselines/**
+# Existing tracked releases, baselines and fixtures remain tracked at their paths.
+# New output in legacy folders also requires explicit curated publication.
 
 # Approved curated packages are tracked; incomplete promotion state is local.
 /published/.*.staging-*/

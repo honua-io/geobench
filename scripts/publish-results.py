@@ -23,6 +23,7 @@ TOP_LEVEL = {
     "report.md", "report.json", "benchmark-metadata.json", "campaign.json",
     "attempts.json", "fairness-audit.txt", "fairness-audit.json",
     "loss-ledger.md", "loss-ledger.json", "calibration.json",
+    "honua-baseline.json", "honua-cold-start.json",
 }
 RESERVED = {"baselines", "releases", "con", "prn", "aux", "nul"}
 SECRET_KEYS = {

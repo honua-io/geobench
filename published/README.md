@@ -7,6 +7,9 @@ is not approved. Neither the runner nor the publisher approves a run.
 The historical tracked results/baselines/, results/releases/ and loose result
 fixtures retain their existing paths and consumers. They are not automatically
 moved or relabeled by this workflow.
+New files under those legacy folders are also ignored; tracked historical files
+remain tracked. Use published for new approved records rather than force-adding
+raw files into legacy archives.
 
 ## Review and promote
 
@@ -102,6 +105,14 @@ Before any raw cleanup, check the owning worktree's Git lock, operational
 markers, live run/process activity and retention instructions. Preserve locked
 or active run trees even when their outputs are ignored. An ignore rule marks
 local output; it does not authorize deletion or establish that a run is idle.
+
+Release automation uploads raw workflow artifacts, including an optional
+honua-baseline.json candidate and honua-cold-start.json record, without Git
+commits or publication. Those small records may be explicitly selected with the
+broad-run evidence set after review. Downloaded raw artifacts belong in a new
+results/<run-id>/ directory. The existing tracked baseline is still the input
+to regression checks; replacing that legacy baseline is a separate reviewed
+source change and must not be inferred from a candidate being generated.
 
 ## Working checkout placement
 

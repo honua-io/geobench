@@ -8,16 +8,12 @@ name: Per-Release Benchmark (Honua Server)
 #   2. Measure cold-start latency (server startup → first successful request).
 #   3. Compare p50/p95/p99 latency, RPS, and error rate against the stored
 #      baseline and fail the job when any metric regresses beyond the threshold.
-#   4. Persist results and the updated baseline as workflow artifacts and as a
-#      commit to results/releases/ in this repo.
-#
-# Secrets required (set in geobench repo settings):
-#   GEOBENCH_RESULTS_PUSH_TOKEN  — PAT with contents:write on this repo, used
-#                                   to commit the results and baseline back.
+#   4. Upload raw results and any requested baseline candidate as workflow
+#      artifacts for operator review. Never approve, commit or push results.
 #
 # The baseline JSON is stored at results/baselines/honua-baseline.json and
-# committed to this repo so it persists across workflow runs without external
-# storage.
+# remains tracked for compatibility. New approved records use published/;
+# replacing this legacy baseline requires a separately reviewed source change.
 
 on:
   repository_dispatch:
@@ -41,11 +37,11 @@ on:
         required: false
         default: '3'
       save_baseline:
-        description: 'Commit a clean baseline (true/false); permits replacing an invalid old baseline after validating new evidence.'
+        description: 'Generate an unapproved baseline candidate in raw artifacts (true/false); never replaces the tracked baseline.'
         required: false
         default: 'false'
       evidence_only:
-        description: 'Diagnostic campaign: upload artifacts without updating a release archive or baseline.'
+        description: 'Diagnostic campaign: skip Honua release regression/cold-start and baseline candidate checks.'
         type: boolean
         default: false
       servers:
@@ -81,7 +77,7 @@ env:
   REGRESSION_THRESHOLD: ${{ github.event.client_payload.regression_threshold || github.event.inputs.regression_threshold || '0.20' }}
   RUNS: ${{ github.event.client_payload.runs || github.event.inputs.runs || '3' }}
   SAVE_BASELINE: ${{ github.event.client_payload.save_baseline || github.event.inputs.save_baseline || 'false' }}
-  # Release archives remain Honua/core only; custom campaigns are evidence-only.
+  # Release regression checks remain Honua/core only; all outputs are raw evidence.
   EVIDENCE_ONLY: ${{ inputs.evidence_only && 'true' || 'false' }}
   SERVERS: ${{ inputs.servers || 'honua' }}
   TESTS: ${{ inputs.tests || 'attribute-filter spatial-bbox concurrent' }}
@@ -134,7 +130,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.GEOBENCH_RESULTS_PUSH_TOKEN || github.token }}
+          persist-credentials: false
 
       - name: Validate campaign selection and resolve GeoServer profile
         run: python3 scripts/benchmark_config.py workflow
@@ -231,7 +227,7 @@ jobs:
           exit_code=$?
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
 
-      - name: Save results as new baseline
+      - name: Generate unapproved baseline candidate
         if: ${{ !inputs.evidence_only && env.SAVE_BASELINE == 'true' && steps.regression.outputs.exit_code == '0' }}
         env:
           RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
@@ -242,45 +238,9 @@ jobs:
             --tests attribute-filter spatial-bbox concurrent \
             --expected-runs "${RUNS}" \
             --cold-start "results/${RESULT_TIMESTAMP}/honua-cold-start.json" \
-            --save-baseline "results/baselines/honua-baseline.json" \
+            --save-baseline "results/${RESULT_TIMESTAMP}/honua-baseline.json" \
             --release-tag "${{ steps.image.outputs.tag }}"
-          echo "Baseline updated from ${{ steps.image.outputs.tag }}"
-
-      - name: Copy results to release archive
-        if: ${{ !inputs.evidence_only && steps.regression.outputs.exit_code == '0' }}
-        env:
-          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
-        run: |
-          tag="${RELEASE_TAG}"
-          archive="results/releases/${tag}"
-          mkdir -p "${archive}"
-          cp -r "results/${RESULT_TIMESTAMP}/." "${archive}/"
-          echo "Results archived to ${archive}"
-
-      - name: Commit results and baseline
-        if: ${{ !inputs.evidence_only && steps.regression.outputs.exit_code == '0' }}
-        env:
-          RESULT_TIMESTAMP: ${{ steps.ts.outputs.ts }}
-        run: |
-          set -euo pipefail
-          git config user.name "Mike McDougall"
-          git config user.email "mike@honua.io"
-
-          # Stage archived release results.
-          tag="${RELEASE_TAG}"
-          git add "results/releases/${tag}/" || true
-
-          # Stage updated baseline if save_baseline was requested.
-          if [ "${SAVE_BASELINE}" = "true" ]; then
-            git add "results/baselines/honua-baseline.json" || true
-          fi
-
-          if git diff --cached --quiet; then
-            echo "Nothing to commit (results directory may be gitignored)."
-          else
-            git commit -m "bench: record ${tag} benchmark results"
-            git push origin HEAD:trunk
-          fi
+          echo "Unapproved baseline candidate generated; operator review is required."
 
       - name: Upload benchmark artifacts
         if: ${{ always() && steps.ts.outputs.ts != '' }}
@@ -298,6 +258,7 @@ jobs:
         run: |
           echo "## Benchmark Results — ${IMAGE_TAG}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Raw evidence only. Review and explicit SHA256-bound approval are required before publication." >> "$GITHUB_STEP_SUMMARY"
           report="results/${RESULT_TIMESTAMP}/report.md"
           if [ -f "${report}" ]; then
             cat "${report}" >> "$GITHUB_STEP_SUMMARY"

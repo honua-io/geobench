@@ -261,11 +261,29 @@ class PublicationTests(unittest.TestCase):
 
 
 class PublicationIgnoreTests(unittest.TestCase):
+    def test_release_automation_uploads_raw_evidence_without_git_publication(self):
+        workflow = (ROOT / ".github/workflows/benchmark-on-release.yml").read_text()
+        self.assertIn("--baseline \"results/baselines/honua-baseline.json\"", workflow)
+        self.assertIn('--save-baseline "results/${RESULT_TIMESTAMP}/honua-baseline.json"', workflow)
+        self.assertIn("actions/upload-artifact@", workflow)
+        self.assertIn("path: results/${{ steps.ts.outputs.ts }}/", workflow)
+        self.assertNotIn("GEOBENCH_RESULTS_PUSH_TOKEN", workflow)
+        self.assertNotIn("results/releases/", workflow)
+        for command in ("git add", "git commit", "git push", "publish-results.py promote"):
+            with self.subTest(command=command):
+                self.assertNotIn(command, workflow)
+
     def test_raw_outputs_ignored_published_trackable_and_legacy_contracts_retained(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / ".gitignore").write_bytes((ROOT / ".gitignore").read_bytes())
             subprocess.run(["git", "init", "-q", str(root)], check=True)
+            historical = ["results/baselines/honua-baseline.json", "results/releases/legacy/report.json"]
+            for name in historical:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}")
+            subprocess.run(["git", "-C", str(root), "add", *historical], check=True)
+            (root / ".gitignore").write_bytes((ROOT / ".gitignore").read_bytes())
             checks = {
                 "results/raw-summary.json": True,
                 "results/20261007/raw.jsonl": True,
@@ -275,8 +293,10 @@ class PublicationIgnoreTests(unittest.TestCase):
                 "published/.20261007.staging-abc/report.md": True,
                 "published/.20261007.publishing": True,
                 "results/baselines/honua-baseline.json": False,
-                "results/baselines/nested/report.json": False,
-                "results/releases/v2026.1/report.json": False,
+                "results/releases/legacy/report.json": False,
+                "results/baselines/new-raw.json": True,
+                "results/baselines/nested/report.json": True,
+                "results/releases/v2026.1/new-raw.json": True,
                 "results/.gitkeep": False,
                 ".env": True,
             }
@@ -284,3 +304,5 @@ class PublicationIgnoreTests(unittest.TestCase):
                 with self.subTest(name=name):
                     result = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", name], check=False)
                     self.assertEqual(result.returncode == 0, ignored)
+            subprocess.run(["git", "-C", str(root), "ls-files", "--error-unmatch", *historical],
+                           check=True, capture_output=True)

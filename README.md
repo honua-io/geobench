@@ -224,9 +224,13 @@ The repo also runs an automated per-release benchmark
 each Honua Server release tag triggers the core feature tracks plus a
 cold-start measurement, compares p50/p95/p99, req/s, and error rate against the
 stored baseline (`results/baselines/honua-baseline.json`) with
-`scripts/check-regression.py`, and commits the results under
-[results/releases/](results/releases/). This is a single-server regression
-gate, not a cross-server comparison.
+`scripts/check-regression.py`, and uploads raw results as workflow artifacts.
+The save_baseline input produces an unapproved honua-baseline.json candidate
+inside the raw run; it does not replace the tracked baseline. The workflow never
+commits or publishes results. Review downloaded evidence and use the explicit
+[promotion workflow](published/README.md) for new approved records. Historical
+[results/releases/](results/releases/) archives stay at their existing paths.
+This is a single-server regression gate, not a cross-server comparison.
 
 ## Published Comparison Snapshots
 
