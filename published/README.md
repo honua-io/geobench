@@ -21,7 +21,9 @@ require its successful exit status before continuing:
       --results-dir results/<run-id> --servers honua,geoserver \
       --strict-equal-db-budget > results/<run-id>/fairness-audit.txt
 
-Warnings still need review and disclosed limitations. This packaging command
+Warnings need review and disclosed limitations. If a selected fairness audit
+contains WARN, promotion and verification require at least one nonempty reviewed
+caveat in the approval's limitations list. This packaging command
 does not rerun a benchmark, independently endorse its conclusions, or replace
 the fairness, oracle, image, timing, calibration and reproducibility gates.
 

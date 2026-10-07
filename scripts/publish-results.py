@@ -33,7 +33,24 @@ SECRET_KEYS = {
 
 
 def linked(path):
-    return path.is_symlink() or path.is_junction()
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    if callable(is_junction) and is_junction():
+        return True
+    # is_junction arrived in Python 3.12. Older Windows runtimes still
+    # expose reparse attributes through lstat; never silently accept a
+    # junction when the convenience API is unavailable.
+    if os.name == "nt":
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            return False
+        attributes = getattr(info, "st_file_attributes", None)
+        if attributes is None:
+            raise ValueError("cannot verify Windows reparse attributes")
+        return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+    return False
 
 
 def safe_path(path, boundary=None):
@@ -256,12 +273,22 @@ def approval_record(path, run_id):
     return approval
 
 
+def require_reviewed_warnings(approval, contents):
+    warnings = any(
+        re.search(r"\bWARN\b", contents[name].decode("utf-8"))
+        for name in ("fairness-audit.txt", "fairness-audit.json") if name in contents
+    )
+    if warnings and not any(value.strip() for value in approval.get("limitations", [])):
+        raise ValueError("fairness warnings require nonempty reviewed limitations in the approval")
+
+
 def promote(root, run_id, approval_path, apply=False, before_commit=None):
     root = safe_path(root)
     run_name(run_id)
     approval = approval_record(approval_path, run_id)
     names = [row["path"] for row in approval["artifacts"]]
     records, contents = collect(root, run_id, names)
+    require_reviewed_warnings(approval, contents)
     approved_hashes = {row["path"]: row["sha256"] for row in approval["artifacts"]}
     if any(row["sha256"] != approved_hashes[row["path"]] for row in records):
         raise ValueError("run artifacts changed after review; obtain fresh approval")
@@ -368,6 +395,7 @@ def verify_package(directory, run_id):
     if actual != expected:
         raise ValueError("unexpected or missing publication files")
     validate_evidence(directory, contents)
+    require_reviewed_warnings(approval, contents)
     return {"mode": "verified", "run_id": run_id, "artifacts": len(contents)}
 
 

@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -6,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +80,53 @@ class PublicationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.promote(apply=True)
                 self.assertFalse((self.root / "published").exists())
+
+    def test_older_windows_junction_api_fallback_rejects_reparse_points_and_unknown_attributes(self):
+        legacy = SimpleNamespace(is_symlink=lambda: False, lstat=lambda: SimpleNamespace(st_file_attributes=0x400))
+        with patch.object(publisher.os, "name", "nt"):
+            self.assertTrue(publisher.linked(legacy))
+            legacy.lstat = lambda: SimpleNamespace(st_file_attributes=0)
+            self.assertFalse(publisher.linked(legacy))
+            legacy.lstat = lambda: SimpleNamespace()
+            with self.assertRaisesRegex(ValueError, "cannot verify"):
+                publisher.linked(legacy)
+        legacy.is_symlink = lambda: True
+        self.assertTrue(publisher.linked(legacy))
+
+    def test_fairness_warnings_require_reviewed_nonempty_caveats(self):
+        for name, contents in [
+            ("fairness-audit.txt", "WARN: heterogeneous CPU architecture\n"),
+            ("fairness-audit.json", {"status": "WARN", "message": "heterogeneous CPU architecture"}),
+        ]:
+            with self.subTest(name=name):
+                self.write(name, contents)
+                names = self.names if name in self.names else self.names + [name]
+                approval = self.approve(names)
+                for limitations in [[], [""], ["   "]]:
+                    approval["limitations"] = limitations
+                    self.approval.write_text(json.dumps(approval))
+                    with self.assertRaisesRegex(ValueError, "reviewed limitations"):
+                        self.promote()
+                    with self.assertRaisesRegex(ValueError, "reviewed limitations"):
+                        self.promote(apply=True)
+                self.assertFalse((self.root / "published").exists())
+
+    def test_package_verification_enforces_warning_caveats_even_with_consistent_hashes(self):
+        self.write("fairness-audit.txt", "WARN: heterogeneous CPU architecture\n")
+        approval = self.approve()
+        approval["limitations"] = ["Different CPU architectures limit direct comparison."]
+        self.approval.write_text(json.dumps(approval))
+        package = Path(self.promote(apply=True)["destination"])
+        self.assertEqual(publisher.verify_package(package, self.run_id)["mode"], "verified")
+        approval["limitations"] = []
+        approval_bytes = (json.dumps(approval, indent=2) + "\n").encode()
+        (package / "approval.json").write_bytes(approval_bytes)
+        manifest_path = package / "publication.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["approval_sha256"] = hashlib.sha256(approval_bytes).hexdigest()
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "reviewed limitations"):
+            publisher.verify_package(package, self.run_id)
 
     def test_approved_small_package_is_verified_raw_retained_and_no_wholesale_copy(self):
         self.write("samples/raw.jsonl", '{"raw": true}\n')
