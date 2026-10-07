@@ -92,6 +92,14 @@ response-shape audits, and a generated report. Optionally copy `.env.example`
 to `.env` to change image tags, host ports, credentials, and defaults —
 configuration is entirely env-var driven.
 
+Raw run directories and loose output files stay ignored under results/.
+After explicit operator approval, use the [approved result workflow](published/README.md)
+to promote only reviewed reports, audit evidence, metadata and system cards into
+tracked published/<run-id>/ packages. Promotion retains the raw run and records
+the approval reference, original harness revision and exact artifact SHA256s.
+Existing tracked baselines and release archives retain their paths. Keep working
+Git checkouts outside both output folders, alongside the repository.
+
 ## Running Specific Tracks
 
 Select benchmark families with `TESTS` and server targets with `SERVERS`:

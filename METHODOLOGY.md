@@ -331,6 +331,20 @@ Together they document:
 
 Without system cards and run metadata, results are not considered publishable.
 
+Publication approval is an explicit operator decision recorded against exact
+reviewed bytes. New curated records use published/<run-id>/; unapproved raw
+runs stay ignored under results/<run-id>/. Follow the
+[approval and promotion contract](published/README.md) to bind selected reports,
+audits, run metadata and copied system cards to the reviewer/reference, original
+harness commit and SHA256s. Feature campaigns use their manifest/report metadata
+and must also pass their existing comparison publication gates.
+
+Promotion is packaging after approval, not scientific approval or an automatic
+runner step. It never changes a diagnostic or failed campaign into publication
+evidence. It preserves raw samples and harness snapshots; retain or separately
+archive those for inspection/recalculation before any explicitly requested raw
+cleanup. Historical tracked baselines/releases retain their existing contracts.
+
 ## Known Limitations
 
 - **Docker resource limits are soft** (cgroups v2). Bare-metal results may differ.
