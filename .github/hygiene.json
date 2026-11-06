@@ -1,0 +1,23 @@
+{
+  "roots": [
+    ".env.example",
+    ".github/",
+    ".gitignore",
+    "AGENTS.md",
+    "LICENSE",
+    "METHODOLOGY.md",
+    "README.md",
+    "adapters/",
+    "config/",
+    "data/",
+    "docker-compose.gsr.yml",
+    "docker-compose.yml",
+    "docs/",
+    "published/",
+    "scripts/",
+    "src/",
+    "system-cards/",
+    "tests/"
+  ],
+  "gate_inputs": {}
+}
