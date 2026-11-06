@@ -11,7 +11,7 @@ import json
 import statistics
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from benchmark_config import supports_test
@@ -1050,7 +1050,7 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
     lines.append("# GeoBench Results")
     lines.append("")
     lines.append(
-        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+        f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}"
     )
     lines.append(f"Dataset: Small (100K points) | Runs: {runs} (median reported)")
     lines.append("")
@@ -1107,7 +1107,7 @@ def generate_report(results_dir, output_path, runs, selected_servers=None):
     with open(json_path, "w") as f:
         json.dump(
             {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "dataset": "small",
                 "runs": runs,
                 "valid": not invalid_runs,
