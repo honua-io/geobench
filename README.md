@@ -62,7 +62,7 @@ images used are recorded in each result directory's metadata.
 
 ## Quick Start
 
-Requirements: Docker with Docker Compose v2, Python 3, `jq`, `curl`.
+Requirements: Docker with Docker Compose v2, Python 3.11 or newer, `jq`, `curl`.
 
 Generate the deterministic dataset, then run the default suite
 (`attribute-filter`, `spatial-bbox`, `concurrent`; 5 runs each against Honua,
