@@ -11,7 +11,7 @@ import shutil
 import stat
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
@@ -243,8 +243,8 @@ def approval_record(path, run_id):
     for key in ("approved_by", "approved_at", "reference", "harness_revision"):
         if not isinstance(approval.get(key), str) or not approval[key].strip():
             raise ValueError(f"approval requires {key}")
-    moment = datetime.fromisoformat(approval["approved_at"].replace("Z", "+00:00"))
-    if moment.tzinfo is None or moment > datetime.now(timezone.utc):
+    moment = datetime.fromisoformat(approval["approved_at"])
+    if moment.tzinfo is None or moment > datetime.now(UTC):
         raise ValueError("approval time must include a timezone and cannot be in the future")
     reference = urlsplit(approval["reference"])
     if reference.scheme != "https" or not reference.netloc or reference.username or reference.password:
