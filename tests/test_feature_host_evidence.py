@@ -57,7 +57,8 @@ class HostEvidenceTests(unittest.TestCase):
                     feature_runtime.engine_host_sample('exact-owned-database')
 
     def test_observer_keeps_controller_separate_from_container_host(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp, patch.object(feature_runtime, 'inspect',
+                side_effect=lambda identity: {'Name': '/' + identity, 'HostConfig': {'NanoCpus': 4 * 10**9}}):
             observer = feature_runtime.Observer(temp, ['server','db','k6'], 'db')
             def host_sample(container):
                 self.assertEqual('db', container)

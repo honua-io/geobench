@@ -18,7 +18,7 @@ fairness rules, and reporting requirements.
 - Orchestration: Bash (`scripts/run-benchmark.sh`, `set -euo pipefail`)
 - Load generation: k6 workloads written in JavaScript (`src/tests/*.js`),
   run via the `grafana/k6:0.54.0` container
-- Post-processing / reporting / audits: Python 3 (standard library; no
+- Post-processing / reporting / audits: Python 3.11 or newer (standard library; no
   `requirements.txt` / `pyproject.toml` present)
 - Servers under test (Docker): Honua Server (.NET 10), GeoServer (Java/JVM),
   QGIS Server (C++/Qt)
@@ -28,7 +28,7 @@ fairness rules, and reporting requirements.
 
 ## Setup
 
-Requirements (from `README.md`): Docker with Docker Compose v2, Python 3, `jq`,
+Requirements (from `README.md`): Docker with Docker Compose v2, Python 3.11 or newer, `jq`,
 `curl`.
 
 1. Optionally copy `.env.example` to `.env` and adjust image tags, host ports,

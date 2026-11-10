@@ -58,6 +58,7 @@ curl -sf -X POST "${GS_URL}/geoserver/rest/workspaces/geobench/datastores" \
           {"@key": "dbtype", "$": "postgis"},
           {"@key": "schema", "$": "public"},
           {"@key": "Loose bbox", "$": "false"},
+          {"@key": "Expose primary keys", "$": "true"},
           {"@key": "Estimated extends", "$": "true"},
           {"@key": "encode functions", "$": "true"},
           {"@key": "max connections", "$": "'${GEOSERVER_MAX_CONNECTIONS}'"},

@@ -13,7 +13,7 @@ import os
 import statistics
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -110,7 +110,7 @@ def summarize_runs(runs: list[SweepRun], scenario: str, output_dir: Path) -> Pat
     lines: list[str] = []
     lines.append("# GeoServices Query Sweep")
     lines.append("")
-    lines.append(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    lines.append(f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
     lines.append(f"Scenario: `{scenario}`")
     lines.append("")
     lines.append("## Per Salt")
@@ -164,7 +164,7 @@ def summarize_runs(runs: list[SweepRun], scenario: str, output_dir: Path) -> Pat
         json.dump(
             {
                 "scenario": scenario,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_at": datetime.now(UTC).isoformat(),
                 "runs": [
                     {
                         "label": run.label,
@@ -234,7 +234,7 @@ def main() -> int:
     if not runs:
         raise RuntimeError("no sweep runs were collected")
 
-    summary_dir = RESULTS_ROOT / f"{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-geoservices-query-sweep"
+    summary_dir = RESULTS_ROOT / f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-geoservices-query-sweep"
     report_path = summarize_runs(runs, args.scenario, summary_dir)
     print(f"[summary] wrote {report_path}")
     return 0

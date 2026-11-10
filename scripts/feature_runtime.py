@@ -95,6 +95,15 @@ class Observer:
         self.path = Path(directory) / "telemetry.jsonl"
         self.containers = containers
         self.database = database
+        # Inspect before any warmup/measurement starts, including calibration.
+        # Docker CPU percentages use 100% per logical CPU, not per quota.
+        self.container_cpu_limits = {}
+        for container in containers:
+            info = inspect(container)
+            cpus = info["HostConfig"]["NanoCpus"] / 1e9
+            if not math.isfinite(cpus) or cpus <= 0:
+                raise ValueError(f"Missing bounded CPU limit: {container}")
+            self.container_cpu_limits[info["Name"].lstrip("/")] = cpus
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.failures = []
@@ -120,6 +129,8 @@ class Observer:
                            "observer_seconds": time.monotonic() - start}
                     for container in row["containers"]:
                         name = container.get("Name", container.get("ID", "unknown"))
+                        if name not in self.container_cpu_limits:
+                            raise ValueError(f"CPU budget missing for observed container: {name}")
                         peaks = self.container_peaks.setdefault(name, {"cpu_percent": 0, "memory_percent": 0})
                         peaks["cpu_percent"] = max(peaks["cpu_percent"], float(container["CPUPerc"].rstrip("%")))
                         peaks["memory_percent"] = max(peaks["memory_percent"], float(container["MemPerc"].rstrip("%")))
@@ -145,11 +156,14 @@ class Observer:
             self.failures.append("observer did not drain")
 
     def summary(self):
-        signals = [f"{name}: sampled CPU reached 90% of four-core budget" for name, peak in self.container_peaks.items() if peak["cpu_percent"] >= 360]
+        signals = [f"{name}: sampled CPU reached 90% of {self.container_cpu_limits[name]:g}-core budget"
+                   for name, peak in self.container_peaks.items()
+                   if peak["cpu_percent"] >= 90 * self.container_cpu_limits[name]]
         signals += [f"{name}: sampled memory reached 90% of limit" for name, peak in self.container_peaks.items() if peak["memory_percent"] >= 90]
         if self.max_pressure["source_active"] >= 6:
             signals.append("source-query budget reached or exceeded in samples")
         return {"samples": self.samples, "max_database_pressure": self.max_pressure,
-                "container_peaks": self.container_peaks, "signals": signals,
+                "container_peaks": self.container_peaks, "container_cpu_limits": self.container_cpu_limits,
+                "signals": signals,
                 "failures": self.failures,
                 "interpretation": "Sampled pressure, not an exact session peak; SQL tracing runs separately. CPU, memory and throttling need correlation with raw five-second samples."}
