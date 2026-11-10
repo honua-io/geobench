@@ -41,7 +41,7 @@ import argparse
 import json
 import statistics
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from k6_results import file_failures, rate_value
@@ -164,7 +164,7 @@ def save_baseline(
         "valid": True,
         "server": server,
         "release_tag": release_tag,
-        "measured_at": datetime.now(timezone.utc).isoformat(),
+        "measured_at": datetime.now(UTC).isoformat(),
         "metrics": metrics,
         "cold_start": cold_start,
     }
