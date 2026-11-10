@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -324,7 +324,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         # Separate SQL diagnostic pass: inspect actual reads, then disable tracing before warmup.
         for statement in ("ALTER SYSTEM SET log_min_duration_statement=0", "SELECT pg_reload_conf()"):
             command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
-        since = datetime.now(timezone.utc).isoformat()
+        since = datetime.now(UTC).isoformat()
         _, checks = run_k6(ids, path, config, "preflight")
         trace = command("docker", "logs", "--since", since, db, stderr=subprocess.STDOUT)
         (path / "source-query.log").write_text(trace)

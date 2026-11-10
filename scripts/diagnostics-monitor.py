@@ -8,7 +8,7 @@ import json
 import subprocess
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -125,7 +125,7 @@ def sample(args: argparse.Namespace) -> dict[str, Any]:
     service_ids = {service: compose_service_id(args.server, service) for service in services}
     container_ids = [cid for cid in service_ids.values() if cid]
     payload: dict[str, Any] = {
-        "sampledAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "sampledAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "server": args.server,
         "services": service_ids,
         "dockerStats": docker_stats(container_ids),
