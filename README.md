@@ -62,7 +62,7 @@ images used are recorded in each result directory's metadata.
 
 ## Quick Start
 
-Requirements: Docker with Docker Compose v2, Python 3, `jq`, `curl`.
+Requirements: Docker with Docker Compose v2, Python 3.11 or newer, `jq`, `curl`.
 
 Generate the deterministic dataset, then run the default suite
 (`attribute-filter`, `spatial-bbox`, `concurrent`; 5 runs each against Honua,
@@ -91,6 +91,14 @@ Each run writes raw k6 JSON, copied system cards, `benchmark-metadata.json`,
 response-shape audits, and a generated report. Optionally copy `.env.example`
 to `.env` to change image tags, host ports, credentials, and defaults —
 configuration is entirely env-var driven.
+
+Raw run directories and loose output files stay ignored under results/.
+After explicit operator approval, use the [approved result workflow](published/README.md)
+to promote only reviewed reports, audit evidence, metadata and system cards into
+tracked published/<run-id>/ packages. Promotion retains the raw run and records
+the approval reference, original harness revision and exact artifact SHA256s.
+Existing tracked baselines and release archives retain their paths. Keep working
+Git checkouts outside both output folders, alongside the repository.
 
 ## Running Specific Tracks
 
@@ -216,9 +224,13 @@ The repo also runs an automated per-release benchmark
 each Honua Server release tag triggers the core feature tracks plus a
 cold-start measurement, compares p50/p95/p99, req/s, and error rate against the
 stored baseline (`results/baselines/honua-baseline.json`) with
-`scripts/check-regression.py`, and commits the results under
-[results/releases/](results/releases/). This is a single-server regression
-gate, not a cross-server comparison.
+`scripts/check-regression.py`, and uploads raw results as workflow artifacts.
+The save_baseline input produces an unapproved honua-baseline.json candidate
+inside the raw run; it does not replace the tracked baseline. The workflow never
+commits or publishes results. Review downloaded evidence and use the explicit
+[promotion workflow](published/README.md) for new approved records. Historical
+[results/releases/](results/releases/) archives stay at their existing paths.
+This is a single-server regression gate, not a cross-server comparison.
 
 ## Published Comparison Snapshots
 

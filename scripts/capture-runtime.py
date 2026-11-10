@@ -6,7 +6,7 @@ import json
 import os
 import platform
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -43,7 +43,7 @@ def main():
                 "find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} +",
             ).splitlines()
     receipt = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "geobench_commit": command("git", "rev-parse", "HEAD"),
         "geobench_dirty": bool(command("git", "status", "--porcelain", "--untracked-files=no")),
         "dataset_sha256": command("sha256sum", "data/small/init.sql").split()[0],
