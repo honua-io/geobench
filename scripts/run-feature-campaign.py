@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -27,12 +27,14 @@ from feature_contract import (
     HONUA_PROFILES,
     MODES,
     fingerprint,
+    generator_budget,
     immutable_image,
     oracle,
     request_url,
     validate_plugin_jars,
 )
 from feature_evidence import calibration_failures, report, summarize
+from feature_geoserver import geoserver_sorting
 from feature_runtime import (
     DB_FINGERPRINT_SQL,
     LABEL,
@@ -46,6 +48,7 @@ from feature_runtime import (
 from feature_sql_evidence import validate_source_trace
 
 ROOT = Path(__file__).resolve().parents[1]
+CONTROL_HOSTS = ("localhost", "host.docker.internal")
 
 
 def write(path, data):
@@ -104,7 +107,10 @@ def resolve_images(args):
     return images
 
 
-def make_compose(owner, server, images, honua_profile="baseline"):
+def make_compose(owner, server, images, honua_profile="baseline", generator_cpus=BUDGET["cpus"], control_host="localhost"):
+    load_budget = generator_budget(generator_cpus)
+    if control_host not in CONTROL_HOSTS:
+        raise ValueError(f"Unknown control host: {control_host}")
     if honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
@@ -122,7 +128,8 @@ def make_compose(owner, server, images, honua_profile="baseline"):
         service["labels"] = labels
         service["networks"] = {"default": {"aliases": [name]}}
         service["pull_policy"] = "never"
-        service["deploy"] = {"resources": {"limits": {"cpus": str(BUDGET["cpus"]), "memory": str(BUDGET["memory_bytes"])}}}
+        budget = load_budget if name == "k6" else BUDGET
+        service["deploy"] = {"resources": {"limits": {"cpus": str(budget["cpus"]), "memory": str(budget["memory_bytes"])}}}
         if name == server:
             service["ports"] = [{"target": 8080, "host_ip": "127.0.0.1", "published": "0", "protocol": "tcp"}]
         if name.startswith("postgis-"):
@@ -132,6 +139,10 @@ def make_compose(owner, server, images, honua_profile="baseline"):
     # Compare the same exact count-metadata policy. Oracle preflight verifies the result.
     if server == "honua":
         services[server]["environment"]["OgcFeatures__NumberMatchedPolicy"] = "Exact"
+        # Owned, isolated databases use production connection reset behavior.
+        services[server]["environment"]["HONUA_TEST_SCHEMA_HEADERS"] = "false"
+        if control_host == "host.docker.internal":
+            services[server]["environment"]["HostValidation__AllowedHosts__2"] = control_host
         services[server]["environment"].update(HONUA_PROFILES[honua_profile])
     return {"services": services,
             "volumes": {f"pgdata-{server}": {"labels": labels}},
@@ -142,7 +153,8 @@ def record_resources(owner):
     return {kind: owned_ids(owner, kind) for kind in ("container", "volume", "network")}
 
 
-def runtime_receipt(ids, images, honua_profile=None):
+def runtime_receipt(ids, images, honua_profile=None, generator_cpus=BUDGET["cpus"]):
+    load_budget = generator_budget(generator_cpus)
     if honua_profile is not None and honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     # Capture only profile-owned keys: other Database values may contain secrets.
@@ -155,8 +167,12 @@ def runtime_receipt(ids, images, honua_profile=None):
                         "cpus": info["HostConfig"]["NanoCpus"] / 1e9,
                         "memory": info["HostConfig"]["Memory"],
                         "environment": [e for e in info["Config"].get("Env", [])
-                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT="))]}
+                                        if e.partition("=")[0] in planner_keys or e.startswith(("Limits__", "Cache__", "OgcFeatures__", "INSTALL_EXTENSIONS=", "STABLE_EXTENSIONS=", "COMMUNITY_EXTENSIONS=", "ASPNETCORE_ENVIRONMENT=", "HONUA_TEST_SCHEMA_HEADERS=", "HostValidation__AllowedHosts__"))]}
         if name == "honua":
+            schema_entries = [e for e in result[name]["environment"]
+                              if e.partition("=")[0] == "HONUA_TEST_SCHEMA_HEADERS"]
+            if schema_entries != ["HONUA_TEST_SCHEMA_HEADERS=false"]:
+                raise ValueError("Honua test-schema configuration drift: production setting required")
             planner_entries = [e.split("=", 1) for e in result[name]["environment"]
                                if e.partition("=")[0] in planner_keys]
             if honua_profile is not None and (len(planner_entries) != len(dict(planner_entries)) or
@@ -167,7 +183,8 @@ def runtime_receipt(ids, images, honua_profile=None):
             result[name]["command"] = command("docker", "exec", identity, "cat", "/proc/1/cmdline").replace("\x00", " ").strip()
             if images[role]["labels"].get("honua.runtime.compilation") == "native-aot" and result[name]["coreclr_mapped"]:
                 raise ValueError("Honua runtime contradicts its Native AOT image label")
-        if info["Image"] != images[role]["id"] or result[name]["cpus"] != BUDGET["cpus"] or result[name]["memory"] != BUDGET["memory_bytes"]:
+        budget = load_budget if name == "k6" else BUDGET
+        if info["Image"] != images[role]["id"] or result[name]["cpus"] != budget["cpus"] or result[name]["memory"] != budget["memory_bytes"]:
             raise ValueError(f"Runtime image/resource drift: {name}")
     return result
 
@@ -180,6 +197,8 @@ def geoserver_store(base, password):
     params = {entry["@key"]: entry["$"] for entry in entries}
     if int(params.get("max connections", 0)) != BUDGET["source_connections"] or int(params.get("min connections", -1)) != 3:
         raise ValueError("GeoServer effective source pool differs from bounded profile")
+    if str(params.get("Expose primary keys", "")).lower() != "true":
+        raise ValueError("GeoServer must expose the id property for explicit query ordering")
     return {key: value for key, value in params.items() if key not in {"passwd", "password", "user"}}
 
 
@@ -208,6 +227,10 @@ def run_k6(ids, directory, config, name):
         process = subprocess.run(args, check=False, stdout=log, stderr=subprocess.STDOUT, timeout=config["duration"] + DRAIN_SECONDS + 180)
     checks = preflight_results((directory / (name + ".log")).read_text())
     write(directory / (name + "-preflight.json"), checks)
+    expected_ids = {r["id"] for r in config["requests"] + config.get("preflight_requests", [])}
+    observed_ids = [row["id"] for row in checks]
+    if set(observed_ids) != expected_ids or len(observed_ids) != len(expected_ids):
+        raise ValueError(f"{name}: incomplete or duplicated semantic preflight receipt")
     if process.returncode or any(row["failure"] for row in checks):
         if config["protocol"] == "gsr":
             write(directory / "coverage-gaps.json", [{"request": r["id"], "reason": r["failure"]}
@@ -223,6 +246,7 @@ def wait_ready(compose, server, log):
 
 def execute_attempt(directory, manifest, attempt, save, calibration_workload=None):
     verify_snapshot(directory, manifest)
+    generator_cpus = manifest.get("generator_budget", generator_budget())["cpus"]
     server = attempt["server"]
     fixture = manifest.setdefault("fixtures", {}).get(server) if manifest.get("reuse_fixture") else None
     owner = manifest["owner"] + ("-fixture-" + server if manifest.get("reuse_fixture") else "-" + attempt["id"])
@@ -231,7 +255,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
     path = directory / attempt["id"]
     path.mkdir()
     compose_file = path / "compose.json"
-    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"))
+    composition = make_compose(owner, server, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus, manifest.get("control_host", "localhost"))
     for volume in composition["services"]["k6"]["volumes"]:
         if volume.get("target") == "/tests":
             volume["source"] = str(directory / "harness" / "src/tests")
@@ -250,7 +274,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
                 attempt["resources"] = identities
                 save()
             ids = {name: command(*compose, "ps", "-q", name) for name in (server, "postgis-" + server, "k6")}
-            runtime = runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"))
+            runtime = runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus)
             write(path / "runtime.json", runtime)
             if runtime["docker_engine"] != manifest["host_identity"]["docker_engine"]:
                 raise ValueError("Docker engine identity/resource drift from prepared campaign")
@@ -263,7 +287,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
             if fixture and (runtime != fixture["runtime"] or fingerprint(sql(ids["postgis-" + server], DB_FINGERPRINT_SQL)) != fixture["database_fingerprint"]):
                 raise ValueError("Reused fixture runtime/database fingerprint changed")
             port = inspect(ids[server])["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
-            base = f"http://localhost:{port}"
+            base = f"http://{manifest.get('control_host', 'localhost')}:{port}"
             env = {**os.environ, "COMPOSE_PROJECT_NAME": owner, "COMPOSE_FILE": str(compose_file),
                    "HONUA_URL": base, "GS_URL": base, "HONUA_STORAGE_PROFILE": "source",
                    "HONUA_API_KEY": composition["services"][server]["environment"].get("HONUA_ADMIN_PASSWORD", "GeoBench-Admin-Key-2026!"),
@@ -274,8 +298,12 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
                 subprocess.run(["bash", str(directory / "harness" / "adapters" / server / "setup.sh")], env=env, cwd=ROOT,
                                stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
         store = geoserver_store(base, env["GS_PASS"]) if server == "geoserver" else None
+        service = None
         if store:
             write(path / "effective-store.json", store)
+            if manifest["protocol"] == "ogc":
+                service = geoserver_sorting(base, env["GS_PASS"], configure=not fixture)
+                write(path / "effective-service.json", service)
         db = ids["postgis-" + server]
         command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", "ANALYZE public.bench_points")
         database = sql(db, DB_FINGERPRINT_SQL)
@@ -284,7 +312,11 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
             raise ValueError("Dataset must contain 100K analyzed points")
         attempt["database_fingerprint"] = fingerprint(database)
         expected = oracle(manifest["corpus"], lambda statement: sql(db, statement))
-        for request in expected["requests"]:
+        # Ascending IDs can coincide with natural database order even when sortby
+        # is ignored. This reverse-order probe is preflight-only for both servers.
+        probe_corpus = {**manifest["corpus"], "requests": [{"id": "ordering-desc", "order": "desc"}]}
+        expected["preflight_requests"] = oracle(probe_corpus, lambda statement: sql(db, statement))["requests"]
+        for request in expected["requests"] + expected["preflight_requests"]:
             request["url"] = request_url(server, manifest["protocol"], request, f"http://{server}:8080", expected["limit"])
         write(path / "oracle.json", expected)
         config = {**expected, "protocol": manifest["protocol"], "duration": 1, "drain": DRAIN_SECONDS,
@@ -292,7 +324,7 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         # Separate SQL diagnostic pass: inspect actual reads, then disable tracing before warmup.
         for statement in ("ALTER SYSTEM SET log_min_duration_statement=0", "SELECT pg_reload_conf()"):
             command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
-        since = datetime.now(timezone.utc).isoformat()
+        since = datetime.now(UTC).isoformat()
         _, checks = run_k6(ids, path, config, "preflight")
         trace = command("docker", "logs", "--since", since, db, stderr=subprocess.STDOUT)
         (path / "source-query.log").write_text(trace)
@@ -353,13 +385,18 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         if pressure["source_sessions"] > BUDGET["source_connections"] or pressure["source_active"] > BUDGET["source_connections"]:
             attempt["fairness_failures"].append("observed source-query pressure exceeds six connections")
         # Verify effective settings and image/resource identity again after traffic.
-        if runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline")) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
+        if runtime_receipt(ids, manifest["images"], manifest.get("honua_profile", "baseline"), generator_cpus) != runtime or fingerprint(sql(db, DB_FINGERPRINT_SQL)) != attempt["database_fingerprint"]:
             attempt["fairness_failures"].append("runtime/database configuration drift")
         if server == "geoserver":
             current_jars = command("docker", "exec", ids[server], "sh", "-c",
                 "find /usr/local/tomcat/webapps/geoserver/WEB-INF/lib -name '*.jar' -exec sha256sum {} +").splitlines()
             if sorted(jars) != sorted(current_jars) or geoserver_store(base, env["GS_PASS"]) != store:
                 attempt["fairness_failures"].append("GeoServer plugin or datastore configuration drift")
+            if service is not None:
+                current_service = geoserver_sorting(base, env["GS_PASS"])
+                write(path / "effective-service-after.json", current_service)
+                if current_service != service:
+                    attempt["fairness_failures"].append("GeoServer feature service configuration drift")
         attempt["status"] = "passed" if not attempt["fairness_failures"] else "failed"
     except (OSError, ValueError, subprocess.SubprocessError, KeyError) as exc:
         attempt.update({"status": "failed", "error": str(exc)})
@@ -399,7 +436,11 @@ def main():
     parser.add_argument("--servers", nargs="+", choices=("honua", "geoserver"), default=["honua", "geoserver"])
     parser.add_argument("--protocol", choices=("ogc", "gsr"), default="ogc")
     parser.add_argument("--honua-profile", choices=HONUA_PROFILES, default="baseline",
-                        help="Keep query-scoped PostgreSQL tuning separate from the default baseline")
+                        help="Separate explicit database-planner controls from automatic bounded planning")
+    parser.add_argument("--generator-cpus", type=int, default=BUDGET["cpus"],
+                        help="Positive integer k6 CPU budget, equal for both products; server/database budgets stay fixed")
+    parser.add_argument("--control-host", choices=CONTROL_HOSTS, default="localhost",
+                        help="Host for provisioning HTTP only; Docker Desktop coordinators use host.docker.internal")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--prepare-only", action="store_true", help="Write immutable inputs and calibration binding without starting stacks")
@@ -412,6 +453,10 @@ def main():
     for key in ("honua", "geoserver", "postgis", "k6"):
         parser.add_argument("--" + key + "-image", default=os.environ.get(key.upper() + "_IMAGE", ""))
     args = parser.parse_args()
+    try:
+        load_budget = generator_budget(args.generator_cpus)
+    except ValueError as exc:
+        parser.error(str(exc))
     if len(set(args.servers)) != len(args.servers) or (args.mode == "comparison" and set(args.servers) != {"honua", "geoserver"}):
         parser.error("Comparison requires both servers; duplicate servers are invalid")
     if args.reuse_fixture and args.mode != "diagnostic":
@@ -433,18 +478,21 @@ def main():
     if not dataset.exists():
         subprocess.run([sys.executable, "data/small/generate.py"], check=True)
     manifest = {"schema": 1, "mode": args.mode, "protocol": args.protocol,
-                "reuse_fixture": args.reuse_fixture,
+                "reuse_fixture": args.reuse_fixture, "control_host": args.control_host,
                 "honua_profile": args.honua_profile,
                 "profile": ("stable-ogc" if args.protocol == "ogc" else "community-gsr") + "-source-bounded",
                 **MODES[args.mode], "scenarios": scenarios, "servers": args.servers,
-                "budget": BUDGET, "seed": args.seed, "images": images, "corpus": corpus,
+                "budget": BUDGET, "generator_budget": load_budget,
+                "seed": args.seed, "images": images, "corpus": corpus,
                 "host_identity": host_identity(),
                 "harness": {"commit": command("git", "rev-parse", "HEAD"), "content": source_fingerprint()},
                 "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
                 "honua_compilation": images.get("honua", {}).get("labels", {}).get("honua.runtime.compilation", "unverified-diagnostic"),
-                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile) for s in args.servers}}
+                "effective_compose": {s: make_compose("fingerprint", s, images, args.honua_profile, args.generator_cpus, args.control_host) for s in args.servers}}
     if args.honua_profile != "baseline":
         manifest["profile"] += "-honua-" + args.honua_profile
+    if args.generator_cpus != BUDGET["cpus"]:
+        manifest["profile"] += f"-generator-{args.generator_cpus}cpu"
     if "honua" in args.servers and manifest["honua_compilation"] != "native-aot":
         manifest["profile"] += "-honua-jit-or-unverified-diagnostic"
     if args.smoke:

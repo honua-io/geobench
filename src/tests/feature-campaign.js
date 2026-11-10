@@ -33,7 +33,7 @@ function query(request) {
 }
 
 export function setup() {
-  const results = config.requests.map(request => {
+  const results = [...config.requests, ...(config.preflight_requests || [])].map(request => {
     const result = query(request);
     return {id: request.id, failure: result.failure,
       failureBody: result.failure ? String(result.response.body).slice(0, 500) : undefined,

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from feature_contract import HONUA_PROFILES
 from feature_evidence import report
 from feature_sql_evidence import validate_honua_planner_profile, validate_source_trace
 
@@ -28,6 +29,29 @@ COMBINED_COUNT_BATCH = execution(COMBINED_SETTING) + execution(COMBINED_COUNT)
 
 
 class PlannerProfileTests(unittest.TestCase):
+    def test_automatic_profile_requires_unset_flags_and_executed_serial_batches(self):
+        self.assertEqual({}, HONUA_PROFILES['automatic-bounded'])
+        result = validate_source_trace(READ_BATCH + SERIAL_COUNT_BATCH, 'automatic-bounded')['planner_profile']
+        self.assertEqual((1, 1), (result['scoped_count_queries'], result['scoped_feature_queries']))
+        for trace in (execution(READ) + execution(COUNT), READ_BATCH + execution(COUNT),
+                      execution(READ) + SERIAL_COUNT_BATCH, READ_BATCH + COMBINED_COUNT_BATCH):
+            with self.subTest(trace=trace), self.assertRaises(ValueError):
+                validate_honua_planner_profile(trace, 'automatic-bounded')
+
+    def test_legacy_profiles_pin_independent_serial_options_against_default_drift(self):
+        keys = {'Database__PreferSerialBoundedSpatialReads', 'Database__PreferSerialSourceSpatialCounts'}
+        for profile, options in HONUA_PROFILES.items():
+            if profile == 'automatic-bounded':
+                continue
+            with self.subTest(profile=profile):
+                self.assertTrue(keys <= options.keys())
+                self.assertTrue(all(options[key] in {'true', 'false'} for key in keys))
+        self.assertEqual({key: 'false' for key in keys}, HONUA_PROFILES['baseline'])
+        result = validate_source_trace(execution(READ) + execution(COUNT), 'baseline')['planner_profile']
+        self.assertEqual((0, 0), (result['scoped_count_queries'], result['scoped_feature_queries']))
+        with self.assertRaises(ValueError):
+            validate_honua_planner_profile(READ_BATCH + SERIAL_COUNT_BATCH, 'baseline')
+
     def test_separate_and_combined_profiles_require_their_executed_batch_shapes(self):
         for profile, trace, counts in [
             ('baseline', execution(COUNT) + execution(READ), (0, 0)),

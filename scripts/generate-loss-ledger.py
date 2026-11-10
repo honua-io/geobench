@@ -8,7 +8,7 @@ import json
 import math
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -296,7 +296,7 @@ def parse_row_time(row: dict[str, Any]) -> datetime:
     timestamp = row.get("timestamp")
     if isinstance(timestamp, str) and timestamp:
         try:
-            return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            return datetime.fromisoformat(timestamp)
         except ValueError:
             pass
 
@@ -304,11 +304,11 @@ def parse_row_time(row: dict[str, Any]) -> datetime:
     match = re.match(r"^(\d{8})-(\d{6})$", report_id)
     if match:
         try:
-            return datetime.strptime("".join(match.groups()), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+            return datetime.strptime("".join(match.groups()), "%Y%m%d%H%M%S").replace(tzinfo=UTC)
         except ValueError:
             pass
 
-    return datetime.min.replace(tzinfo=timezone.utc)
+    return datetime.min.replace(tzinfo=UTC)
 
 
 def dedupe_latest_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -629,10 +629,10 @@ def write_markdown(output_dir: Path, metadata: dict[str, Any], rows: list[dict[s
 
 def main() -> int:
     args = parse_args()
-    generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    generated_at = datetime.now(UTC).replace(microsecond=0).isoformat()
     output_dir = args.output_dir
     if output_dir is None:
-        output_dir = Path("results") / f"loss-ledger-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+        output_dir = Path("results") / f"loss-ledger-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rows: list[dict[str, Any]] = []

@@ -2,7 +2,7 @@
 import re
 from collections import Counter
 
-from feature_contract import HONUA_PROFILES
+from feature_contract import honua_planner_settings
 
 HEADER = re.compile(r'^\d{4}-\d\d-\d\d .*?\[(?P<pid>\d+)\] ')
 EXECUTION = re.compile(r'LOG:\s+.*?(?:execute [^:]+|statement):\s*(.*)$')
@@ -92,17 +92,7 @@ def validate_honua_planner_profile(trace, profile):
     This recognizes the pinned Honua batch shapes, not arbitrary PostgreSQL SQL.
     Backend IDs keep concurrent health checks from breaking batch attribution.
     """
-    if profile not in HONUA_PROFILES:
-        raise ValueError(f'Unknown Honua planner profile: {profile}')
-    flags = HONUA_PROFILES[profile]
-    expected_settings = {
-        'count': {name for key, name in (
-            ('Database__DisableJitForSourceSpatialCounts', 'jit'),
-            ('Database__PreferSerialSourceSpatialCounts', 'max_parallel_workers_per_gather'),
-        ) if key in flags},
-        'feature': ({'max_parallel_workers_per_gather'}
-                    if 'Database__PreferSerialBoundedSpatialReads' in flags else set()),
-    }
+    expected_settings = honua_planner_settings(profile)
     expected = {kind for kind, settings in expected_settings.items() if settings}
     call = (r"(?:pg_catalog\.)?set_config\(\s*'(jit|max_parallel_workers_per_gather)'"
             r"\s*,\s*'(off|0)'\s*,\s*true\s*\)")
