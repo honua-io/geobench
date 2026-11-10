@@ -2,12 +2,15 @@
 import hashlib
 import json
 import math
+import os
 import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
 from feature_contract import BUDGET, MODES, generator_budget
 from feature_sql_evidence import validate_source_trace
+
+HOST_MEASUREMENT_LOCK = f"/tmp/geobench-feature-campaign-{os.getuid()}.lock"
 
 
 def distribution(values):

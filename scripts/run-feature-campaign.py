@@ -33,7 +33,12 @@ from feature_contract import (
     request_url,
     validate_plugin_jars,
 )
-from feature_evidence import calibration_failures, report, summarize
+from feature_evidence import (
+    HOST_MEASUREMENT_LOCK,
+    calibration_failures,
+    report,
+    summarize,
+)
 from feature_geoserver import geoserver_sorting
 from feature_runtime import (
     DB_FINGERPRINT_SQL,
@@ -601,7 +606,7 @@ if __name__ == "__main__":
     def interrupt(signum, frame):
         raise KeyboardInterrupt(f"signal {signum}")
     signal.signal(signal.SIGTERM, interrupt)
-    with contextlib.suppress(BrokenPipeError), open(f"/tmp/geobench-feature-campaign-{os.getuid()}.lock", "a") as host_lock:
+    with contextlib.suppress(BrokenPipeError), open(HOST_MEASUREMENT_LOCK, "a") as host_lock:
         try:
             fcntl.flock(host_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
