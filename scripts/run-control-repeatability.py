@@ -12,11 +12,12 @@ import signal
 import statistics
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 from feature_contract import DRAIN_SECONDS, HONUA_PROFILES, fingerprint
+from feature_evidence import HOST_MEASUREMENT_LOCK
 
 ROOT = Path(__file__).resolve().parents[1]
 ARMS = ("control-a", "control-b")
@@ -188,6 +189,10 @@ def validate_prepared(runner, directory, plan):
     return manifests
 
 
+def has_clock_anomalies(row):
+    return any(part.get("counts", {}).get("clock_anomalies", 0) for part in (row, row.get("warmup", {})))
+
+
 def repeatability_report(manifests, ledgers, reports):
     """Gate on all six measurements, never median-of-medians alone or averaged percentiles."""
     failures, rows = [], {}
@@ -206,7 +211,7 @@ def repeatability_report(manifests, ledgers, reports):
             for scenario, row in attempt.get("rows", {}).items():
                 if not row.get("warmup") or row.get("failures") or row["warmup"].get("failures"):
                     failures.append(f"{arm}/{attempt['id']}/{scenario}: missing or failed phase evidence")
-                if any(part.get("counts", {}).get("clock_anomalies", 0) for part in (row, row.get("warmup", {}))):
+                if has_clock_anomalies(row):
                     failures.append(f"{arm}/{attempt['id']}/{scenario}: clock anomalies")
     attempts = [attempt for arm in ARMS for attempt in ledgers[arm] if attempt.get("status") == "passed"]
     for key in ("database_fingerprint", "response_contract"):
@@ -253,8 +258,7 @@ def run_schedule(runner, directory, plan, manifests, ledgers, save):
             runner.execute_attempt(directory / arm, manifests[arm], attempt, save)
             if attempt["status"] != "passed" or not attempt.get("cleaned") or attempt.get("fairness_failures"):
                 raise ValueError(f"{arm}/{attempt['id']}: attempt failed; remaining scheduled attempts will not run")
-            if any(part.get("counts", {}).get("clock_anomalies", 0)
-                   for row in attempt.get("rows", {}).values() for part in (row, row.get("warmup", {}))):
+            if any(has_clock_anomalies(row) for row in attempt.get("rows", {}).values()):
                 raise ValueError(f"{arm}/{attempt['id']}: clock anomalies; remaining scheduled attempts will not run")
 
 
@@ -268,12 +272,12 @@ def execute(runner, directory, plan, approval_note):
                       "status": "not-run", "error": "scheduled but not started", "rows": {}}
                      for rep in range(1, 4)] for arm in ARMS}
     receipt = {"status": "running", "plan_binding": plan["binding"], "approval_note": approval_note.strip(),
-               "approved_utc": datetime.now(timezone.utc).isoformat(), "order": plan["order"]}
+               "execution_started_utc": datetime.now(UTC).isoformat(), "order": plan["order"]}
 
     def save():
         for arm in ARMS:
             runner.write(directory / arm / "attempts.json", ledgers[arm])
-        receipt["utc"] = datetime.now(timezone.utc).isoformat()
+        receipt["utc"] = datetime.now(UTC).isoformat()
         receipt["attempts"] = ledgers
         runner.write(receipt_file, receipt)
 
@@ -332,7 +336,7 @@ def main(argv=None):
         prepare(runner, directory, args)
         return 0
     plan = json.loads((directory / "repeatability-plan.json").read_text())
-    with open(f"/tmp/geobench-feature-campaign-{os.getuid()}.lock", "a") as lock:
+    with open(HOST_MEASUREMENT_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return execute(runner, directory, plan, args.approval_note)
 
