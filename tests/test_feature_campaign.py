@@ -153,25 +153,65 @@ assert.equal(records.filter(r=>r.name==='feature_latency').length,0);
             with self.assertRaises(ValueError):
                 runner.verify_snapshot(root, manifest)
 
-    def test_count_tuning_is_scoped_to_honua_and_changes_configuration_fingerprint(self):
+    def test_planner_profiles_are_isolated_and_have_distinct_configuration_fingerprints(self):
         runner = load('run-feature-campaign')
         original = {'services': {name: {'environment': {'keep': 'value'}} for name in
                     ('honua', 'geoserver', 'postgis-honua', 'postgis-geoserver', 'k6')}}
         with patch.object(runner, 'command', return_value=json.dumps(original)):
             baseline = runner.make_compose('owned', 'honua', {})
-            tuned = runner.make_compose('owned', 'honua', {}, 'count-jit-off')
             geo = runner.make_compose('owned', 'geoserver', {})
-            geo_tuned = runner.make_compose('owned', 'geoserver', {}, 'count-jit-off')
-        key = 'Database__DisableJitForSourceSpatialCounts'
-        self.assertNotIn(key, baseline['services']['honua']['environment'])
-        self.assertEqual('true', tuned['services']['honua']['environment'][key])
-        self.assertNotEqual(fingerprint(baseline), fingerprint(tuned))
-        del tuned['services']['honua']['environment'][key]
-        self.assertEqual(baseline, tuned)
-        self.assertEqual(geo, geo_tuned)
+            count = 'Database__DisableJitForSourceSpatialCounts'
+            serial = 'Database__PreferSerialBoundedSpatialReads'
+            serial_count = 'Database__PreferSerialSourceSpatialCounts'
+            baseline_env = baseline['services']['honua']['environment']
+            self.assertEqual('false', baseline_env['HONUA_TEST_SCHEMA_HEADERS'])
+            self.assertEqual('false', baseline_env[serial])
+            self.assertEqual('false', baseline_env[serial_count])
+            fingerprints = {fingerprint(baseline)}
+            for profile, keys in [('count-jit-off', [count]), ('serial-reads', [serial]),
+                                  ('count-jit-off-serial-reads', [count, serial]),
+                                  ('serial-counts', [serial_count]),
+                                  ('count-jit-off-serial-counts', [count, serial_count]),
+                                  ('serial-reads-counts', [serial, serial_count]),
+                                  ('count-jit-off-serial-reads-counts', [count, serial, serial_count])]:
+                with self.subTest(profile=profile):
+                    tuned = runner.make_compose('owned', 'honua', {}, profile)
+                    fingerprints.add(fingerprint(tuned))
+                    for key in keys:
+                        self.assertEqual('true', tuned['services']['honua']['environment'].pop(key))
+                        if key in baseline_env:
+                            tuned['services']['honua']['environment'][key] = baseline_env[key]
+                    self.assertEqual(baseline, tuned)
+                    self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, profile))
+            automatic = runner.make_compose('owned', 'honua', {}, 'automatic-bounded')
+            fingerprints.add(fingerprint(automatic))
+            for key in (count, serial, serial_count):
+                self.assertNotIn(key, automatic['services']['honua']['environment'])
+            for key in (serial, serial_count):
+                automatic['services']['honua']['environment'][key] = 'false'
+            self.assertEqual(baseline, automatic)
+            self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, 'automatic-bounded'))
+            self.assertEqual(9, len(fingerprints))
         with patch.object(runner, 'command') as command:
             with self.assertRaises(ValueError):
                 runner.make_compose('owned', 'honua', {}, 'unknown')
+            command.assert_not_called()
+
+    def test_coordinator_host_is_explicitly_allowed_without_changing_measured_stack(self):
+        runner = load('run-feature-campaign')
+        original = {'services': {name: {'environment': {'keep': 'value'}} for name in
+                    ('honua', 'geoserver', 'postgis-honua', 'postgis-geoserver', 'k6')}}
+        with patch.object(runner, 'command', return_value=json.dumps(original)):
+            normal = runner.make_compose('owned', 'honua', {})
+            controller = runner.make_compose('owned', 'honua', {}, control_host='host.docker.internal')
+            env = controller['services']['honua']['environment']
+            self.assertEqual('host.docker.internal', env.pop('HostValidation__AllowedHosts__2'))
+            self.assertEqual(normal, controller)
+            geo = runner.make_compose('owned', 'geoserver', {})
+            self.assertEqual(geo, runner.make_compose('owned', 'geoserver', {}, control_host='host.docker.internal'))
+        with patch.object(runner, 'command') as command:
+            with self.assertRaisesRegex(ValueError, 'Unknown control host'):
+                runner.make_compose('owned', 'honua', {}, control_host='unrecorded.invalid')
             command.assert_not_called()
 
     def test_cleanup_discovers_stopped_owned_containers(self):

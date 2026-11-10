@@ -125,7 +125,8 @@ services:
       AllowedHosts: "*"
       PUBLIC_BASE_URL: "http://localhost:${HONUA_PORT:-8081}"
       HONUA_BENCHMARK_QUIET_LOGS: "true"
-      HONUA_TEST_SCHEMA_HEADERS: "true"
+      # Each benchmark owns its database; request schema-isolation hooks are unnecessary.
+      HONUA_TEST_SCHEMA_HEADERS: "false"
       Cache__ResponseCachingEnabled: "false"
       # Measure query execution, not the security profile's HTTP 429 responses.
       RateLimiting__Enabled: "false"

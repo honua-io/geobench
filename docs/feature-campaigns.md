@@ -18,6 +18,16 @@ Missing/malformed payloads, ignored filters, duplicates, wrong order, incomplete
 pages and wrong geometries fail. The OGC profile requires exact `numberMatched`; returned counts must agree with
 the oracle. Count-metadata presence is also compared across products.
 
+Fresh GeoServer fixtures expose the primary-key attribute and explicitly enable
+OGC sorting in their WFS service metadata. The campaign verifies both persisted
+settings and advertised sorting conformance, records the effective service
+fingerprint, and checks it again after traffic. Reused fixtures must already
+match; they are not silently reconfigured. A separate descending-ID oracle probe
+runs during preflight for both products, so natural ascending database order
+cannot conceal an ignored `sortby` parameter. This probe does not enter the
+measured workload. Earlier campaigns without this check may contain repeated
+GeoServer ignored-sort warnings and need a corrected rebaseline.
+
 ## Prepare immutable images
 
 Use digest references for Honua, PostGIS and k6. Tags are rejected. The comparison
@@ -40,6 +50,12 @@ installed JAR hashes, core/plugin versions and Java version form the runtime
 receipt. Downloading plugins during a campaign is disabled. Rebuilding from a
 mutable plugin URL may produce a different image; it is a new profile identity,
 not a valid resume of the old campaign.
+
+Runtime receipts also retain the exact Honua planner keys defined by the shared
+profile configuration, without exposing unrelated database environment values.
+The runner checks the inspected keys against the selected profile before traffic
+and at the final drift check. Missing, changed, duplicated or unrequested planner
+options fail the attempt. Executed-SQL proof remains a separate requirement.
 
 For **separate community GSR evidence**, build with a compatible community
 GeoServer base digest and `--build-arg COMMUNITY=gsr`, then run with
@@ -75,22 +91,111 @@ measurement per scenario. Comparison defaults are five paired repetitions,
 server order, reversed on every subsequent pair. Each server/repetition gets
 fresh private PostGIS storage, network and ephemeral loopback port. Both server
 and DB have 4 CPUs / 4 GiB; source pools target six connections. The load generator
-also has 4 CPUs / 4 GiB. Normal metadata caches remain enabled. Honua exact
+defaults to 4 CPUs / 4 GiB. Normal metadata caches remain enabled. Honua exact
 response caching and adaptive admission are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
-The default `--honua-profile baseline` preserves the server's default count
-planning. Use `--honua-profile count-jit-off` in a separate campaign to enable
+Honua's test-schema headers are disabled (`HONUA_TEST_SCHEMA_HEADERS=false`).
+Each attempt already owns an isolated database, and workloads do not send
+per-request schema overrides. This retains the shipping connection reset policy;
+turning test-schema isolation on adds resets of pooled catalog connections.
+Runtime receipts record the flag and reject missing, conflicting or enabled
+values before and after traffic. Older campaigns retain their original
+configuration and results; this change requires a new fingerprint-bound campaign
+and cannot be resumed into an earlier test-schema-enabled run.
+
+A persistent coordinator container on Docker Desktop can use
+`--control-host host.docker.internal` to reach the private published ports for
+provisioning and configuration checks. The default is `localhost`. The manifest
+records this address and binds it to resume/calibration; measured k6 requests
+continue to use each product's private Compose-network address. This option does
+not enable host networking or change the server/database/generator budgets.
+The container-coordinator option explicitly adds `host.docker.internal` to
+Honua's allowed-host list for provisioning; host validation remains enabled, and
+the effective list is captured in runtime receipts.
+
+Use `--generator-cpus 8` in a new diagnostic campaign to investigate generator
+headroom. The option accepts positive integers and applies the same k6 CPU budget
+to both products; server/database CPU, memory and source-connection limits remain
+unchanged, and k6 memory remains 4 GiB. The manifest and reports record the separate
+generator budget, and nondefault profile names include `generator-8cpu`. Effective
+limits are checked before and after traffic. Changed budgets invalidate the resume
+and calibration binding. Observer CPU warnings use inspected per-container quotas,
+so 400% CPU is saturation for a four-core server but not an eight-core generator.
+
+An enlarged local generator is a separate diagnostic configuration. It does not
+prove unlimited generator capacity or replace isolated-generator and observer
+calibration for publication. Compare the same server image/workload under each
+generator budget and retain every repetition. Do not change a running campaign's
+budget or combine rows across generator configurations.
+
+The default `--honua-profile baseline` explicitly disables Honua's serial-read
+and serial-count options, providing a database-planner control even when server
+defaults change. Each explicitly tuned profile pins the other serial option off
+unless that option is named in the profile. These controls preserve the earlier
+untuned/tuned behavior; they are not evidence of a newer server's shipping defaults.
+
+Use `--honua-profile automatic-bounded` for a server implementing automatic
+bounded planning ([server issue #5338](https://github.com/honua-io/honua-server/issues/5338)). It leaves all planner flags absent and
+requires the SQL diagnostic to prove transaction-local serial feature reads and
+associated exact counts on the existing point/bbox requests. An older image that
+keeps database planning, an injected explicit option, missing read/count tuning,
+or unexpected count-JIT suppression fails validation. This is a separate,
+fingerprinted profile using the same workload and resource budgets. Keep its
+results distinct from explicitly tuned profiles. Its name does not establish a
+performance gain or a publication claim.
+
+Use `--honua-profile count-jit-off` in a separate campaign to enable
 `Database__DisableJitForSourceSpatialCounts=true` on a supporting Honua image
 (server PR #5307). This suppresses PostgreSQL JIT only for eligible count queries;
 it is independent of Honua Native AOT and does not change database-wide JIT or
 parallel-worker settings. The profile name and effective environment are included
 in the campaign fingerprint, preventing resume across different tuning settings.
-GeoServer's configuration is identical in both campaigns. Keep the baseline and
+GeoServer's configuration is identical across these campaigns. Keep the baseline and
 tuned rows separate; if database JIT is already off, this option adds no JIT-removal
 benefit. A supporting image and executed SQL evidence are needed to establish
 that the option was actually applied.
+
+Use `--honua-profile serial-reads` to test the existing
+`Database__PreferSerialBoundedSpatialReads=true` option separately. It requests
+zero parallel workers only for eligible source-backed point bbox feature reads:
+first pages of 1–100 features with default ID ordering and no ambient transaction.
+It does not tune counts, later pages, or custom sorting. The
+`--honua-profile count-jit-off-serial-reads` profile enables both options, using
+separate transaction-local settings for count and feature queries. Neither option
+changes database-wide settings or Honua's Native AOT compilation mode.
+
+Use `--honua-profile serial-counts` to enable only
+`Database__PreferSerialSourceSpatialCounts=true`. The separate
+`--honua-profile count-jit-off-serial-counts` profile combines that count-worker
+policy with PostgreSQL JIT suppression; neither enables serial feature reads.
+These profiles require a server image implementing the count option. An image
+that silently ignores it fails executed-SQL preflight.
+
+Use `--honua-profile serial-reads-counts` to combine the independent serial page
+and count options, or `--honua-profile count-jit-off-serial-reads-counts` to add
+count-specific PostgreSQL JIT suppression. These profiles require separate
+executed evidence for feature and count batches. Worker settings before a page
+query cannot substitute for count evidence, and the three-option profile must
+show both count settings before the same count. The individual profiles remain
+available to isolate each policy's effect; combined profiles imply no speed gain.
+
+Serial count proof requires a transaction-local worker setting immediately
+followed by the spatial count on the same backend. The combined profile requires
+both settings in the same setting statement before that count. Separate JIT-only
+and serial-only counts cannot establish the combined profile. Fixed count SQL
+identities distinguish serial-only and combined preparation policies. Raw SQL is
+revalidated when generating the report, and each profile has its own campaign
+fingerprint. These options do not imply a performance improvement; measure the
+production Native AOT build before drawing that conclusion.
+
+All nine profiles have distinct configuration fingerprints. Before timed traffic,
+the SQL diagnostic must show the profile's settings actually executing on the
+same database backend immediately before their eligible source queries. Report
+generation independently checks this raw trace. An ignored or unsupported option,
+unexpected tuning in the baseline, or missing half of the combined profile fails
+validation. These profiles test planner choices; their names imply no speed benefit.
 
 Each scenario runs warmup and measurement in separate k6 processes, with a
 35-second graceful drain after each. The HTTP timeout is 30 seconds. No process
@@ -104,6 +209,7 @@ uses monotonic elapsed time. Negative wall-clock timings in k6's auxiliary HTTP 
 anomalies and block publication. Warmup,
 late completions, invalid responses, cancellations and dropped iterations are
 retained separately. See [k6 graceful stop](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/).
+
 
 ## Evidence and resumption
 

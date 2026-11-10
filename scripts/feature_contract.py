@@ -12,10 +12,56 @@ ARRIVAL_RATES = (10, 30, 60, 120, 240)
 CONCURRENCY = (1, 10, 50, 100)
 DRAIN_SECONDS = 35
 BUDGET = {"cpus": 4, "memory_bytes": 4 * 1024**3, "source_connections": 6}
-HONUA_PROFILES = {
+_EXPLICIT_HONUA_PROFILES = {
     "baseline": {},
     "count-jit-off": {"Database__DisableJitForSourceSpatialCounts": "true"},
+    "serial-counts": {"Database__PreferSerialSourceSpatialCounts": "true"},
+    "count-jit-off-serial-counts": {
+        "Database__DisableJitForSourceSpatialCounts": "true",
+        "Database__PreferSerialSourceSpatialCounts": "true",
+    },
+    "serial-reads": {"Database__PreferSerialBoundedSpatialReads": "true"},
+    "count-jit-off-serial-reads": {
+        "Database__DisableJitForSourceSpatialCounts": "true",
+        "Database__PreferSerialBoundedSpatialReads": "true",
+    },
+    "serial-reads-counts": {
+        "Database__PreferSerialBoundedSpatialReads": "true",
+        "Database__PreferSerialSourceSpatialCounts": "true",
+    },
+    "count-jit-off-serial-reads-counts": {
+        "Database__DisableJitForSourceSpatialCounts": "true",
+        "Database__PreferSerialBoundedSpatialReads": "true",
+        "Database__PreferSerialSourceSpatialCounts": "true",
+    },
 }
+_SERIAL_DATABASE_DEFAULTS = {
+    "Database__PreferSerialBoundedSpatialReads": "false",
+    "Database__PreferSerialSourceSpatialCounts": "false",
+}
+# Keep each explicit policy isolated when a newer server changes its defaults.
+# Automatic planning is deliberately exercised with no environment overrides.
+HONUA_PROFILES = {
+    **{name: {**_SERIAL_DATABASE_DEFAULTS, **flags}
+       for name, flags in _EXPLICIT_HONUA_PROFILES.items()},
+    "automatic-bounded": {},
+}
+
+
+def honua_planner_settings(profile):
+    """Expected executed policies for the pinned source-query diagnostic."""
+    if profile not in HONUA_PROFILES:
+        raise ValueError(f"Unknown Honua planner profile: {profile}")
+    flags = ({key: "true" for key in _SERIAL_DATABASE_DEFAULTS}
+             if profile == "automatic-bounded" else HONUA_PROFILES[profile])
+    return {
+        "count": {name for key, name in (
+            ("Database__DisableJitForSourceSpatialCounts", "jit"),
+            ("Database__PreferSerialSourceSpatialCounts", "max_parallel_workers_per_gather"),
+        ) if flags.get(key) == "true"},
+        "feature": ({"max_parallel_workers_per_gather"}
+                    if flags.get("Database__PreferSerialBoundedSpatialReads") == "true" else set()),
+    }
 
 
 def fingerprint(value):
@@ -23,8 +69,22 @@ def fingerprint(value):
                                     allow_nan=False).encode()).hexdigest()
 
 
+def generator_budget(cpus=BUDGET["cpus"]):
+    """One generator budget for every product; server/database limits stay fixed."""
+    if type(cpus) is not int or cpus <= 0:
+        raise ValueError("Generator CPUs must be a positive integer")
+    return {"cpus": cpus, "memory_bytes": BUDGET["memory_bytes"]}
+
+
 def immutable_image(image):
     return bool(re.fullmatch(r"(?:[^\s]+@)?sha256:[0-9a-f]{64}", image))
+
+
+def order_direction(request):
+    direction = request.get("order", "asc")
+    if direction not in ("asc", "desc"):
+        raise ValueError("Unsupported feature ordering")
+    return direction.upper()
 
 
 def oracle(corpus, sql):
@@ -35,6 +95,7 @@ def oracle(corpus, sql):
         if "boundary_id" in request:
             x, y = sql(f"SELECT json_build_array(ST_X(geom),ST_Y(geom)) FROM public.bench_points WHERE id={int(request['boundary_id'])}")
             request["bbox"] = [x, y, x + 0.000001, y + 0.000001]
+        direction = order_direction(request)
         where = request.get("filter", "TRUE")
         if "bbox" in request:
             coords = ",".join(str(float(v)) for v in request["bbox"])
@@ -43,9 +104,9 @@ def oracle(corpus, sql):
         # Corpus is repository-owned SQL, never user-supplied request text.
         query = f"""WITH selected AS (
           SELECT id,{fields},ST_AsGeoJSON(geom,9)::jsonb AS geometry
-          FROM public.bench_points WHERE {where} ORDER BY id
+          FROM public.bench_points WHERE {where} ORDER BY id {direction}
           LIMIT {int(corpus['limit'])} OFFSET {int(request.get('offset', 0))}
-        ) SELECT json_build_object('features',COALESCE(jsonb_agg(to_jsonb(selected) ORDER BY id),'[]'::jsonb),
+        ) SELECT json_build_object('features',COALESCE(jsonb_agg(to_jsonb(selected) ORDER BY id {direction}),'[]'::jsonb),
           'matched',(SELECT count(*) FROM public.bench_points WHERE {where})) FROM selected"""
         request["expected"] = sql(query)
         requests.append(request)
@@ -53,10 +114,11 @@ def oracle(corpus, sql):
 
 
 def request_url(server, protocol, request, base, limit=100):
+    direction = order_direction(request)
     if protocol == "ogc":
         path = ("/ogc/features/collections/1/items" if server == "honua" else
                 "/geoserver/ogc/features/v1/collections/geobench:bench_points/items")
-        params = {"f": "json", "limit": limit, "sortby": "id",
+        params = {"f": "json", "limit": limit, "sortby": "id" if direction == "ASC" else "-id",
                   "offset" if server == "honua" else "startIndex": request.get("offset", 0)}
         if request.get("filter"):
             params.update({"filter": request["filter"], "filter-lang": "cql2-text"})
@@ -66,7 +128,7 @@ def request_url(server, protocol, request, base, limit=100):
         path = ("/rest/services/default/FeatureServer/1/query" if server == "honua" else
                 "/geoserver/gsr/services/geobench/FeatureServer/0/query")
         params = {"f": "json", "where": request.get("filter", "1=1"), "outFields": "*",
-                  "returnGeometry": "true", "outSR": 4326, "orderByFields": "id ASC",
+                  "returnGeometry": "true", "outSR": 4326, "orderByFields": "id " + direction,
                   "resultRecordCount": limit, "resultOffset": request.get("offset", 0)}
         if "bbox" in request:
             params.update({"geometry": ",".join(map(str, request["bbox"])), "inSR": 4326,
