@@ -31,3 +31,8 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# Local GC diagnostic outputs and generated compose/certificate inputs
+/artifacts/
+/.gc-cohort-keyring/
+/docker-compose.loadsize-*.yml
