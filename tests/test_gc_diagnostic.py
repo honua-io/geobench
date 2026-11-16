@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/gc-cohort-diagnostic.py"
@@ -90,6 +90,40 @@ class GcDiagnosticTests(unittest.TestCase):
             for restart, value in [(0, 2), (0, 3), (1, 10), (1, 12)]
         ]
         self.assertEqual(3, self.summary(rows)["gc_pause_seconds_observed_delta"])
+
+    def test_sampler_discards_counter_when_process_restarts_during_metrics(self):
+        before = "running exit=0 oom=false restarts=0 health=healthy started=old pid=10"
+        after = "running exit=0 oom=false restarts=1 health=healthy started=new pid=11"
+        completed = lambda output: subprocess.CompletedProcess([], 0, output, "")
+        stop = Mock()
+        stop.wait.side_effect = [False, True]
+        response = Mock()
+        response.read.return_value = b"dotnet_gc_pause_time_seconds_total 10\n"
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "runtime"
+            with (
+                patch.object(
+                    gc.subprocess,
+                    "run",
+                    side_effect=[
+                        completed("cid"),
+                        completed(""),
+                        completed(before),
+                        completed(after),
+                    ],
+                ),
+                patch.object(gc, "sh", return_value=completed("")),
+                patch.object(gc, "urlopen", return_value=response),
+            ):
+                gc.capture_server({"HONUA_PORT": "8000"}, prefix, stop)
+            sample = json.loads(prefix.with_suffix(".samples.jsonl").read_text())
+            self.assertNotIn("gc_pause_seconds_total", sample)
+            self.assertEqual(
+                "container lifetime changed during metrics collection",
+                sample["gc_metrics_error"],
+            )
 
     def run_until_keyring(self, revision):
         calls = []

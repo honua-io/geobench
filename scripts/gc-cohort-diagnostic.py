@@ -151,7 +151,7 @@ def capture_server(env, prefix, stop):
                 "docker",
                 "inspect",
                 "--format",
-                "{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}}",
+                "{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}} started={{.State.StartedAt}} pid={{.State.Pid}}",
                 cid,
             ],
             check=False,
@@ -227,6 +227,26 @@ def capture_server(env, prefix, stop):
             sample["gc_metrics_error"] = f"HTTPError:{exc.code}"
         except (URLError, OSError, ValueError) as exc:
             sample["gc_metrics_error"] = type(exc).__name__
+        # Metrics and process evidence must belong to the same container lifetime.
+        # Include StartedAt and PID so a restart in progress cannot reuse the earlier identity.
+        after = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}} started={{.State.StartedAt}} pid={{.State.Pid}}",
+                cid,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if not state or state != after:
+            sample.pop("gc_pause_seconds_total", None)
+            sample.pop("gc_metrics", None)
+            sample["gc_metrics_error"] = (
+                "container lifetime changed during metrics collection"
+            )
         with prefix.with_suffix(".samples.jsonl").open("a") as f:
             f.write(json.dumps(sample) + "\n")
 
