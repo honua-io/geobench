@@ -439,7 +439,7 @@ def main():
         "--max-load",
         type=float,
         default=16.0,
-        help="refuse to start above this 1-minute load average; compare only controlled quiet-host runs",
+        help="1-minute load ceiling (0 < max-load <= 16); compare only controlled quiet-host runs",
     )
     a = ap.parse_args()
     if a.runs < 1 or a.duration < 1 or a.warmup < 1:
@@ -463,8 +463,8 @@ def main():
         ap.error("levels must be comma-separated positive integers")
     if not levels or min(levels) < 1 or len(set(levels)) != len(levels):
         ap.error("levels must be unique positive integers")
-    if not math.isfinite(a.max_load) or a.max_load <= 0:
-        ap.error("max-load must be finite and positive")
+    if not math.isfinite(a.max_load) or not 0 < a.max_load <= 16:
+        ap.error("max-load must be finite, positive and at most 16")
     root = Path.cwd()
     assert (root / "scripts/run-benchmark.sh").exists(), (
         "run from the geobench checkout root"
@@ -495,13 +495,13 @@ def main():
     result["load_at_start"] = {
         "load1": load1,
         "cpus": os.cpu_count(),
-        "containers": len(sh("docker", "ps", "-q").stdout.split()),
     }
     if load1 > a.max_load:
         result["verdict"] = "NOT_QUIET"
         save()
         print(json.dumps({"verdict": "NOT_QUIET", "load1": load1, "max": a.max_load}))
         return 3
+    result["load_at_start"]["containers"] = len(sh("docker", "ps", "-q").stdout.split())
     # Shared-host runs are diagnostics; comparative timing needs a quiet, controlled rerun.
     result["host_quiet"] = load1 <= 16.0
     result["interpretation"] = (

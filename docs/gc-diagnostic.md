@@ -38,9 +38,10 @@ errors, OOM/restart state and counter availability. Every repetition must have
 zero request errors and p95 below 500 ms to meet the level's bar. A failed or
 partial run must remain in the comparison.
 
-The script refuses startup above a 1-minute host load of 16 by default and
-records load throughout. Raising `--max-load` permits harness debugging only;
-busy-host timings cannot justify GC defaults or architecture comparisons. A
+The script refuses startup above a 1-minute host load of 16 before any Docker
+command and records load throughout. `--max-load` may lower this ceiling;
+nonfinite, nonpositive or greater-than-16 values are rejected before work starts.
+Busy-host timings cannot justify GC defaults or architecture comparisons. A
 short `--runs 1 --levels 1 --duration 2 --warmup 1` run checks instrumentation.
 Use compatible image/source revisions and controlled quiet-host runs for actual
 comparisons. The script creates and removes its own Docker stack and throwaway

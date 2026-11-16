@@ -230,6 +230,11 @@ class GcDiagnosticTests(unittest.TestCase):
             ("--levels", "0"),
             ("--levels", "1,1"),
             ("--max-load", "nan"),
+            ("--max-load", "inf"),
+            ("--max-load", "0"),
+            ("--max-load", "-1"),
+            ("--max-load", "16.01"),
+            ("--max-load", "96"),
         ]:
             with (
                 self.subTest(flag=flag, value=value),
@@ -253,6 +258,28 @@ class GcDiagnosticTests(unittest.TestCase):
                 )
                 self.assertEqual(2, result.returncode, result.stderr)
                 self.assertEqual([], list(Path(temporary).iterdir()))
+
+    def test_busy_host_refuses_before_any_docker_command(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "scripts").mkdir()
+            (root / "scripts/run-benchmark.sh").touch()
+            with (
+                contextlib.chdir(root),
+                patch.object(gc, "sh") as shell,
+                patch.object(gc.os, "getloadavg", return_value=(17, 0, 0)),
+                patch.object(
+                    sys,
+                    "argv",
+                    [str(SCRIPT), "--image", "sha256:" + "a" * 64,
+                     "--source", "b" * 40, "--max-load", "16"],
+                ),
+            ):
+                self.assertEqual(3, gc.main())
+                shell.assert_not_called()
+            result = json.loads(next(root.glob("artifacts/**/result.json")).read_text())
+            self.assertEqual("NOT_QUIET", result["verdict"])
+            self.assertEqual(17, result["load_at_start"]["load1"])
 
 
 if __name__ == "__main__":
