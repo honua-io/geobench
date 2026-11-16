@@ -29,7 +29,6 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-LOCAL_TAG = "honua-gc-diagnostic:local"
 KEYRING_DIR = (
     Path.cwd() / ".gc-cohort-keyring"
 )  # never under artifacts/, so it is not copied back
@@ -252,8 +251,15 @@ def runtime_summary(path):
     pause_groups = {}
     for sample in samples:
         value = sample.get("gc_pause_seconds_total")
-        if isinstance(value, (int, float)) and math.isfinite(value) and value >= 0:
-            pause_groups.setdefault(sample["id"], []).append(value)
+        restart = re.search(r"\brestarts=(\d+)\b", sample.get("state", ""))
+        if (
+            restart
+            and isinstance(value, (int, float))
+            and math.isfinite(value)
+            and value >= 0
+        ):
+            lifetime = (sample["id"], int(restart[1]))
+            pause_groups.setdefault(lifetime, []).append(value)
     pause_deltas = [
         values[-1] - values[0]
         for values in pause_groups.values()
@@ -284,7 +290,7 @@ def runtime_summary(path):
     }
 
 
-def override(size, cfg, pg_port):
+def override(size, cfg, pg_port, image):
     gc_env = "\n".join(
         f'      {key}: "{value}"'
         for key, value in GC_PROFILES[cfg["gc_profile"]].items()
@@ -300,7 +306,7 @@ services:
       resources:
         limits: {{cpus: "{cfg["db_cpus"]}", memory: {cfg["db_mem"]}}}
   honua:
-    image: {LOCAL_TAG}
+    image: {image}
     pull_policy: never
     # Build-host only: the PR Gate runner hooks pkill UIDs 1001/1002 (the image default), as in cohort compose.cohort-uid.yaml.
     user: "61001:1001"
@@ -485,9 +491,8 @@ def main():
     )
 
     meta = json.loads(sh("docker", "image", "inspect", a.image).stdout)[0]
-    assert (
-        meta["Config"]["Labels"].get("org.opencontainers.image.revision") == a.source
-    ), "image revision mismatch"
+    if meta["Config"]["Labels"].get("org.opencontainers.image.revision") != a.source:
+        raise RuntimeError("image revision mismatch")
     result["runtime"] = meta["Config"]["Labels"].get(
         "honua.runtime.compilation", "unknown"
     )
@@ -533,12 +538,11 @@ def main():
     if not init_sql.exists():
         sh(sys.executable, "data/small/generate.py", "--output", str(init_sql))
     try:
-        sh("docker", "tag", a.image, LOCAL_TAG)
         keyring_password = make_keyring()
         for size in sizes:
             cfg = dict(SIZES[size], gc_profile=a.profile)
             ov = root / f"docker-compose.loadsize-{size.lower()}.yml"
-            ov.write_text(override(size, cfg, free_port()))
+            ov.write_text(override(size, cfg, free_port(), a.image))
             ts = f"loadsize-{size.lower()}-{stamp}"
             env = dict(
                 os.environ,
@@ -554,7 +558,7 @@ def main():
                 POSTGIS_LOG_MIN_DURATION_STATEMENT="-1",
                 AUDIT_SHAPES="1",
                 HONUA_STORAGE_PROFILE="source",
-                HONUA_IMAGE=LOCAL_TAG,
+                HONUA_IMAGE=a.image,
                 LOADSIZE_KEYRING_PASSWORD=keyring_password,
                 HONUA_MAX_CONCURRENT_QUERIES=str(cfg["pool"]),
                 HONUA_MAX_CONNECTION_POOL_SIZE=str(cfg["pool"]),
@@ -631,7 +635,6 @@ def main():
                 )
                 ov.unlink()
         shutil.rmtree(KEYRING_DIR, ignore_errors=True)
-        sh("docker", "rmi", LOCAL_TAG, check=False)
     result["host_quiet"] = bool(
         result["host_quiet"]
         and all(
