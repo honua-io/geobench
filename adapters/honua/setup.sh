@@ -33,12 +33,12 @@ api() {
   local url="${HONUA_URL}${path}"
 
   if [ -n "${data}" ]; then
-    curl -sS -X "${method}" "${url}" \
+    curl --fail-with-body -sS -X "${method}" "${url}" \
       -H "Content-Type: application/json" \
       -H "${HEADER_KEY}" \
       -d "${data}"
   else
-    curl -sS -X "${method}" "${url}" \
+    curl --fail-with-body -sS -X "${method}" "${url}" \
       -H "${HEADER_KEY}"
   fi
 }
@@ -67,8 +67,42 @@ find_connection_id() {
 find_layer_id() {
   local connection_id="$1"
   api GET "/api/v1/admin/connections/${connection_id}/layers?serviceName=${SERVICE_NAME}" \
-    | jq -r '.data[]? | select(.layerName == "bench_points") | .layerId' \
+    | jq -r '.data | (if type == "array" then . else .items end) | .[]? | select(.layerName == "bench_points") | (.storageLayerId // .layerId)' \
     | head -n1
+}
+
+resolve_published_layer_id() {
+  local response="$1"
+  local connection_id="$2"
+  local layer_id job_id status
+  layer_id="$(jq -r '.data.storageLayerId // .data.layerId // empty' <<<"${response}")"
+  if [ -n "${layer_id}" ]; then
+    echo "${layer_id}"
+    return 0
+  fi
+  job_id="$(jq -r '.data.jobId // empty | @uri' <<<"${response}")"
+  if [ -z "${job_id}" ]; then
+    echo "ERROR: publish returned neither a layer ID nor a job ID" >&2
+    return 1
+  fi
+  for _ in $(seq 1 300); do
+    response="$(api GET "/api/v1/admin/connections/${connection_id}/layers/jobs/${job_id}")" || return 1
+    status="$(jq -r '.data.status // empty' <<<"${response}")"
+    case "${status}" in
+      Completed)
+        layer_id="$(jq -r '.data.storageLayerId // empty' <<<"${response}")"
+        if [ -n "${layer_id}" ]; then
+          echo "${layer_id}"
+          return 0
+        fi
+        echo "ERROR: completed publication has no storage layer ID" >&2
+        return 1 ;;
+      Queued|Processing) sleep 2 ;;
+      *) echo "ERROR: publication job did not complete (status=${status})" >&2; return 1 ;;
+    esac
+  done
+  echo "ERROR: publication timed out after 600 seconds" >&2
+  return 1
 }
 
 wait_for_public_items() {
@@ -145,7 +179,7 @@ api GET "/api/v1/admin/connections/${CONNECTION_ID}/tables" \
 echo "[3/7] Publishing bench_points layer..."
 LAYER_ID="$(find_layer_id "${CONNECTION_ID}" || true)"
 if [ -z "${LAYER_ID}" ]; then
-  LAYER_ID="$(
+  PUBLISH_RESPONSE="$(
     api POST "/api/v1/admin/connections/${CONNECTION_ID}/layers" '{
       "schema": "public",
       "table": "bench_points",
@@ -170,8 +204,9 @@ if [ -z "${LAYER_ID}" ]; then
       ],
       "serviceName": "'"${SERVICE_NAME}"'",
       "enabled": true
-    }' | jq -r '.data.layerId // empty'
+    }'
   )"
+  LAYER_ID="$(resolve_published_layer_id "${PUBLISH_RESPONSE}" "${CONNECTION_ID}")"
 fi
 
 if [ -z "${LAYER_ID}" ]; then
