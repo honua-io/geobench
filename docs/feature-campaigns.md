@@ -147,7 +147,7 @@ server order, reversed on every subsequent pair. Each server/repetition gets
 fresh private PostGIS storage, network and ephemeral loopback port. Both server
 and DB have 4 CPUs / 4 GiB; source pools target six connections. The load generator
 defaults to 4 CPUs / 4 GiB. Normal metadata caches remain enabled. Honua exact
-response caching and adaptive admission are disabled. Honua uses exact
+response caching, adaptive admission and anonymous pressure shedding are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
