@@ -131,6 +131,7 @@ def calibration_failures(evidence, binding):
 
 def report(directory, manifest, attempts):
     failures = []
+    plan_shapes = []
     expected = {(rep, server) for rep in range(1, manifest["repetitions"] + 1)
                 for server in manifest["servers"]}
     keys = [(a["repetition"], a["server"]) for a in attempts]
@@ -162,6 +163,9 @@ def report(directory, manifest, attempts):
                 profile = manifest.get("honua_profile", "baseline") if attempt["server"] == "honua" else None
                 if validate_source_trace((Path(directory) / attempt["id"] / "source-query.log").read_text(), profile) != source_receipt:
                     failures.append(f"attempt {attempt['id']}: source-query evidence mismatch")
+                if "source_plans" in source_receipt:
+                    plan_shapes.append(f"{attempt['id']}: {source_receipt['source_plans']} source-table plans, "
+                                       f"{source_receipt['parallel_source_plans']} with parallel workers")
             except (OSError, ValueError, KeyError, TypeError):
                 failures.append(f"attempt {attempt['id']}: missing or invalid executed source-query evidence")
             for scenario, row in attempt.get("rows", {}).items():
@@ -223,6 +227,8 @@ def report(directory, manifest, attempts):
              f"Server/database budget (each): {json.dumps(result['server_database_budget'], sort_keys=True)}.",
              f"Generator budget (same for both products): {json.dumps(result['generator_budget'], sort_keys=True)}.", ""]
     lines.extend(f"- {reason}" for reason in dict.fromkeys(publication_failures))
+    if plan_shapes:
+        lines += ["", "Preflight query plans (auto_explain, diagnostic):"] + [f"- {shape}" for shape in plan_shapes]
     lines += ["", "| Scenario | Server | Repetition | Offered req/s | Valid req/s | p50 ms | p95 ms | p99 ms | Late | Dropped |", "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for scenario, servers in by_scenario.items():
         for server, data in servers.items():
