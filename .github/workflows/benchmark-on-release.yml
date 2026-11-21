@@ -1,7 +1,10 @@
 name: Per-Release Benchmark (Honua Server)
+# The title names the release tag so candidate-schedule.yml can tell which pins already ran.
+run-name: Benchmark ${{ github.event.client_payload.release_tag || github.event.inputs.release_tag || 'latest' }}
 
-# Triggered by honua-server on each release tag via repository_dispatch, or
-# manually via workflow_dispatch for ad-hoc replays.
+# Dispatched by candidate-schedule.yml for the release train's pinned honua-server
+# candidate (weekly and on each new pin), by honua-server via repository_dispatch,
+# or manually via workflow_dispatch for ad-hoc replays.
 #
 # Responsibilities:
 #   1. Run the benchmark suite against the tagged honua-server image.
