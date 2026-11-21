@@ -120,7 +120,8 @@ def make_compose(owner, server, images, honua_profile="baseline", generator_cpus
     if honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
-           "HONUA_ADAPTIVE_ADMISSION_ENABLED": "false", "HONUA_MAX_CONCURRENT_QUERIES": "6",
+           "HONUA_ADAPTIVE_ADMISSION_ENABLED": "false", "HONUA_ANONYMOUS_PRESSURE_ADMISSION_ENABLED": "false",
+           "HONUA_MAX_CONCURRENT_QUERIES": "6",
            "HONUA_MAX_CONNECTION_POOL_SIZE": "6", "HONUA_MIN_CONNECTION_POOL_SIZE": "3",
            "GEOSERVER_INSTALL_EXTENSIONS": "false", "GEOSERVER_STABLE_EXTENSIONS": "",
            "GEOSERVER_COMMUNITY_EXTENSIONS": "", "POSTGIS_LOG_MIN_DURATION_STATEMENT": "-1"}

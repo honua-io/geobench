@@ -41,8 +41,13 @@ def release_tag(sha):
 
 
 def already_benchmarked(runs, tag):
+    """A pin counts as benchmarked once a run for it succeeded or is still running.
+
+    A failed run may never have measured anything (an image not yet pullable, a
+    runner fault), so the next daily check dispatches the pin again.
+    """
     title = f"Benchmark {tag}"
-    return any(run.get("display_title") == title and run.get("conclusion") not in {"cancelled", "skipped"}
+    return any(run.get("display_title") == title and run.get("conclusion") in {None, "success"}
                for run in runs)
 
 

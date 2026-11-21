@@ -39,7 +39,9 @@ class CandidateScheduleTests(unittest.TestCase):
         tag = candidate_schedule.release_tag(SHA)
         self.assertEqual('candidate-de512e8', tag)
         title = 'Benchmark candidate-de512e8'
-        self.assertTrue(candidate_schedule.already_benchmarked([{'display_title': title, 'conclusion': 'failure'}], tag))
+        self.assertTrue(candidate_schedule.already_benchmarked([{'display_title': title, 'conclusion': 'success'}], tag))
+        self.assertFalse(candidate_schedule.already_benchmarked([{'display_title': title, 'conclusion': 'failure'}], tag))
+        self.assertFalse(candidate_schedule.already_benchmarked([{'display_title': title, 'conclusion': 'timed_out'}], tag))
         self.assertTrue(candidate_schedule.already_benchmarked([{'display_title': title, 'conclusion': None}], tag))
         self.assertFalse(candidate_schedule.already_benchmarked([{'display_title': title, 'conclusion': 'cancelled'}], tag))
         self.assertFalse(candidate_schedule.already_benchmarked([{'display_title': 'Benchmark candidate-0000000'}], tag))
