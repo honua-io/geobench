@@ -25,7 +25,7 @@ class RuntimePlannerEvidenceTests(unittest.TestCase):
         images = {'honua': {'id': 'sha256:pinned', 'labels': {'honua.runtime.compilation': 'native-aot'}}}
         with patch.object(runner, 'inspect', return_value=info), \
                 patch.object(runner, 'docker_engine_identity', return_value={}), \
-                patch.object(runner, 'command', side_effect=['native mappings', '/app/Honua.Server\x00']):
+                patch.object(runner, 'read_process_file', side_effect=['native mappings', '/app/Honua.Server\x00']):
             if profile is None:
                 return runner.runtime_receipt({'honua': 'owned-container'}, images)
             return runner.runtime_receipt({'honua': 'owned-container'}, images, honua_profile=profile)

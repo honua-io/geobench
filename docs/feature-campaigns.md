@@ -151,6 +151,14 @@ response caching and adaptive admission are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
+Current Honua images have no shell, so the harness probes readiness with the
+image's own `/app/honua-healthcheck --ready` and reads the server's `/proc` files
+through a throwaway helper container that joins its PID namespace as the same user.
+Production startup needs operation key-ring protection; the compose file supplies a
+disposable secret (`HONUA_KEYRING_SECRET` overrides it). On hosts where CI hooks kill
+processes by UID (for example UID 1001), set `HONUA_CONTAINER_USER` to another
+`uid:gid`; the default is the image's own `1001:1001`.
+
 Honua's test-schema headers are disabled (`HONUA_TEST_SCHEMA_HEADERS=false`).
 Each attempt already owns an isolated database, and workloads do not send
 per-request schema overrides. This retains the shipping connection reset policy;

@@ -19,6 +19,22 @@ def inspect(container):
     return json.loads(command("docker", "inspect", container))[0]
 
 
+def read_process_file(container, path, helper_image):
+    """Read a /proc file of a container's main process, including shell-less images.
+
+    Images without `cat` are read from a throwaway helper container that joins the
+    target's PID namespace as the same user, so no extra privilege is needed.
+    """
+    try:
+        return command("docker", "exec", container, "cat", path, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as error:
+        if error.returncode not in (126, 127) or not helper_image:
+            raise
+    user = inspect(container)["Config"].get("User") or "0"
+    return command("docker", "run", "--rm", "--network", "none", "--pid", f"container:{container}",
+                   "--user", user, "--entrypoint", "cat", helper_image, path)
+
+
 def owned_ids(owner, kind="container"):
     return sorted(command("docker", kind, "ls", "-q", *(["-a"] if kind == "container" else []), "--filter", f"label={LABEL}={owner}").split())
 
