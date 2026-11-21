@@ -55,6 +55,27 @@ class SourceEvidenceTests(unittest.TestCase):
 \tFROM "public"."bench_points" WHERE label = 'quote'' FROM honua.features' '''
         self.assertEqual(1, validate_source_trace(COUNT + execution(sql))['feature_queries'])
 
+    def test_background_change_feed_polls_are_counted_not_treated_as_projections(self):
+        poll = execution('''SELECT changes.generation, ST_AsEWKB(changes.committed_geometry),
+\t    changes.operation = 2 AND ST_AsEWKB(changes.pre_geometry) IS DISTINCT FROM ST_AsEWKB(changes.committed_geometry)
+\tFROM honua.feature_changes AS changes
+\tLEFT JOIN LATERAL (SELECT entry.source_id FROM honua.feature_change_outbox AS entry LIMIT 1) AS outbox ON true
+\tWHERE changes.generation > $1 ORDER BY changes.generation LIMIT $2''')
+        result = validate_source_trace(COUNT + poll + FEATURES)
+        self.assertEqual(1, result['feature_queries'])
+        self.assertEqual(1, result['background_change_feed_reads'])
+        self.assertNotIn('background_change_feed_reads', validate_source_trace(COUNT + FEATURES))
+
+    def test_change_feed_cannot_hide_a_source_or_materialized_projection(self):
+        for sql in ('SELECT ST_AsBinary(p.geom) FROM public.bench_points p JOIN honua.feature_changes c ON true',
+                    'SELECT ST_AsBinary(geometry) FROM honua.features f JOIN other.feature_changes c ON true'):
+            with self.subTest(sql=sql), self.assertRaises(ValueError):
+                validate_source_trace(COUNT + FEATURES + execution(sql))
+
+    def test_is_distinct_from_is_not_a_from_clause(self):
+        sql = 'SELECT ST_AsBinary(geom) FROM public.bench_points WHERE label IS NOT DISTINCT FROM other_label'
+        self.assertEqual(['public.bench_points'], validate_source_trace(COUNT + execution(sql))['feature_relations'])
+
     def test_report_revalidates_raw_sql_instead_of_trusting_a_passed_attempt(self):
         manifest = {'mode':'diagnostic','profile':'source','repetitions':1,
                     'servers':['honua'],'scenarios':[],'binding':'test'}

@@ -108,6 +108,8 @@ services:
   honua:
     image: ${HONUA_IMAGE:-ghcr.io/honua-io/honua-server:nightly-aot}
     profiles: ["honua"]
+    # Image default. Hosts whose CI hooks kill processes by UID can choose another.
+    user: "${HONUA_CONTAINER_USER:-1001:1001}"
     ports:
       - "${HONUA_PORT:-8081}:8080"
     depends_on:
@@ -118,6 +120,10 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       ConnectionStrings__DefaultConnection: "Host=postgis-honua;Port=5432;Database=geobench;Username=geobench;Password=geobench_pass"
       HONUA_ADMIN_PASSWORD: "${HONUA_ADMIN_PASSWORD:-GeoBench-Admin-Key-2026!}"
+      # Current servers refuse to boot in Production without key-ring protection for the
+      # operation secret channel. Production accepts only env/aws references for the secret.
+      Operations__SecretChannel__KeyRingSecret: "env:GEOBENCH_OPERATION_KEYRING_SECRET"
+      GEOBENCH_OPERATION_KEYRING_SECRET: "${HONUA_KEYRING_SECRET:-geobench-disposable-operation-keyring-secret-0001}"
       Security__ConnectionEncryption__MasterKey: "geobench-master-key-at-least-32-characters-long"
       Security__ConnectionEncryption__Salt: "Z2VvYmVuY2gtc2FsdC1mb3ItZW5jcnlwdGlvbi10ZXN0aW5n"
       HostValidation__AllowedHosts__0: "localhost"
@@ -144,8 +150,9 @@ services:
       Limits__Connections__AdaptiveConcurrencyInitialQueries: "${HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET:-6}"
       Limits__Connections__AdaptiveConcurrencyTargetDurationMs: "${HONUA_ADAPTIVE_ADMISSION_TARGET_DURATION_MS:-100}"
       Limits__Connections__AdaptiveConcurrencyUpdateIntervalMs: "${HONUA_ADAPTIVE_ADMISSION_UPDATE_INTERVAL_MS:-1000}"
+    # The image has no shell or wget; it ships its own probe.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/healthz/live || exit 1"]
+      test: ["CMD", "/app/honua-healthcheck", "--ready"]
       interval: 5s
       timeout: 10s
       retries: 30

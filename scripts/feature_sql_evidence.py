@@ -53,6 +53,12 @@ def query_tokens(statement):
     return tokens
 
 
+def is_distinct_from(tokens, index):
+    """`a IS [NOT] DISTINCT FROM b` is a comparison, not a FROM clause."""
+    return (index >= 2 and tokens[index - 1] == ('word', 'distinct') and
+            tokens[index - 2] in {('word', 'is'), ('word', 'not')})
+
+
 def relations(tokens):
     result = set()
     depth = 0
@@ -66,7 +72,7 @@ def relations(tokens):
             from_depths.discard(depth)
             depth -= 1
             expecting_relation = False
-        elif token == ('word', 'from'):
+        elif token == ('word', 'from') and not is_distinct_from(tokens, index):
             from_depths.add(depth)
             expecting_relation = True
         elif token == ('word', 'join') or (token == ('punct', ',') and depth in from_depths):
@@ -142,16 +148,24 @@ def validate_honua_planner_profile(trace, profile):
             'scoped_feature_queries': observed['feature']}
 
 
+# Honua's change-feed reader polls its own change journal in the background. These reads
+# never touch the benchmark source and are not feature projections of a request.
+HONUA_CHANGE_FEED = ('honua', 'feature_changes')
+
+
 def validate_source_trace(trace, honua_profile=None):
     source = ('public', 'bench_points')
     geometry_functions = {'st_asbinary', 'st_asewkb', 'st_asgeojson', 'st_astext', 'st_asewkt'}
-    feature_queries = source_counts = 0
+    feature_queries = source_counts = change_feed_reads = 0
     observed = set()
     for statement in executed_statements(trace):
         tokens = query_tokens(statement)
         if not tokens or tokens[0] != ('word', 'select'):
             continue
         tables = relations(tokens)
+        if HONUA_CHANGE_FEED in tables and source not in tables:
+            change_feed_reads += 1
+            continue
         if any(table[-1] == 'features' or (table[-1] == 'bench_points' and table != source) for table in tables):
             raise ValueError(f'Unexpected feature storage in SQL trace: {sorted(tables)}')
         functions = {token[1] for index, token in enumerate(tokens[:-1])
@@ -168,6 +182,8 @@ def validate_source_trace(trace, honua_profile=None):
     result = {'feature_queries': feature_queries, 'source_count_queries': source_counts,
               'feature_relations': sorted('.'.join(table) for table in observed),
               'scope': 'Executed geometry-encoding SELECT statements in the pinned source-backed profiles'}
+    if change_feed_reads:
+        result['background_change_feed_reads'] = change_feed_reads
     if honua_profile is not None:
         result['planner_profile'] = validate_honua_planner_profile(trace, honua_profile)
     return result

@@ -48,6 +48,7 @@ from feature_runtime import (
     command,
     inspect,
     owned_ids,
+    read_process_file,
     sql,
 )
 from feature_sql_evidence import validate_source_trace
@@ -183,9 +184,10 @@ def runtime_receipt(ids, images, honua_profile=None, generator_cpus=BUDGET["cpus
             if honua_profile is not None and (len(planner_entries) != len(dict(planner_entries)) or
                     dict(planner_entries) != HONUA_PROFILES[honua_profile]):
                 raise ValueError(f"Honua planner configuration drift: {honua_profile}")
-            maps = command("docker", "exec", identity, "cat", "/proc/1/maps")
+            helper = images.get("postgis", {}).get("id")
+            maps = read_process_file(identity, "/proc/1/maps", helper)
             result[name]["coreclr_mapped"] = "libcoreclr" in maps or "libclrjit" in maps
-            result[name]["command"] = command("docker", "exec", identity, "cat", "/proc/1/cmdline").replace("\x00", " ").strip()
+            result[name]["command"] = read_process_file(identity, "/proc/1/cmdline", helper).replace("\x00", " ").strip()
             if images[role]["labels"].get("honua.runtime.compilation") == "native-aot" and result[name]["coreclr_mapped"]:
                 raise ValueError("Honua runtime contradicts its Native AOT image label")
         budget = load_budget if name == "k6" else BUDGET
