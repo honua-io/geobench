@@ -25,6 +25,13 @@ class ReadProcessFileTests(unittest.TestCase):
                          ('docker', 'run', '--rm', '--network', 'none', '--pid', 'container:c1',
                           '--user', '61001:1001', '--entrypoint', 'cat', 'sha256:helper', '/proc/1/maps'))
 
+    def test_not_executable_and_unset_user_fall_back_to_a_root_helper(self):
+        denied = subprocess.CalledProcessError(126, 'cat')
+        with patch.object(feature_runtime, 'command', side_effect=[denied, 'cmd']) as command, \
+                patch.object(feature_runtime, 'inspect', return_value={'Config': {'User': ''}}):
+            self.assertEqual(feature_runtime.read_process_file('c1', '/proc/1/cmdline', 'sha256:helper'), 'cmd')
+        self.assertEqual('0', command.call_args.args[command.call_args.args.index('--user') + 1])
+
     def test_other_exec_failures_and_missing_helper_are_not_hidden(self):
         for error, helper in ((subprocess.CalledProcessError(1, 'cat'), 'sha256:helper'),
                               (subprocess.CalledProcessError(127, 'cat'), None)):

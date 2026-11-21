@@ -155,7 +155,9 @@ Current Honua images have no shell, so the harness probes readiness with the
 image's own `/app/honua-healthcheck --ready` and reads the server's `/proc` files
 through a throwaway helper container that joins its PID namespace as the same user.
 Production startup needs operation key-ring protection; the compose file supplies a
-disposable secret (`HONUA_KEYRING_SECRET` overrides it). On hosts where CI hooks kill
+disposable secret (`HONUA_KEYRING_SECRET` overrides it; the effective compose,
+including this value, is recorded in `campaign.json`, so never use a real secret).
+Images older than the shipped healthcheck probe are no longer supported. On hosts where CI hooks kill
 processes by UID (for example UID 1001), set `HONUA_CONTAINER_USER` to another
 `uid:gid`; the default is the image's own `1001:1001`.
 
