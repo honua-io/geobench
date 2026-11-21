@@ -1,0 +1,44 @@
+name: Scheduled Honua candidate benchmark
+
+# Benchmarks the honua-server candidate pinned by the release train
+# (honua-release platform-manifest.yaml): every week, and on the first daily
+# check after the pin moves to a new release candidate. The manifest is
+# public and the dispatch uses this repository's own token, so no
+# cross-repository secret is needed (honua-io/honua-server#8808).
+
+on:
+  schedule:
+    - cron: '17 8 * * 1'   # weekly: Monday 08:17 UTC, always
+    - cron: '47 9 * * *'   # daily: only when the pinned candidate is new
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-schedule
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Dispatch the pinned candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write   # dispatches benchmark-on-release.yml in this repository
+    steps:
+      - name: Checkout geobench
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Dispatch the per-release benchmark
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ALWAYS: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '17 8 * * 1' }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$ALWAYS" = "true" ]; then args+=(--always); fi
+          python3 scripts/candidate_schedule.py "${args[@]}"

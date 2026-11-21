@@ -120,7 +120,8 @@ def make_compose(owner, server, images, honua_profile="baseline", generator_cpus
     if honua_profile not in HONUA_PROFILES:
         raise ValueError(f"Unknown Honua profile: {honua_profile}")
     env = {**os.environ, **{key.upper() + "_IMAGE": value["reference"] for key, value in images.items()},
-           "HONUA_ADAPTIVE_ADMISSION_ENABLED": "false", "HONUA_MAX_CONCURRENT_QUERIES": "6",
+           "HONUA_ADAPTIVE_ADMISSION_ENABLED": "false", "HONUA_ANONYMOUS_PRESSURE_ADMISSION_ENABLED": "false",
+           "HONUA_MAX_CONCURRENT_QUERIES": "6",
            "HONUA_MAX_CONNECTION_POOL_SIZE": "6", "HONUA_MIN_CONNECTION_POOL_SIZE": "3",
            "GEOSERVER_INSTALL_EXTENSIONS": "false", "GEOSERVER_STABLE_EXTENSIONS": "",
            "GEOSERVER_COMMUNITY_EXTENSIONS": "", "POSTGIS_LOG_MIN_DURATION_STATEMENT": "-1"}
@@ -139,7 +140,10 @@ def make_compose(owner, server, images, honua_profile="baseline", generator_cpus
         if name == server:
             service["ports"] = [{"target": 8080, "host_ip": "127.0.0.1", "published": "0", "protocol": "tcp"}]
         if name.startswith("postgis-"):
-            service["command"] = ["postgres", "-c", "max_connections=200"]
+            # auto_explain defaults to silent (-1); the traced preflight window enables it
+            # with ALTER SYSTEM, which a command-line value would override.
+            service["command"] = ["postgres", "-c", "max_connections=200",
+                                  "-c", "shared_preload_libraries=auto_explain"]
         if name == "k6":
             service["user"] = f"{os.getuid()}:{os.getgid()}"
     # Compare the same exact count-metadata policy. Oracle preflight verifies the result.
@@ -329,13 +333,15 @@ def execute_attempt(directory, manifest, attempt, save, calibration_workload=Non
         config = {**expected, "protocol": manifest["protocol"], "duration": 1, "drain": DRAIN_SECONDS,
                   "phase": "warmup", "scenario": "equality", "vus": 1}
         # Separate SQL diagnostic pass: inspect actual reads, then disable tracing before warmup.
-        for statement in ("ALTER SYSTEM SET log_min_duration_statement=0", "SELECT pg_reload_conf()"):
+        for statement in ("ALTER SYSTEM SET log_min_duration_statement=0",
+                          "ALTER SYSTEM SET auto_explain.log_min_duration=0", "SELECT pg_reload_conf()"):
             command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
         since = datetime.now(UTC).isoformat()
         _, checks = run_k6(ids, path, config, "preflight")
         trace = command("docker", "logs", "--since", since, db, stderr=subprocess.STDOUT)
         (path / "source-query.log").write_text(trace)
-        for statement in ("ALTER SYSTEM SET log_min_duration_statement=-1", "SELECT pg_reload_conf()"):
+        for statement in ("ALTER SYSTEM SET log_min_duration_statement=-1",
+                          "ALTER SYSTEM SET auto_explain.log_min_duration=-1", "SELECT pg_reload_conf()"):
             command("docker", "exec", db, "psql", "-U", "geobench", "-d", "geobench", "-c", statement)
         profile = manifest.get("honua_profile", "baseline") if server == "honua" else None
         write(path / "source-query.json", validate_source_trace(trace, profile))

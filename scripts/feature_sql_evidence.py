@@ -153,6 +153,31 @@ def validate_honua_planner_profile(trace, profile):
 HONUA_CHANGE_FEED = ('honua', 'feature_changes')
 
 
+PLAN = re.compile(r'LOG:\s+duration: [0-9.]+ ms\s+plan:')
+SOURCE_SCAN = re.compile(r'(?m)\bon (?:"?public"?\.)?"?bench_points"?(?:\s|$)')
+GATHER = re.compile(r'(?m)^\s*(?:->\s+)?Gather(?: Merge)?\s')
+
+
+def explained_plans(trace):
+    """Read auto_explain plan records (the plan text that follows each plan header)."""
+    current = None
+    for line in trace.splitlines():
+        if HEADER.match(line):
+            if current is not None:
+                yield '\n'.join(current)
+            current = [] if PLAN.search(line) else None
+        elif current is not None and line.startswith('\t'):
+            current.append(line[1:])
+    if current is not None:
+        yield '\n'.join(current)
+
+
+def source_plan_shapes(trace):
+    """Count logged plans that scan the source table and how many use parallel workers."""
+    plans = [plan for plan in explained_plans(trace) if SOURCE_SCAN.search(plan)]
+    return len(plans), sum(1 for plan in plans if GATHER.search(plan))
+
+
 def validate_source_trace(trace, honua_profile=None):
     source = ('public', 'bench_points')
     geometry_functions = {'st_asbinary', 'st_asewkb', 'st_asgeojson', 'st_astext', 'st_asewkt'}
@@ -184,6 +209,11 @@ def validate_source_trace(trace, honua_profile=None):
               'scope': 'Executed geometry-encoding SELECT statements in the pinned source-backed profiles'}
     if change_feed_reads:
         result['background_change_feed_reads'] = change_feed_reads
+    plans, parallel = source_plan_shapes(trace)
+    if plans:
+        # Diagnostic only: a parallel plan for a bounded page is a startup cost to explain.
+        result['source_plans'] = plans
+        result['parallel_source_plans'] = parallel
     if honua_profile is not None:
         result['planner_profile'] = validate_honua_planner_profile(trace, honua_profile)
     return result

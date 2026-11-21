@@ -145,6 +145,10 @@ services:
       Limits__Connections__MaxConnectionPoolSize: "${HONUA_MAX_CONNECTION_POOL_SIZE:-6}"
       Limits__Connections__MinConnectionPoolSize: "${HONUA_MIN_CONNECTION_POOL_SIZE:-3}"
       Limits__Connections__AdaptiveConcurrencyEnabled: "${HONUA_ADAPTIVE_ADMISSION_ENABLED:-false}"
+      # Queue every request, as GeoServer does: newer servers otherwise refuse queued
+      # anonymous reads with 503 under pressure. Independent of adaptive admission;
+      # older images ignore the key.
+      Limits__Connections__AnonymousPressureAdmissionEnabled: "${HONUA_ANONYMOUS_PRESSURE_ADMISSION_ENABLED:-false}"
       Limits__Connections__AdaptiveConcurrencyMinQueries: "${HONUA_ADAPTIVE_ADMISSION_MIN_TARGET:-3}"
       Limits__Connections__AdaptiveConcurrencyMaxQueries: "${HONUA_ADAPTIVE_ADMISSION_MAX_TARGET:-6}"
       Limits__Connections__AdaptiveConcurrencyInitialQueries: "${HONUA_ADAPTIVE_ADMISSION_INITIAL_TARGET:-6}"

@@ -221,7 +221,10 @@ python3 scripts/audit-fairness.py \
 
 The repo also runs an automated per-release benchmark
 ([.github/workflows/benchmark-on-release.yml](.github/workflows/benchmark-on-release.yml)):
-each Honua Server release tag triggers the core feature tracks plus a
+[candidate-schedule.yml](.github/workflows/candidate-schedule.yml) dispatches it
+every Monday and on the first daily check after the release train
+(`honua-release` `platform-manifest.yaml`) pins a new honua-server candidate,
+benchmarking that pinned image by digest. Each run measures the core feature tracks plus a
 cold-start measurement, compares p50/p95/p99, req/s, and error rate against the
 stored baseline (`results/baselines/honua-baseline.json`) with
 `scripts/check-regression.py`, and uploads raw results as workflow artifacts.

@@ -147,7 +147,7 @@ server order, reversed on every subsequent pair. Each server/repetition gets
 fresh private PostGIS storage, network and ephemeral loopback port. Both server
 and DB have 4 CPUs / 4 GiB; source pools target six connections. The load generator
 defaults to 4 CPUs / 4 GiB. Normal metadata caches remain enabled. Honua exact
-response caching and adaptive admission are disabled. Honua uses exact
+response caching, adaptive admission and anonymous pressure shedding are disabled. Honua uses exact
 `numberMatched` to match GeoServer's count behavior. Imported storage is not
 part of this source-backed profile.
 
@@ -296,6 +296,15 @@ source-backed feature reads. The recognizer targets the SQL shapes of the pinned
 profiles; an unrecognized shape needs a separate diagnostic review. Reporting
 revalidates the raw trace against its receipt. Older artifacts without this
 receipt do not satisfy the new evidence gate.
+
+Both PostGIS services preload `auto_explain`, silent by default. The traced
+preflight window turns it on next to statement logging. `source-query.json`
+then records `source_plans`, the logged plans that scan `bench_points`, and
+`parallel_source_plans`, the ones among them with a `Gather` or `Gather Merge`
+node. `report.md` lists both per attempt. They are diagnostic: a bounded page or
+count planned with parallel workers can spend more on worker startup than on the
+scan, so explain it before you compare latency. Neither is a validity gate.
+Receipts from traces without plans omit both keys.
 
 The manifest fingerprints both the controller and Docker engine (engine ID,
 kernel, CPU/memory capacity, version and cgroup settings). Engine identity and
