@@ -92,5 +92,32 @@ class SourceEvidenceTests(unittest.TestCase):
             self.assertTrue(any('source-query evidence mismatch' in value for value in result['failures']))
 
 
+def plan(*nodes):
+    body = ''.join(f'\t{node}\n' for node in nodes)
+    return f'2026-09-28 12:00:00.000 UTC [42] LOG:  duration: 10.4 ms  plan:\n\tQuery Text: SELECT ...\n{body}'
+
+
+PARALLEL = plan('Limit  (cost=1000.30..12363.08 rows=101 width=40)',
+                '  ->  Gather Merge  (cost=1000.30..742281.19 rows=6589 width=40)',
+                '        ->  Parallel Index Scan using bench_points_pkey on bench_points  (cost=0.29..740539.92)')
+SERIAL = plan('Limit  (cost=0.29..19246.71 rows=101 width=40)',
+              '  ->  Index Scan using bench_points_pkey on bench_points  (cost=0.29..1255657.56)')
+OTHER = plan('Gather  (cost=1000.00..2000.00 rows=1 width=8)', '  ->  Parallel Seq Scan on feature_changes')
+
+
+class SourcePlanShapeTests(unittest.TestCase):
+    def test_counts_source_plans_and_parallel_workers(self):
+        result = validate_source_trace(COUNT + FEATURES + PARALLEL + SERIAL + OTHER)
+        self.assertEqual(result['source_plans'], 2)
+        self.assertEqual(result['parallel_source_plans'], 1)
+
+    def test_plan_text_does_not_count_as_an_executed_read(self):
+        with self.assertRaises(ValueError):
+            validate_source_trace(PARALLEL + SERIAL)
+
+    def test_trace_without_plans_keeps_its_receipt(self):
+        self.assertNotIn('source_plans', validate_source_trace(COUNT + FEATURES))
+
+
 if __name__ == '__main__':
     unittest.main()

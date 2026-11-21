@@ -297,6 +297,15 @@ profiles; an unrecognized shape needs a separate diagnostic review. Reporting
 revalidates the raw trace against its receipt. Older artifacts without this
 receipt do not satisfy the new evidence gate.
 
+Both PostGIS services preload `auto_explain`, silent by default. The traced
+preflight window turns it on next to statement logging. `source-query.json`
+then records `source_plans`, the logged plans that scan `bench_points`, and
+`parallel_source_plans`, the ones among them with a `Gather` or `Gather Merge`
+node. `report.md` lists both per attempt. They are diagnostic: a bounded page or
+count planned with parallel workers can spend more on worker startup than on the
+scan, so explain it before you compare latency. Neither is a validity gate.
+Receipts from traces without plans omit both keys.
+
 The manifest fingerprints both the controller and Docker engine (engine ID,
 kernel, CPU/memory capacity, version and cgroup settings). Engine identity and
 capacity are checked again before and after traffic. Five-second `host` samples
