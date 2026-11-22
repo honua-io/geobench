@@ -20,7 +20,7 @@ This note is intentionally protocol-by-protocol so we do not collapse all behavi
 ## Current Benchmark Context
 
 Latest fair common OGC feature comparison:
-- [results/20260325-131101/report.md](../results/20260325-131101/report.md)
+- `results/20260325-131101/report.md` (gitignored local run)
 
 Key shape from that run:
 - Honua wins `equality`, `like`, `large bbox`, and mixed load at `10` and `100` VUs
@@ -37,8 +37,8 @@ Important constraint:
 ### 1. GeoServer OGC API Features is a thin wrapper over WFS/GetFeature
 
 GeoServer's OGC API Features handler builds a WFS `GetFeatureRequest` and then delegates to the existing WFS implementation:
-- [/tmp/geoserver/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeatureService.java](/tmp/geoserver/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeatureService.java)
-- [/tmp/geoserver/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeaturesGetFeature.java](/tmp/geoserver/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeaturesGetFeature.java)
+- `geoserver/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeatureService.java`
+- `geoserver/src/extension/ogcapi/ogcapi-features/src/main/java/org/geoserver/ogcapi/v1/features/FeaturesGetFeature.java`
 
 Why it matters:
 - GeoServer is not maintaining a separate OGC query engine here.
@@ -52,8 +52,8 @@ GeoTools' JDBC feature source explicitly advertises support for:
 - limit when the dialect supports limit/offset
 
 Relevant code:
-- [/tmp/geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCQueryCapabilities.java](/tmp/geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCQueryCapabilities.java)
-- [/tmp/geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java](/tmp/geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java)
+- `geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCQueryCapabilities.java`
+- `geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java`
 
 Why it matters:
 - GeoServer can keep `filter + sort + limit + offset` down in SQL on the happy path.
@@ -61,7 +61,7 @@ Why it matters:
 
 Additional evidence:
 - `JDBCFeatureSource` only applies in-memory offset/max-feature skipping when post-filtering is required:
-  - [/tmp/geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java](/tmp/geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java)
+  - `geotools/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java`
 
 Why it matters:
 - GeoServer gets native paging when it safely can.
@@ -70,8 +70,8 @@ Why it matters:
 ### 3. GeoServer writes GeoJSON by streaming feature collections to the output writer
 
 GeoServer's GeoJSON response path iterates the feature collection and writes directly to the response writer:
-- [/tmp/geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/json/GeoJSONGetFeatureResponse.java](/tmp/geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/json/GeoJSONGetFeatureResponse.java)
-- [/tmp/geoserver/src/main/src/main/java/org/geoserver/json/GeoJSONFeatureWriter.java](/tmp/geoserver/src/main/src/main/java/org/geoserver/json/GeoJSONFeatureWriter.java)
+- `geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/json/GeoJSONGetFeatureResponse.java`
+- `geoserver/src/main/src/main/java/org/geoserver/json/GeoJSONFeatureWriter.java`
 
 Why it matters:
 - GeoServer is not rebuilding a generic attribute bag and then serializing it again per feature in the OGC/WFS output path.
@@ -80,11 +80,11 @@ Why it matters:
 ### 4. Honua still pays a generic attribute-bag cost per feature
 
 Honua's Postgres feature readers read `attributes` as a JSON string, deserialize it, convert values, and then attach `objectid`:
-- [/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureDataAccess.Readers.cs](/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureDataAccess.Readers.cs)
+- `honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureDataAccess.Readers.cs`
 
 Then OGC and WFS rebuild response properties from that attribute dictionary:
-- [/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs](/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs)
-- [/home/makani/honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs](/home/makani/honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs)
+- `honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs`
+- `honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs`
 
 Why it matters:
 - Even after the SQL/index fixes, Honua still has more app-layer per-row work than GeoServer on common feature outputs.
@@ -92,9 +92,9 @@ Why it matters:
 
 Additional evidence:
 - Honua's OGC handler still materializes arrays of `GeoJsonFeature` and serializes them after rebuilding properties:
-  - [/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs](/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs)
+  - `honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs`
 - Honua's WFS JSON/GML handlers similarly build full feature collections after the plan/count phase:
-  - [/home/makani/honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs](/home/makani/honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs)
+  - `honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs`
 
 ### 6. Honua's shared limited-query store path is still heavier than it looks
 
@@ -103,9 +103,9 @@ Honua's store layer still carries count work on many limited queries:
 - limited "optimized" queries use `COUNT(*) OVER()` in the shared SQL builder
 
 Relevant code:
-- [/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/PostgresFeatureStore.cs](/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/PostgresFeatureStore.cs)
-- [/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureQueryBuilder.Build.cs](/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureQueryBuilder.Build.cs)
-- [/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureQueryBuilder.EncodedFormats.cs](/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureQueryBuilder.EncodedFormats.cs)
+- `honua-server/src/Honua.Postgres/Features/FeatureStore/PostgresFeatureStore.cs`
+- `honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureQueryBuilder.Build.cs`
+- `honua-server/src/Honua.Postgres/Features/FeatureStore/Services/FeatureQueryBuilder.EncodedFormats.cs`
 
 Why it matters:
 - Honua can still pay exact-count or window-count cost on protocol paths that do not actually need totals.
@@ -114,13 +114,13 @@ Why it matters:
 ### 5. GeoServer currently serves the typed benchmark table directly
 
 GeoServer is published directly against `bench_points`:
-- [adapters/geoserver/setup.sh](/home/makani/geobench/adapters/geoserver/setup.sh)
+- [adapters/geoserver/setup.sh](../adapters/geoserver/setup.sh)
 
 The benchmark dataset gives that table exactly aligned indexes:
-- [data/small/generate.py](/home/makani/geobench/data/small/generate.py)
+- [data/small/generate.py](../data/small/generate.py)
 
 Honua still serves through `public.features` with JSON-backed attributes:
-- [adapters/honua/setup.sh](/home/makani/geobench/adapters/honua/setup.sh)
+- [adapters/honua/setup.sh](../adapters/honua/setup.sh)
 
 Why it matters:
 - GeoServer starts from a friendlier storage shape for this benchmark.
@@ -135,10 +135,10 @@ Why it matters:
 - GeoServer OGC API requests reuse WFS/GetFeature and GeoTools JDBC pushdown.
 - Honua OGC requests use a separate handler and a separate response assembly path.
 - Honua's OGC path now supports omitting exact `numberMatched` on the hot path:
-  - [/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesOptions.cs](/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesOptions.cs)
-  - [/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs](/home/makani/honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs)
+  - `honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesOptions.cs`
+  - `honua-server/src/Honua.Server/Features/OgcFeatures/OgcFeaturesQueryHandler.cs`
 - Honua's paged no-count path uses `LIMIT + 1` semantics via `QueryPageAsync` and `QueryGeoJsonPageAsync`:
-  - [/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/PostgresFeatureStore.cs](/home/makani/honua-server/src/Honua.Postgres/Features/FeatureStore/PostgresFeatureStore.cs)
+  - `honua-server/src/Honua.Postgres/Features/FeatureStore/PostgresFeatureStore.cs`
 
 ### What still likely explains lagging OGC cases
 
@@ -163,7 +163,7 @@ Where Honua still lags GeoServer on the common feature track, the remaining like
 ### What is proven
 
 Honua's WFS handler currently does an exact per-layer count before building paged query plans:
-- [/home/makani/honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs](/home/makani/honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs)
+- `honua-server/src/Honua.Server/Features/Wfs20/Services/Wfs20Handler.cs`
 
 Specifically:
 - `BuildLayerQueryPlansAsync(...)` calls `_featureReader.CountAsync(...)` before issuing the actual query
@@ -174,8 +174,8 @@ GeoServer's WFS path is more nuanced:
 - `CountExecutor` can reuse a provided count, call `getCount`, or fall back to `getFeatures(query).size()`
 
 Relevant code:
-- [/tmp/geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/GetFeature.java](/tmp/geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/GetFeature.java)
-- [/tmp/geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/CountExecutor.java](/tmp/geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/CountExecutor.java)
+- `geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/GetFeature.java`
+- `geoserver/src/wfs-core/src/main/java/org/geoserver/wfs/CountExecutor.java`
 
 ### Likely implication for benchmarking
 
@@ -209,9 +209,9 @@ GeoServer's raster map output uses `StreamingRenderer` with several performance-
 - advanced projection handling controls
 
 Relevant code:
-- [/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/RenderedImageMapOutputFormat.java](/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/RenderedImageMapOutputFormat.java)
-- [/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/StyleQueryUtil.java](/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/StyleQueryUtil.java)
-- [/tmp/geotools/modules/library/render/src/main/java/org/geotools/renderer/lite/StreamingRenderer.java](/tmp/geotools/modules/library/render/src/main/java/org/geotools/renderer/lite/StreamingRenderer.java)
+- `geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/RenderedImageMapOutputFormat.java`
+- `geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/StyleQueryUtil.java`
+- `geotools/modules/library/render/src/main/java/org/geotools/renderer/lite/StreamingRenderer.java`
 
 This stack reduces work by:
 
@@ -228,9 +228,9 @@ Additional evidence:
   - thread pool
   - line-width optimization
   - advanced projection handling flags
-  - [/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/RenderedImageMapOutputFormat.java](/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/RenderedImageMapOutputFormat.java)
+  - `geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/RenderedImageMapOutputFormat.java`
 - GeoServer's style query utility expands the bbox by the computed style buffer, mixes style and request filters, simplifies the filter, and sets `FEATURE_2D` hints:
-  - [/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/StyleQueryUtil.java](/tmp/geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/StyleQueryUtil.java)
+  - `geoserver/src/wms-core/src/main/java/org/geoserver/wms/map/StyleQueryUtil.java`
 
 ### What is proven in Honua
 
@@ -245,9 +245,9 @@ Honua's MapServer export and WMS handlers currently:
 - draw with Skia
 
 Relevant code:
-- [/home/makani/honua-server/src/Honua.Server/Features/MapServer/MapServerRequestHandlers.Export.cs](/home/makani/honua-server/src/Honua.Server/Features/MapServer/MapServerRequestHandlers.Export.cs)
-- [/home/makani/honua-server/src/Honua.Server/Features/MapServer/MapServerRequestHandlers.Wms.cs](/home/makani/honua-server/src/Honua.Server/Features/MapServer/MapServerRequestHandlers.Wms.cs)
-- [/home/makani/honua-server/src/Honua.Server/Features/MapServer/Rendering/SkiaMapRenderer.cs](/home/makani/honua-server/src/Honua.Server/Features/MapServer/Rendering/SkiaMapRenderer.cs)
+- `honua-server/src/Honua.Server/Features/MapServer/MapServerRequestHandlers.Export.cs`
+- `honua-server/src/Honua.Server/Features/MapServer/MapServerRequestHandlers.Wms.cs`
+- `honua-server/src/Honua.Server/Features/MapServer/Rendering/SkiaMapRenderer.cs`
 
 ### Likely implication for benchmarking
 
@@ -283,7 +283,7 @@ Honua's native FeatureServer path is architecturally leaner than its common OGC/
 - it already has native binary-oriented output paths such as PBF and GeoArrow helpers
 
 Relevant code:
-- [/home/makani/honua-server/src/Honua.Server/Features/FeatureServer/Services/FeatureServerQueryExecutor.cs](/home/makani/honua-server/src/Honua.Server/Features/FeatureServer/Services/FeatureServerQueryExecutor.cs)
+- `honua-server/src/Honua.Server/Features/FeatureServer/Services/FeatureServerQueryExecutor.cs`
 
 ### Likely implication
 
@@ -304,7 +304,7 @@ Our current GeoServer adapter sets:
 - connection pool settings
 
 It does **not** explicitly enable prepared statements in the datastore config:
-- [adapters/geoserver/setup.sh](/home/makani/geobench/adapters/geoserver/setup.sh)
+- [adapters/geoserver/setup.sh](../adapters/geoserver/setup.sh)
 
 GeoServer's PostGIS docs expose more tuning knobs:
 - prepared statements

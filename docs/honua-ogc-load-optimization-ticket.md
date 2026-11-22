@@ -15,7 +15,7 @@ This ticket captures the current benchmark evidence and the concrete Honua-side 
 ## Current Benchmark Evidence
 
 Latest production-mode Honua rerun:
-- results: [results/20260323-195109/report.md](../results/20260323-195109/report.md)
+- results: `results/20260323-195109/report.md` (gitignored local run)
 - concurrent overall: `127.3 req/s`, `p95 1388.9 ms`, `p99 2889.5 ms`
 - concurrent by stage:
   - `1 VU`: `10.0 req/s`, `p95 55.1 ms`
@@ -24,7 +24,7 @@ Latest production-mode Honua rerun:
   - `100 VUs`: `31.4 req/s`, `p95 2675.3 ms`
 
 GeoServer fair reference:
-- results: [results/20260323-141856/report.md](../results/20260323-141856/report.md)
+- results: `results/20260323-141856/report.md` (gitignored local run)
 - concurrent by stage:
   - `1 VU`: `15.9 req/s`, `p95 28.2 ms`
   - `10 VUs`: `56.0 req/s`, `p95 86.9 ms`

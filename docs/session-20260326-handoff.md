@@ -2,7 +2,7 @@
 
 ## State
 
-- Workspace: `/home/makani/geobench`
+- Workspace: `geobench` repository root
 - No GeoBench benchmark containers are currently running.
 - Honua PR:
   - PR: `https://github.com/honua-io/honua-server/pull/616`
@@ -41,10 +41,10 @@
 ### WMS 3-way deterministic-style comparison
 
 Directory:
-- `/home/makani/geobench/results/20260326-130232`
+- `results/20260326-130232`
 
 Report:
-- `/home/makani/geobench/results/20260326-130232/report.md`
+- `results/20260326-130232/report.md`
 
 Headline:
 - `small`: Honua `707.9 req/s`, GeoServer `137.9`, QGIS `0.8`
@@ -62,10 +62,10 @@ Interpretation:
 ### Honua-only WMS after latest renderer tuning
 
 Directory:
-- `/home/makani/geobench/results/20260326-133212`
+- `results/20260326-133212`
 
 Report:
-- `/home/makani/geobench/results/20260326-133212/report.md`
+- `results/20260326-133212/report.md`
 
 Headline:
 - `small`: `1104.3 req/s`, p95 `4.1 ms`
@@ -77,14 +77,14 @@ Interpretation:
 
 ## Partial / Non-publishable Runs
 
-### `/home/makani/geobench/results/20260326-134044`
+### `results/20260326-134044`
 
 - Started before the warmup-exec split.
 - Do not use for comparison.
 - Problem:
   - `attribute-filter` equality completed, but `range/like` submetrics and later suites are not trustworthy for publication because warmup/shared exec naming was still contaminating k6 submetrics.
 
-### `/home/makani/geobench/results/20260326-135253`
+### `results/20260326-135253`
 
 - Started after the warmup-exec split, but intentionally aborted.
 - Directory only contains:

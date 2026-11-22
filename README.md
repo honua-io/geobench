@@ -54,7 +54,7 @@ servers support which rows.
 | Server | Runtime | Default Image |
 |--------|---------|---------------|
 | [GeoServer](https://geoserver.org/) | Java / JVM | `docker.osgeo.org/geoserver:3.0.1` |
-| [Honua Server](https://github.com/honua-io/honua-server) | .NET 10 | `ghcr.io/honua-io/honua-server:nightly-aot` |
+| [Honua Server](https://github.com/honua-io/honua-server) | .NET 11 | `ghcr.io/honua-io/honua-server:nightly-aot` |
 | [QGIS Server](https://qgis.org/en/site/about/features.html#qgis-server) | C++ / Qt | `qgis/qgis-server:3.38` |
 
 Published snapshots may pin a digest or a specific nightly tag; the exact

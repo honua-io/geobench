@@ -20,7 +20,7 @@ fairness rules, and reporting requirements.
   run via the `grafana/k6:0.54.0` container
 - Post-processing / reporting / audits: Python 3.11 or newer (standard library; no
   `requirements.txt` / `pyproject.toml` present)
-- Servers under test (Docker): Honua Server (.NET 10), GeoServer (Java/JVM),
+- Servers under test (Docker): Honua Server (.NET 11), GeoServer (Java/JVM),
   QGIS Server (C++/Qt)
 - Database: PostGIS (`postgis/postgis:17-3.5`), one instance per server
 - Containerization: Docker + Docker Compose v2 (`docker-compose.yml`, uses

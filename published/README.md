@@ -119,7 +119,7 @@ source change and must not be inferred from a candidate being generated.
 ## Working checkout placement
 
 Keep Git clones and worktrees alongside the repository, outside results and
-published, for example /home/mike/honua-io/wt-geobench-<purpose>:
+published, for example `../wt-geobench-<purpose>`:
 
     git worktree add ../wt-geobench-experiment -b experiment origin/trunk
 
