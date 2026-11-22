@@ -163,8 +163,9 @@ export function mixedWorkload() {
 
   var res = http.get(req.url, { tags: { name: req.name, workload: workload }, responseType: "text" });
   var ok = check(res, ogcChecks(req));
-  errorRate.add(!ok);
-  responseTime.add(res.timings.duration);
+  var metricTags = { workload: workload };
+  errorRate.add(!ok, metricTags);
+  responseTime.add(res.timings.duration, metricTags);
 }
 
 export function warmupConcurrent() {
