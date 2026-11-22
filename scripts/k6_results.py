@@ -79,7 +79,7 @@ def validation_failures(data, expected_scenarios=()):
             continue
         base, suffix = name.split("{", 1)
         tags = dict(part.split(":", 1) for part in suffix[:-1].split(",") if ":" in part)
-        if base not in {"http_reqs", "http_req_duration"} or not measured_tags(tags):
+        if base not in {"http_reqs", "http_req_duration", "errors"} or not measured_tags(tags):
             continue
         measured.setdefault(frozenset(tags.items()), {})[base] = metric
     for tags in set(measured) | set(expected_scenarios):
@@ -91,6 +91,16 @@ def validation_failures(data, expected_scenarios=()):
                         and math.isfinite(duration[field]) and duration[field] >= 0
                         for field in ("med", "p(95)", "p(99)"))):
             failures.append(f"missing or incomplete measured scenario: {dict(sorted(tags))}")
+        if {"concurrency", "workload"} <= dict(tags).keys():
+            errors = pair.get("errors", {})
+            observations = [errors.get(field) for field in ("passes", "fails")]
+            if not (all(isinstance(value, (int, float)) and math.isfinite(value)
+                        and value >= 0 for value in observations)
+                    and sum(observations) == count and count > 0):
+                failures.append(f"missing or incomplete workload error samples: {dict(sorted(tags))}")
+            elif rate_value(errors) != 0 or errors["passes"] != 0:
+                # k6 Rate passes count true samples: here true means a failed request.
+                failures.append(f"failed workload response checks: {dict(sorted(tags))}")
     if not measured:
         failures.append("no measured-phase request and duration metrics")
     return failures
@@ -104,6 +114,8 @@ def point_stream_failures(contents, expected_scenarios=()):
     measured_durations = 0
     scenario_requests = set()
     scenario_durations = set()
+    workload_requests = {}
+    workload_errors = {}
     for line in contents.splitlines():
         if not line.strip():
             continue
@@ -141,6 +153,11 @@ def point_stream_failures(contents, expected_scenarios=()):
             tags = data.get("tags", {})
             scenario = frozenset((key, str(value)) for key, value in tags.items()
                                  if key in MEASURED_TAGS or key == "workload")
+            if {"concurrency", "workload"} <= dict(scenario).keys():
+                if name == "http_reqs":
+                    workload_requests[scenario] = workload_requests.get(scenario, 0) + value
+                elif name == "errors":
+                    workload_errors[scenario] = workload_errors.get(scenario, 0) + 1
             if name == "http_reqs" and value > 0:
                 scenario_requests.add(scenario)
             elif name == "http_req_duration":
@@ -156,6 +173,9 @@ def point_stream_failures(contents, expected_scenarios=()):
             scenario <= tags for tags in scenario_durations
         ):
             failures.append(f"missing or incomplete measured scenario: {dict(sorted(scenario))}")
+    for scenario in workload_requests.keys() | workload_errors.keys():
+        if workload_errors.get(scenario, 0) != workload_requests.get(scenario, 0):
+            failures.append(f"missing or incomplete workload error samples: {dict(sorted(scenario))}")
     return failures
 
 
